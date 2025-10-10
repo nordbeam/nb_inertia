@@ -1,0 +1,776 @@
+defmodule Mix.Tasks.NbInertia.Install.Docs do
+  @moduledoc false
+
+  def short_doc do
+    "Installs and configures NbInertia with Inertia.js in a Phoenix application."
+  end
+
+  def example do
+    "mix nb_inertia.install --client-framework react --typescript"
+  end
+
+  def long_doc do
+    """
+    Installs and configures NbInertia with Inertia.js in a Phoenix application.
+
+    This installer wraps and enhances the base Inertia.js library with additional
+    features like declarative page DSL, type-safe props, and shared props.
+
+    ## Installation Steps
+
+    1. Adds `{:nb_inertia, "~> 0.1"}` to mix.exs dependencies
+    2. Adds `{:inertia, "~> 2.5"}` to mix.exs dependencies
+    3. Sets up controller helpers (import NbInertia.Controller)
+    4. Sets up HTML helpers (import Inertia.HTML)
+    5. Adds `plug Inertia.Plug` to the browser pipeline
+    6. Adds configuration to config/config.exs under :nb_inertia namespace
+    7. Updates root layout template (with nb_vite support if detected)
+    8. Configures asset bundler (esbuild by default, or skips if nb_vite is present)
+    9. Detects and uses appropriate package manager (npm, yarn, pnpm, or bun)
+    10. Creates sample Inertia page component
+    11. Prints helpful next steps
+
+    ## Usage
+
+    ```bash
+    mix nb_inertia.install
+    ```
+
+    ## Options
+
+        --client-framework FRAMEWORK  Framework to use for the client-side integration
+                                      (react, vue, or svelte). Default is react.
+        --camelize-props              Enable camelCase for props (stored in :nb_inertia config)
+        --history-encrypt             Enable history encryption (stored in :nb_inertia config)
+        --typescript                  Enable TypeScript
+        --yes                         Don't prompt for confirmations
+
+    ## Examples
+
+    ```bash
+    # Install with React and TypeScript
+    mix nb_inertia.install --client-framework react --typescript
+
+    # Install with Vue and camelized props
+    mix nb_inertia.install --client-framework vue --camelize-props
+
+    # Install with React, TypeScript, and history encryption
+    mix nb_inertia.install --client-framework react --typescript --history-encrypt --camelize-props
+    ```
+
+    ## Using with nb_vite
+
+    If you have `nb_vite` in your dependencies, the installer will automatically:
+    - Skip esbuild configuration (Vite handles bundling)
+    - Generate a root layout that uses NbVite helper functions
+    - Detect if Bun is configured via nb_vite and use it for package installation
+    - Use the appropriate package manager (bun, pnpm, yarn, or npm)
+
+    To use nb_inertia with nb_vite and Bun:
+
+    ```bash
+    # First install nb_vite with Bun support
+    mix nb_vite.install --bun --typescript
+
+    # Then install nb_inertia
+    mix nb_inertia.install --client-framework react --typescript
+    ```
+
+    The installer will detect the nb_vite setup and configure accordingly.
+    """
+  end
+end
+
+if Code.ensure_loaded?(Igniter) do
+  defmodule Mix.Tasks.NbInertia.Install do
+    @shortdoc __MODULE__.Docs.short_doc()
+
+    @moduledoc __MODULE__.Docs.long_doc()
+
+    use Igniter.Mix.Task
+    require Igniter.Code.Common
+
+    @impl Igniter.Mix.Task
+    def info(_argv, _parent) do
+      %Igniter.Mix.Task.Info{
+        schema: [
+          client_framework: :string,
+          camelize_props: :boolean,
+          history_encrypt: :boolean,
+          typescript: :boolean,
+          yes: :boolean
+        ],
+        example: __MODULE__.Docs.example(),
+        defaults: [client_framework: "react"],
+        positional: [],
+        composes: ["deps.get"]
+      }
+    end
+
+    @impl Igniter.Mix.Task
+    def igniter(igniter) do
+      igniter
+      |> add_dependencies()
+      |> setup_controller_helpers()
+      |> setup_html_helpers()
+      |> setup_router()
+      |> add_inertia_config()
+      |> update_root_layout()
+      |> maybe_update_asset_bundler_config()
+      |> setup_client()
+      |> create_sample_page()
+      |> print_next_steps()
+    end
+
+    @doc false
+    def using_nb_vite?(igniter) do
+      # Check if nb_vite is in the dependencies
+      case Igniter.Project.Deps.get_dependency_declaration(igniter, :nb_vite) do
+        {:ok, _} -> true
+        _ -> false
+      end
+    end
+
+    @doc false
+    def maybe_update_asset_bundler_config(igniter) do
+      if using_nb_vite?(igniter) do
+        # If using nb_vite, skip esbuild configuration
+        igniter
+      else
+        # If not using nb_vite, configure esbuild
+        update_esbuild_config(igniter)
+      end
+    end
+
+    @doc false
+    def add_dependencies(igniter) do
+      igniter
+      |> Igniter.Project.Deps.add_dep({:nb_inertia, "~> 0.1"})
+      |> Igniter.Project.Deps.add_dep({:inertia, "~> 2.5"})
+    end
+
+    @doc false
+    def setup_controller_helpers(igniter) do
+      update_web_ex_helper(igniter, :controller, fn zipper ->
+        import_code = "import NbInertia.Controller"
+
+        with {:ok, zipper} <- move_to_last_import_or_alias(zipper) do
+          {:ok, Igniter.Code.Common.add_code(zipper, import_code)}
+        end
+      end)
+    end
+
+    @doc false
+    def setup_html_helpers(igniter) do
+      update_web_ex_helper(igniter, :html, fn zipper ->
+        import_code = """
+            import Inertia.HTML
+        """
+
+        with {:ok, zipper} <- move_to_last_import_or_alias(zipper) do
+          {:ok, Igniter.Code.Common.add_code(zipper, import_code)}
+        end
+      end)
+    end
+
+    # Run an update function within the quote do ... end block inside a *web.ex helper function
+    defp update_web_ex_helper(igniter, helper_name, update_fun) do
+      web_module = Igniter.Libs.Phoenix.web_module(igniter)
+
+      case Igniter.Project.Module.find_module(igniter, web_module) do
+        {:ok, {igniter, _source, _zipper}} ->
+          Igniter.Project.Module.find_and_update_module!(igniter, web_module, fn zipper ->
+            with {:ok, zipper} <- Igniter.Code.Function.move_to_def(zipper, helper_name, 0),
+                 {:ok, zipper} <- Igniter.Code.Common.move_to_do_block(zipper) do
+              Igniter.Code.Common.within(zipper, update_fun)
+            else
+              :error ->
+                {:warning, "Could not find #{helper_name}/0 function in #{inspect(web_module)}"}
+            end
+          end)
+
+        {:error, igniter} ->
+          Igniter.add_warning(
+            igniter,
+            "Could not find web module #{inspect(web_module)}. You may need to manually add NbInertia helpers."
+          )
+      end
+    end
+
+    defp move_to_last_import_or_alias(zipper) do
+      # Try to find the last import first
+      case Igniter.Code.Common.move_to_last(
+             zipper,
+             &Igniter.Code.Function.function_call?(&1, :import)
+           ) do
+        {:ok, zipper} ->
+          {:ok, zipper}
+
+        _ ->
+          # If no imports, try to find the last alias
+          Igniter.Code.Common.move_to_last(
+            zipper,
+            &Igniter.Code.Function.function_call?(&1, :alias)
+          )
+      end
+    end
+
+    @doc false
+    def setup_router(igniter) do
+      Igniter.Libs.Phoenix.append_to_pipeline(igniter, :browser, "plug Inertia.Plug")
+    end
+
+    @doc false
+    def add_inertia_config(igniter) do
+      # Get endpoint module name based on app name
+      {igniter, endpoint_module} = Igniter.Libs.Phoenix.select_endpoint(igniter)
+
+      # Determine configuration based on options
+      camelize_props = igniter.args.options[:camelize_props] || false
+      history_encryption = igniter.args.options[:history_encrypt] || false
+
+      config_options = [
+        endpoint: endpoint_module
+      ]
+
+      # Add camelize_props config if specified
+      config_options =
+        if camelize_props do
+          Keyword.put(config_options, :camelize_props, true)
+        else
+          config_options
+        end
+
+      # Add history encryption config if specified
+      config_options =
+        if history_encryption do
+          Keyword.put(config_options, :history, encrypt: true)
+        else
+          config_options
+        end
+
+      # Add the configuration to config.exs under :nb_inertia namespace
+      Enum.reduce(config_options, igniter, fn {key, value}, igniter ->
+        Igniter.Project.Config.configure(
+          igniter,
+          "config.exs",
+          :nb_inertia,
+          [key],
+          value
+        )
+      end)
+    end
+
+    @doc false
+    def update_root_layout(igniter) do
+      file_path =
+        Path.join([
+          "lib",
+          web_dir(igniter),
+          "components",
+          "layouts",
+          "root.html.heex"
+        ])
+
+      content =
+        if using_nb_vite?(igniter) do
+          inertia_root_html_vite()
+        else
+          inertia_root_html_esbuild()
+        end
+
+      Igniter.create_new_file(igniter, file_path, content, on_exists: :overwrite)
+    end
+
+    defp web_dir(igniter) do
+      igniter
+      |> Igniter.Libs.Phoenix.web_module()
+      |> inspect()
+      |> Macro.underscore()
+    end
+
+    defp inertia_root_html_esbuild() do
+      """
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta name="csrf-token" content={get_csrf_token()} />
+          <.inertia_title><%= assigns[:page_title] %></.inertia_title>
+          <.inertia_head content={@inertia_head} />
+          <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
+          <script type="module" defer phx-track-static src={~p"/assets/app.js"} />
+        </head>
+        <body>
+          {@inner_content}
+        </body>
+      </html>
+      """
+    end
+
+    defp inertia_root_html_vite() do
+      """
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta name="csrf-token" content={get_csrf_token()} />
+          <.inertia_title><%= assigns[:page_title] %></.inertia_title>
+          <.inertia_head content={@inertia_head} />
+          <%= NbVite.vite_client() %>
+          <%= NbVite.react_refresh() %>
+          <%= NbVite.vite_assets("js/app.tsx") %>
+        </head>
+        <body>
+          {@inner_content}
+        </body>
+      </html>
+      """
+    end
+
+    @doc false
+    def update_esbuild_config(igniter) do
+      igniter
+      |> Igniter.Project.Config.configure(
+        "config.exs",
+        :esbuild,
+        [:version],
+        "0.21.5"
+      )
+      |> Igniter.Project.Config.configure(
+        "config.exs",
+        :esbuild,
+        [Igniter.Project.Application.app_name(igniter)],
+        {:code,
+         Sourceror.parse_string!("""
+         [
+          args:
+            ~w(js/app.jsx --bundle --chunk-names=chunks/[name]-[hash] --splitting --format=esm  --target=es2020 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
+          cd: Path.expand("../assets", __DIR__),
+          env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
+         ]
+         """)}
+      )
+      |> Igniter.add_task("esbuild.install")
+    end
+
+    @doc false
+    def setup_client(igniter) do
+      case igniter.args.options[:client_framework] do
+        "react" ->
+          typescript = igniter.args.options[:typescript] || false
+          extension = if typescript, do: "tsx", else: "jsx"
+
+          igniter
+          |> install_client_package()
+          |> maybe_create_typescript_config()
+          |> Igniter.create_new_file("assets/js/app.#{extension}", inertia_app_jsx(igniter),
+            on_exists: :overwrite
+          )
+
+        framework when framework in ["vue", "svelte"] ->
+          igniter
+          |> install_client_package()
+          |> maybe_create_typescript_config()
+
+        _ ->
+          igniter
+      end
+    end
+
+    @doc false
+    def using_bun?(igniter) do
+      # Check if bun is configured in nb_vite
+      if using_nb_vite?(igniter) do
+        case Igniter.Project.Config.config_value(igniter, :bun, [:version]) do
+          {:ok, _} -> true
+          _ -> false
+        end
+      else
+        false
+      end
+    end
+
+    @doc false
+    def get_package_manager_command(igniter) do
+      # First check if using Bun via nb_vite configuration
+      if using_bun?(igniter) do
+        "bun"
+      else
+        # Detect package manager from lockfiles in assets directory
+        detect_package_manager_from_lockfile()
+      end
+    end
+
+    defp detect_package_manager_from_lockfile do
+      cond do
+        File.exists?("assets/bun.lockb") ->
+          "bun"
+
+        File.exists?("assets/pnpm-lock.yaml") ->
+          "pnpm"
+
+        File.exists?("assets/yarn.lock") ->
+          "yarn"
+
+        File.exists?("assets/package-lock.json") ->
+          "npm"
+
+        # Fallback to system detection if no lockfile exists
+        System.find_executable("bun") ->
+          "bun"
+
+        System.find_executable("pnpm") ->
+          "pnpm"
+
+        System.find_executable("yarn") ->
+          "yarn"
+
+        true ->
+          "npm"
+      end
+    end
+
+    defp maybe_create_typescript_config(igniter) do
+      if igniter.args.options[:typescript] do
+        Igniter.create_new_file(igniter, "assets/tsconfig.json", react_tsconfig_json(),
+          on_exists: :overwrite
+        )
+      else
+        igniter
+      end
+    end
+
+    defp install_client_package(igniter) do
+      typescript = igniter.args.options[:typescript] || false
+      client_framework = igniter.args.options[:client_framework]
+
+      igniter
+      |> install_client_main_packages(client_framework)
+      |> maybe_install_typescript_deps(client_framework, typescript)
+    end
+
+    defp install_client_main_packages(igniter, "react") do
+      pkg_manager = get_package_manager_command(igniter)
+
+      install_cmd =
+        case pkg_manager do
+          "bun" -> "bun add @inertiajs/react react react-dom axios"
+          "pnpm" -> "pnpm add --dir assets @inertiajs/react react react-dom axios"
+          "yarn" -> "cd assets && yarn add @inertiajs/react react react-dom axios"
+          _ -> "npm install --prefix assets @inertiajs/react react react-dom axios"
+        end
+
+      Igniter.add_task(igniter, "cmd", [install_cmd])
+    end
+
+    defp install_client_main_packages(igniter, "vue") do
+      pkg_manager = get_package_manager_command(igniter)
+
+      install_cmd =
+        case pkg_manager do
+          "bun" -> "bun add @inertiajs/vue3 vue vue-loader axios"
+          "pnpm" -> "pnpm add --dir assets @inertiajs/vue3 vue vue-loader axios"
+          "yarn" -> "cd assets && yarn add @inertiajs/vue3 vue vue-loader axios"
+          _ -> "npm install --prefix assets @inertiajs/vue3 vue vue-loader axios"
+        end
+
+      Igniter.add_task(igniter, "cmd", [install_cmd])
+    end
+
+    defp install_client_main_packages(igniter, "svelte") do
+      pkg_manager = get_package_manager_command(igniter)
+
+      install_cmd =
+        case pkg_manager do
+          "bun" -> "bun add @inertiajs/svelte svelte axios"
+          "pnpm" -> "pnpm add --dir assets @inertiajs/svelte svelte axios"
+          "yarn" -> "cd assets && yarn add @inertiajs/svelte svelte axios"
+          _ -> "npm install --prefix assets @inertiajs/svelte svelte axios"
+        end
+
+      Igniter.add_task(igniter, "cmd", [install_cmd])
+    end
+
+    defp maybe_install_typescript_deps(igniter, _, false), do: igniter
+
+    defp maybe_install_typescript_deps(igniter, "react", true) do
+      pkg_manager = get_package_manager_command(igniter)
+
+      install_cmd =
+        case pkg_manager do
+          "bun" ->
+            "bun add --dev @types/react @types/react-dom typescript"
+
+          "pnpm" ->
+            "pnpm add --dir assets --save-dev @types/react @types/react-dom typescript"
+
+          "yarn" ->
+            "cd assets && yarn add --dev @types/react @types/react-dom typescript"
+
+          _ ->
+            "npm install --prefix assets --save-dev @types/react @types/react-dom typescript"
+        end
+
+      Igniter.add_task(igniter, "cmd", [install_cmd])
+    end
+
+    defp maybe_install_typescript_deps(igniter, "vue", true) do
+      pkg_manager = get_package_manager_command(igniter)
+
+      install_cmd =
+        case pkg_manager do
+          "bun" -> "bun add --dev @vue/compiler-sfc vue-tsc typescript"
+          "pnpm" -> "pnpm add --dir assets --save-dev @vue/compiler-sfc vue-tsc typescript"
+          "yarn" -> "cd assets && yarn add --dev @vue/compiler-sfc vue-tsc typescript"
+          _ -> "npm install --prefix assets --save-dev @vue/compiler-sfc vue-tsc typescript"
+        end
+
+      Igniter.add_task(igniter, "cmd", [install_cmd])
+    end
+
+    defp maybe_install_typescript_deps(igniter, "svelte", true) do
+      pkg_manager = get_package_manager_command(igniter)
+
+      install_cmd =
+        case pkg_manager do
+          "bun" -> "bun add --dev svelte-loader svelte-preprocess typescript"
+          "pnpm" -> "pnpm add --dir assets --save-dev svelte-loader svelte-preprocess typescript"
+          "yarn" -> "cd assets && yarn add --dev svelte-loader svelte-preprocess typescript"
+          _ -> "npm install --prefix assets --save-dev svelte-loader svelte-preprocess typescript"
+        end
+
+      Igniter.add_task(igniter, "cmd", [install_cmd])
+    end
+
+    defp react_tsconfig_json() do
+      """
+      {
+        "compilerOptions": {
+          "target": "ES2020",
+          "useDefineForClassFields": true,
+          "lib": ["ES2020", "DOM", "DOM.Iterable"],
+          "module": "ESNext",
+          "skipLibCheck": true,
+          "moduleResolution": "bundler",
+          "allowImportingTsExtensions": true,
+          "resolveJsonModule": true,
+          "isolatedModules": true,
+          "noEmit": true,
+          "jsx": "react-jsx",
+          "strict": true,
+          "noUnusedLocals": true,
+          "noUnusedParameters": true,
+          "noFallthroughCasesInSwitch": true,
+          "allowJs": true,
+          "forceConsistentCasingInFileNames": true,
+          "esModuleInterop": true,
+          "baseUrl": ".",
+          "paths": {
+            "@/*": ["./js/*"]
+          }
+        },
+        "include": ["js/**/*.ts", "js/**/*.tsx", "js/**/*.js", "js/**/*.jsx"],
+        "exclude": ["node_modules"]
+      }
+      """
+    end
+
+    defp inertia_app_jsx(igniter) do
+      # The app.jsx/tsx file is the same for both esbuild and Vite
+      # Vite natively handles JSX/TSX, esbuild is configured to handle it too
+      """
+      import React from "react";
+      import axios from "axios";
+
+      import { createInertiaApp } from "@inertiajs/react";
+      import { createRoot } from "react-dom/client";
+
+      axios.defaults.xsrfHeaderName = "x-csrf-token";
+
+      createInertiaApp({
+        resolve: async (name) => {
+          return await import(`./pages/${name}.jsx`);
+        },
+        setup({ App, el, props }) {
+          createRoot(el).render(<App {...props} />);
+        },
+      });
+      """
+    end
+
+    @doc false
+    def create_sample_page(igniter) do
+      client_framework = igniter.args.options[:client_framework]
+      typescript = igniter.args.options[:typescript] || false
+
+      case client_framework do
+        "react" ->
+          extension = if typescript, do: "tsx", else: "jsx"
+          sample_page = sample_react_page()
+
+          Igniter.create_new_file(igniter, "assets/js/pages/Home.#{extension}", sample_page,
+            on_exists: :skip
+          )
+
+        _ ->
+          igniter
+      end
+    end
+
+    defp sample_react_page() do
+      """
+      import React from "react";
+
+      export default function Home({ greeting }) {
+        return (
+          <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+            <h1>{greeting || "Welcome to NbInertia!"}</h1>
+            <p>
+              This is a sample Inertia.js page component created by the nb_inertia installer.
+            </p>
+            <p>
+              Edit this file at <code>assets/js/pages/Home.jsx</code> to get started.
+            </p>
+
+            <div style={{ marginTop: "2rem" }}>
+              <h2>Next Steps</h2>
+              <ul>
+                <li>Create more page components in assets/js/pages/</li>
+                <li>Use <code>inertia_page</code> macro to declare pages in your controllers</li>
+                <li>Render pages with <code>render_inertia(conn, :page_name, props)</code></li>
+              </ul>
+            </div>
+
+            <div style={{ marginTop: "2rem", padding: "1rem", background: "#f0f0f0", borderRadius: "0.5rem" }}>
+              <h3>Example Controller</h3>
+              <pre style={{ background: "white", padding: "1rem", borderRadius: "0.25rem", overflow: "auto" }}>
+                {`defmodule MyAppWeb.PageController do
+        use MyAppWeb, :controller
+        use NbInertia.Controller
+
+        inertia_page :home do
+          prop :greeting, :string
+        end
+
+        def home(conn, _params) do
+          render_inertia(conn, :home,
+            greeting: "Hello from NbInertia!"
+          )
+        end
+      end`}
+              </pre>
+            </div>
+          </div>
+        );
+      }
+      """
+    end
+
+    defp print_next_steps(igniter) do
+      client_framework = igniter.args.options[:client_framework]
+      typescript = igniter.args.options[:typescript] || false
+      camelize_props = igniter.args.options[:camelize_props] || false
+      history_encrypt = igniter.args.options[:history_encrypt] || false
+      using_vite = using_nb_vite?(igniter)
+      using_bun_runtime = using_bun?(igniter)
+      pkg_manager = get_package_manager_command(igniter)
+
+      config_info =
+        if camelize_props || history_encrypt do
+          "\n\nConfiguration added to config/config.exs under :nb_inertia:" <>
+            if(camelize_props, do: "\n  - camelize_props: true", else: "") <>
+            if(history_encrypt, do: "\n  - history: [encrypt: true]", else: "")
+        else
+          ""
+        end
+
+      bundler_info =
+        if using_vite do
+          "- Using nb_vite for asset bundling (with #{if using_bun_runtime, do: "Bun", else: "Node.js"})"
+        else
+          "- Configured esbuild for code splitting"
+        end
+
+      next_steps = """
+      NbInertia has been successfully installed!
+
+      What was configured:
+      - Added {:nb_inertia, "~> 0.1"} and {:inertia, "~> 2.5"} to dependencies
+      - Set up controller helpers (import NbInertia.Controller)
+      - Set up HTML helpers (import Inertia.HTML)
+      - Added plug Inertia.Plug to the browser pipeline
+      - Updated root layout for Inertia.js
+      #{bundler_info}
+      - Package manager: #{pkg_manager}#{config_info}
+      - Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}
+      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}
+
+      Next steps:
+      1. Create an Inertia-enabled controller action:
+
+         defmodule MyAppWeb.PageController do
+           use MyAppWeb, :controller
+           use NbInertia.Controller
+
+           inertia_page :home do
+             prop :greeting, :string
+           end
+
+           def home(conn, _params) do
+             render_inertia(conn, :home,
+               greeting: "Hello from NbInertia!"
+             )
+           end
+         end
+
+      2. Add a route in your router:
+
+         get "/", PageController, :home
+
+      3. Create page components in assets/js/pages/
+         - NbInertia automatically converts :home to "Home"
+         - Use :users_index to render "Users/Index" component
+
+      4. Start your Phoenix server:
+
+         mix phx.server
+
+      For more information:
+      - NbInertia docs: https://hexdocs.pm/nb_inertia
+      - Inertia.js docs: https://inertiajs.com
+      """
+
+      Igniter.add_notice(igniter, next_steps)
+    end
+  end
+else
+  defmodule Mix.Tasks.NbInertia.Install do
+    @shortdoc "Install `igniter` in order to install NbInertia."
+
+    @moduledoc __MODULE__.Docs.long_doc()
+
+    use Mix.Task
+
+    def run(_argv) do
+      Mix.shell().error("""
+      The task 'nb_inertia.install' requires igniter. Please install igniter and try again.
+
+      Add to your mix.exs:
+
+          {:igniter, "~> 0.5", only: [:dev]}
+
+      Then run:
+
+          mix deps.get
+          mix nb_inertia.install
+
+      For more information, see: https://hexdocs.pm/igniter/readme.html#installation
+      """)
+
+      exit({:shutdown, 1})
+    end
+  end
+end
