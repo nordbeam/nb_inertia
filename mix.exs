@@ -1,7 +1,7 @@
 defmodule NbInertia.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @source_url "https://github.com/nordbeam/nb_inertia"
 
   def project do
@@ -43,6 +43,7 @@ defmodule NbInertia.MixProject do
 
       # Optional dependencies
       {:nb_serializer, path: "/Users/assim/Projects/nb_serializer", optional: true},
+      {:deno_rider, "~> 0.2", optional: true},
 
       # Development and test dependencies
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},

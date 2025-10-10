@@ -1105,4 +1105,40 @@ defmodule NbInertia.Controller do
       end
     end
   end
+
+  @doc """
+  Enables server-side rendering for the current request.
+
+  ## Example
+
+      conn
+      |> enable_ssr()
+      |> render_inertia("Dashboard")
+  """
+  def enable_ssr(conn) do
+    Plug.Conn.put_private(conn, :nb_inertia_ssr_enabled, true)
+  end
+
+  @doc """
+  Disables server-side rendering for the current request.
+
+  ## Example
+
+      conn
+      |> disable_ssr()
+      |> render_inertia("Dashboard")
+  """
+  def disable_ssr(conn) do
+    Plug.Conn.put_private(conn, :nb_inertia_ssr_enabled, false)
+  end
+
+  @doc """
+  Checks if SSR is enabled for the current request.
+  """
+  def ssr_enabled?(conn) do
+    case conn.private[:nb_inertia_ssr_enabled] do
+      nil -> NbInertia.SSR.ssr_enabled?()
+      value -> value
+    end
+  end
 end
