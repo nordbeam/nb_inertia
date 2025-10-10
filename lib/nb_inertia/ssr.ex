@@ -107,7 +107,11 @@ defmodule NbInertia.SSR do
   Checks if SSR is currently enabled.
   """
   def ssr_enabled? do
-    GenServer.call(__MODULE__, :enabled?)
+    if Process.whereis(__MODULE__) do
+      GenServer.call(__MODULE__, :enabled?)
+    else
+      false
+    end
   rescue
     _ -> false
   end
