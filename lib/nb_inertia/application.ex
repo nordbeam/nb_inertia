@@ -39,6 +39,22 @@ defmodule NbInertia.Application do
 
   @impl true
   def start(_type, _args) do
+    # Set the environment at startup if not already set
+    # This ensures Mix.env is captured at compile time and available at runtime
+    unless Application.get_env(:nb_inertia, :env) do
+      # In production releases, Mix is not available, so we detect the environment
+      # by checking if Mix module is loaded
+      env =
+        if Code.ensure_loaded?(Mix) and function_exported?(Mix, :env, 0) do
+          Mix.env()
+        else
+          # In releases without Mix, default to :prod
+          :prod
+        end
+
+      Application.put_env(:nb_inertia, :env, env)
+    end
+
     # Forward configuration from :nb_inertia to :inertia
     forward_config()
 

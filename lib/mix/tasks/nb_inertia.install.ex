@@ -286,14 +286,63 @@ if Code.ensure_loaded?(Igniter) do
           "root.html.heex"
         ])
 
-      content =
-        if using_nb_vite?(igniter) do
-          inertia_root_html_vite()
+      if using_nb_vite?(igniter) do
+        # When using nb_vite, append Inertia-specific lines to existing root.html.heex
+        append_inertia_to_vite_layout(igniter, file_path)
+      else
+        # When not using nb_vite, create complete root.html.heex with esbuild config
+        content = inertia_root_html_esbuild()
+        Igniter.create_new_file(igniter, file_path, content, on_exists: :overwrite)
+      end
+    end
+
+    defp append_inertia_to_vite_layout(igniter, file_path) do
+      client_framework = igniter.args.options[:client_framework]
+      typescript = igniter.args.options[:typescript] || false
+      extension = if typescript, do: "tsx", else: "jsx"
+
+      # Build the lines to append
+      lines_to_add = build_inertia_vite_lines(client_framework, extension)
+
+      # Update the file by finding the </head> tag and inserting before it
+      igniter
+      |> Igniter.include_existing_file(file_path)
+      |> Igniter.update_file(file_path, fn source ->
+        Rewrite.Source.update(source, :content, fn
+          content when is_binary(content) ->
+            # Check if inertia components are already present
+            if String.contains?(content, "<.inertia_title>") do
+              # Inertia already configured, skip
+              content
+            else
+              # Find </head> and insert Inertia lines before it
+              if String.contains?(content, "</head>") do
+                String.replace(content, "</head>", "#{lines_to_add}  </head>", global: false)
+              else
+                # If no </head> tag found, return content unchanged and warn
+                content
+              end
+            end
+
+          content ->
+            content
+        end)
+      end)
+    end
+
+    defp build_inertia_vite_lines(client_framework, extension) do
+      react_refresh_line =
+        if client_framework == "react" do
+          "    <%= NbVite.react_refresh() %>\n"
         else
-          inertia_root_html_esbuild()
+          ""
         end
 
-      Igniter.create_new_file(igniter, file_path, content, on_exists: :overwrite)
+      """
+          <.inertia_title><%= assigns[:page_title] %></.inertia_title>
+          <.inertia_head content={@inertia_head} />
+      #{react_refresh_line}    <%= NbVite.vite_assets("js/app.#{extension}") %>
+      """
     end
 
     defp web_dir(igniter) do
@@ -323,6 +372,8 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
+    # This function is deprecated - kept for reference only
+    # The new approach appends Inertia lines to existing vite layout using build_inertia_vite_lines/2
     defp inertia_root_html_vite() do
       """
       <!DOCTYPE html>
@@ -380,6 +431,7 @@ if Code.ensure_loaded?(Igniter) do
           igniter
           |> install_client_package()
           |> maybe_create_typescript_config()
+          |> maybe_update_vite_config_for_react()
           |> Igniter.create_new_file("assets/js/app.#{extension}", inertia_app_jsx(igniter),
             on_exists: :overwrite
           )
@@ -392,6 +444,105 @@ if Code.ensure_loaded?(Igniter) do
         _ ->
           igniter
       end
+    end
+
+    @doc false
+    def maybe_update_vite_config_for_react(igniter) do
+      if using_nb_vite?(igniter) do
+        update_vite_config_for_react(igniter)
+      else
+        igniter
+      end
+    end
+
+    defp update_vite_config_for_react(igniter) do
+      vite_config_path = "assets/vite.config.js"
+      typescript = igniter.args.options[:typescript] || false
+      extension = if typescript, do: "tsx", else: "jsx"
+
+      if Igniter.exists?(igniter, vite_config_path) do
+        igniter
+        |> Igniter.include_existing_file(vite_config_path)
+        |> Igniter.update_file(vite_config_path, fn source ->
+          Rewrite.Source.update(source, :content, fn
+            content when is_binary(content) ->
+              # Check if React plugin is already configured
+              if String.contains?(content, "@vitejs/plugin-react") do
+                # Already configured, but still need to add app.tsx to input if not present
+                if String.contains?(content, "js/app.#{extension}") do
+                  content
+                else
+                  add_app_to_vite_input(content, extension)
+                end
+              else
+                # Add React plugin import, configuration, and app.tsx to input
+                content
+                |> add_react_import_to_vite_config()
+                |> add_react_plugin_to_vite_config()
+                |> add_app_to_vite_input(extension)
+              end
+
+            content ->
+              content
+          end)
+        end)
+      else
+        igniter
+      end
+    end
+
+    defp add_react_import_to_vite_config(content) do
+      # Add the import after other imports, before the export
+      if String.contains?(content, "import") do
+        # Find the last import and add react import after it
+        lines = String.split(content, "\n")
+
+        {imports, rest} =
+          Enum.split_while(lines, fn line ->
+            String.starts_with?(String.trim(line), "import") or String.trim(line) == ""
+          end)
+
+        # Add react import at the end of imports
+        react_import = "import react from '@vitejs/plugin-react'"
+
+        # Rebuild content
+        Enum.join(imports ++ [react_import, ""] ++ rest, "\n")
+      else
+        # No imports found, add at the beginning
+        "import react from '@vitejs/plugin-react'\n\n" <> content
+      end
+    end
+
+    defp add_react_plugin_to_vite_config(content) do
+      # Add react() with babel configuration to the plugins array
+      # Look for "plugins: [" and add react() with babel plugin as first plugin
+      react_plugin_config = """
+        react({
+          babel: {
+            plugins: ['babel-plugin-react-compiler'],
+          },
+        }),
+      """
+
+      content
+      |> String.replace(
+        ~r/(plugins:\s*\[)(\s*)/,
+        "\\1\\2\n      #{String.trim(react_plugin_config)}",
+        global: false
+      )
+    end
+
+    defp add_app_to_vite_input(content, extension) do
+      # Add js/app.{extension} to the input array in vite.config.js
+      # Match: input: ['js/app.ts', 'css/app.css']
+      # Result: input: ['js/app.ts', 'js/app.tsx', 'css/app.css']
+
+      content
+      |> String.replace(
+        ~r/(input:\s*\[['"]js\/app\.(ts|js)['"])/,
+        "\\1, 'js/app.#{extension}'",
+        global: false
+      )
     end
 
     @doc false
@@ -456,6 +607,7 @@ if Code.ensure_loaded?(Igniter) do
 
       igniter
       |> install_client_main_packages(client_framework)
+      |> maybe_install_react_dev_deps(client_framework)
       |> maybe_install_typescript_deps(client_framework, typescript)
     end
 
@@ -463,12 +615,22 @@ if Code.ensure_loaded?(Igniter) do
       pkg_manager = get_package_manager_command(igniter)
       assets_dir = Path.join(File.cwd!(), "assets")
 
+      # Add @vitejs/plugin-react if using nb_vite
+      react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react", else: ""
+
       install_cmd =
         case pkg_manager do
-          "bun" -> "cd #{assets_dir} && bun add @inertiajs/react react react-dom axios"
-          "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/react react react-dom axios"
-          "yarn" -> "cd #{assets_dir} && yarn add @inertiajs/react react react-dom axios"
-          _ -> "npm install --prefix #{assets_dir} @inertiajs/react react react-dom axios"
+          "bun" ->
+            "cd #{assets_dir} && bun add @inertiajs/react react react-dom axios#{react_plugin}"
+
+          "pnpm" ->
+            "pnpm add --dir #{assets_dir} @inertiajs/react react react-dom axios#{react_plugin}"
+
+          "yarn" ->
+            "cd #{assets_dir} && yarn add @inertiajs/react react react-dom axios#{react_plugin}"
+
+          _ ->
+            "npm install --prefix #{assets_dir} @inertiajs/react react react-dom axios#{react_plugin}"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -503,6 +665,30 @@ if Code.ensure_loaded?(Igniter) do
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
     end
+
+    defp maybe_install_react_dev_deps(igniter, "react") do
+      pkg_manager = get_package_manager_command(igniter)
+      assets_dir = Path.join(File.cwd!(), "assets")
+
+      install_cmd =
+        case pkg_manager do
+          "bun" ->
+            "cd #{assets_dir} && bun add -D babel-plugin-react-compiler@latest"
+
+          "pnpm" ->
+            "pnpm add --dir #{assets_dir} -D babel-plugin-react-compiler@latest"
+
+          "yarn" ->
+            "cd #{assets_dir} && yarn add -D babel-plugin-react-compiler@latest"
+
+          _ ->
+            "npm install --prefix #{assets_dir} -D babel-plugin-react-compiler@latest"
+        end
+
+      Igniter.add_task(igniter, "cmd", [install_cmd])
+    end
+
+    defp maybe_install_react_dev_deps(igniter, _), do: igniter
 
     defp maybe_install_typescript_deps(igniter, _, false), do: igniter
 
@@ -573,7 +759,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp react_tsconfig_json() do
-      """
+      ~S"""
       {
         "compilerOptions": {
           "target": "ES2020",
@@ -608,7 +794,7 @@ if Code.ensure_loaded?(Igniter) do
     defp inertia_app_jsx(_igniter) do
       # The app.jsx/tsx file is the same for both esbuild and Vite
       # Vite natively handles JSX/TSX, esbuild is configured to handle it too
-      """
+      ~S"""
       import React from "react";
       import axios from "axios";
 
@@ -636,6 +822,7 @@ if Code.ensure_loaded?(Igniter) do
         igniter
         |> create_ssr_entry_files()
         |> create_vite_plugins()
+        |> update_vite_config_for_ssr()
         |> add_ssr_config()
       else
         if ssr_enabled do
@@ -654,6 +841,112 @@ if Code.ensure_loaded?(Igniter) do
         else
           igniter
         end
+      end
+    end
+
+    defp update_vite_config_for_ssr(igniter) do
+      vite_config_path = "assets/vite.config.js"
+      typescript = igniter.args.options[:typescript] || false
+      extension = if typescript, do: "tsx", else: "jsx"
+
+      if Igniter.exists?(igniter, vite_config_path) do
+        igniter
+        |> Igniter.include_existing_file(vite_config_path)
+        |> Igniter.update_file(vite_config_path, fn source ->
+          Rewrite.Source.update(source, :content, fn
+            content when is_binary(content) ->
+              # Check if SSR config is already present
+              if String.contains?(content, "isSsrBuild") or String.contains?(content, "BUILD_SSR") do
+                # Already configured for SSR - just add ssrDev if missing
+                if String.contains?(content, "ssrDev:") do
+                  content
+                else
+                  add_ssr_dev_to_phoenix_plugin(content, extension)
+                end
+              else
+                # Convert standard config to SSR config
+                convert_to_ssr_vite_config(content, extension)
+              end
+
+            content ->
+              content
+          end)
+        end)
+      else
+        igniter
+      end
+    end
+
+    defp add_ssr_dev_to_phoenix_plugin(content, extension) do
+      # Add ssrDev configuration to phoenix plugin
+      ssr_dev_config = """
+      ssrDev: {
+                enabled: true,
+                path: '/ssr',
+                healthPath: '/ssr-health',
+                entryPoint: './js/ssr_dev.#{extension}',
+                hotFile: '../priv/ssr-hot',
+              },
+      """
+
+      # Find the phoenix plugin configuration and add ssrDev before the closing brace
+      String.replace(
+        content,
+        ~r/(phoenix\(\{[^}]*)(}\))/s,
+        "\\1  #{String.trim(ssr_dev_config)}\n        \\2"
+      )
+    end
+
+    defp convert_to_ssr_vite_config(content, extension) do
+      # Add import for node-prefix-plugin if not present
+      content =
+        if not String.contains?(content, "node-prefix-plugin") do
+          add_node_prefix_plugin_import(content)
+        else
+          content
+        end
+
+      # Convert the export to a function that checks for SSR build
+      # This is complex, so we'll do a simple check and replacement
+      if String.contains?(content, "export default defineConfig({") do
+        # Standard config - convert to function form
+        content
+        |> String.replace(
+          "export default defineConfig({",
+          "export default defineConfig(({ command, mode, isSsrBuild }) => {\n  const isSSR = isSsrBuild || process.env.BUILD_SSR === \"true\";\n\n  if (isSSR) {\n    // SSR build configuration for Deno compatibility\n    return {\n      plugins: [react(), nodePrefixPlugin()],\n      build: {\n        ssr: true,\n        outDir: \"../priv/static\",\n        rollupOptions: {\n          input: \"js/ssr_prod.#{extension}\",\n          output: {\n            format: \"esm\",\n            entryFileNames: \"ssr.js\",\n            footer: \"globalThis.render = render;\",\n          },\n        },\n      },\n      resolve: {\n        alias: {\n          \"@\": path.resolve(__dirname, \"./js\"),\n        },\n      },\n      ssr: {\n        noExternal: true,\n        target: \"neutral\",\n      },\n    };\n  }\n\n  // Client build configuration\n  return {"
+        )
+        |> add_ssr_server_config_and_closing()
+      else
+        # Already in function form or different structure - just add warning
+        content
+      end
+    end
+
+    defp add_node_prefix_plugin_import(content) do
+      # Add after other imports
+      lines = String.split(content, "\n")
+
+      {imports, rest} =
+        Enum.split_while(lines, fn line ->
+          String.starts_with?(String.trim(line), "import") or String.trim(line) == ""
+        end)
+
+      import_line = "import nodePrefixPlugin from './vite-plugins/node-prefix-plugin.js'"
+      Enum.join(imports ++ [import_line, ""] ++ rest, "\n")
+    end
+
+    defp add_ssr_server_config_and_closing(content) do
+      # Find the closing of the phoenix plugin and add server config before the final closing brace
+      # Look for the last occurrence of "  }" or "})" to add server config before it
+      if String.contains?(content, "})") do
+        # Add server config and closing before the last "})"
+        String.replace(
+          content,
+          ~r/(\s*})(\s*)$/,
+          "\\1,\n    server: {\n      host: process.env.VITE_HOST || \"127.0.0.1\",\n      port: parseInt(process.env.VITE_PORT || \"5173\"),\n    },\n  };\n});"
+        )
+      else
+        content <> "\n});"
       end
     end
 
@@ -690,7 +983,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp ssr_dev_template() do
-      """
+      ~S"""
       import React from "react";
       import ReactDOMServer from "react-dom/server";
       import { createInertiaApp } from "@inertiajs/react";
@@ -718,17 +1011,17 @@ if Code.ensure_loaded?(Igniter) do
                 .sort();
 
               throw new Error(
-                `❌ SSR Page Not Found\\n\\n` +
-                `Component: ${name}\\n` +
-                `Expected file: assets/js/pages/${name}.tsx\\n\\n` +
-                `This page file doesn't exist or wasn't found by Vite's glob.\\n\\n` +
-                `Common causes:\\n` +
-                `• The file hasn't been created yet\\n` +
-                `• The file name doesn't match the component name\\n` +
-                `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\\n` +
-                `• The component name in your controller doesn't match the file path\\n\\n` +
-                `Available pages (${availablePages.length}):\\n` +
-                availablePages.map(p => `  - ${p}`).join('\\n')
+                `❌ SSR Page Not Found\n\n` +
+                `Component: ${name}\n` +
+                `Expected file: assets/js/pages/${name}.tsx\n\n` +
+                `This page file doesn't exist or wasn't found by Vite's glob.\n\n` +
+                `Common causes:\n` +
+                `• The file hasn't been created yet\n` +
+                `• The file name doesn't match the component name\n` +
+                `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\n` +
+                `• The component name in your controller doesn't match the file path\n\n` +
+                `Available pages (${availablePages.length}):\n` +
+                availablePages.map(p => `  - ${p}`).join('\n')
               );
             }
 
@@ -742,7 +1035,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp ssr_prod_template() do
-      """
+      ~S"""
       import React from "react";
       import ReactDOMServer from "react-dom/server";
       import { createInertiaApp } from "@inertiajs/react";
@@ -770,18 +1063,18 @@ if Code.ensure_loaded?(Igniter) do
                 .sort();
 
               throw new Error(
-                `❌ SSR Page Not Found\\n\\n` +
-                `Component: ${name}\\n` +
-                `Expected file: assets/js/pages/${name}.tsx\\n\\n` +
-                `This page file doesn't exist or wasn't bundled in the SSR build.\\n\\n` +
-                `Common causes:\\n` +
-                `• The file hasn't been created yet\\n` +
-                `• The file name doesn't match the component name\\n` +
-                `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\\n` +
-                `• The component name in your controller doesn't match the file path\\n` +
-                `• The SSR bundle needs to be rebuilt (run: bun build:ssr)\\n\\n` +
-                `Available pages (${availablePages.length}):\\n` +
-                availablePages.map(p => `  - ${p}`).join('\\n')
+                `❌ SSR Page Not Found\n\n` +
+                `Component: ${name}\n` +
+                `Expected file: assets/js/pages/${name}.tsx\n\n` +
+                `This page file doesn't exist or wasn't bundled in the SSR build.\n\n` +
+                `Common causes:\n` +
+                `• The file hasn't been created yet\n` +
+                `• The file name doesn't match the component name\n` +
+                `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\n` +
+                `• The component name in your controller doesn't match the file path\n` +
+                `• The SSR bundle needs to be rebuilt (run: bun build:ssr)\n\n` +
+                `Available pages (${availablePages.length}):\n` +
+                availablePages.map(p => `  - ${p}`).join('\n')
               );
             }
 

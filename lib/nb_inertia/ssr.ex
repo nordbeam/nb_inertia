@@ -283,7 +283,7 @@ defmodule NbInertia.SSR do
   ## Private Functions
 
   defp dev_mode? do
-    Application.get_env(:nb_inertia, :env, Mix.env()) == :dev
+    Application.get_env(:nb_inertia, :env, :prod) == :dev
   end
 
   defp check_dev_server_health(base_url) do

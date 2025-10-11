@@ -365,7 +365,7 @@ defmodule NbInertia.Controller do
         end)
 
       # Validate props in dev mode
-      if Mix.env() in [:dev, :test] do
+      if Application.get_env(:nb_inertia, :env, :prod) in [:dev, :test] do
         NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props)
 
         # Check for collisions between shared module props and page props
@@ -901,7 +901,7 @@ defmodule NbInertia.Controller do
           end)
 
         # Validate props in dev mode
-        if Mix.env() in [:dev, :test] do
+        if Application.get_env(:nb_inertia, :env, :prod) in [:dev, :test] do
           NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props)
 
           # Check for collisions
