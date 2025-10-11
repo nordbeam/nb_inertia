@@ -786,10 +786,13 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    defp inertia_app_jsx(_igniter) do
+    defp inertia_app_jsx(igniter) do
       # The app.jsx/tsx file is the same for both esbuild and Vite
       # Vite natively handles JSX/TSX, esbuild is configured to handle it too
-      ~S"""
+      typescript = igniter.args.options[:typescript] || false
+      extension = if typescript, do: "tsx", else: "jsx"
+
+      """
       import React from "react";
       import axios from "axios";
 
@@ -800,7 +803,7 @@ if Code.ensure_loaded?(Igniter) do
 
       createInertiaApp({
         resolve: async (name) => {
-          return await import(`./pages/${name}.jsx`);
+          return await import(`./pages/${name}.#{extension}`);
         },
         setup({ App, el, props }) {
           createRoot(el).render(<App {...props} />);
@@ -1253,6 +1256,9 @@ if Code.ensure_loaded?(Igniter) do
           - SSR enabled in nb_inertia config
 
           MANUAL SETUP REQUIRED:
+
+          Note: If using Vite 7, ensure nb_vite has vite-node@^3.2.4 or later.
+          Earlier versions are not compatible with Vite 7.
 
           1. Update your assets/vite.config.js to wrap the config in a function:
 
