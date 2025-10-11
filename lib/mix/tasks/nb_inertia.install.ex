@@ -461,13 +461,14 @@ if Code.ensure_loaded?(Igniter) do
 
     defp install_client_main_packages(igniter, "react") do
       pkg_manager = get_package_manager_command(igniter)
+      assets_dir = Path.join(File.cwd!(), "assets")
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "cd assets && bun add @inertiajs/react react react-dom axios"
-          "pnpm" -> "pnpm add --dir assets @inertiajs/react react react-dom axios"
-          "yarn" -> "cd assets && yarn add @inertiajs/react react react-dom axios"
-          _ -> "npm install --prefix assets @inertiajs/react react react-dom axios"
+          "bun" -> "cd #{assets_dir} && bun add @inertiajs/react react react-dom axios"
+          "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/react react react-dom axios"
+          "yarn" -> "cd #{assets_dir} && yarn add @inertiajs/react react react-dom axios"
+          _ -> "npm install --prefix #{assets_dir} @inertiajs/react react react-dom axios"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -475,13 +476,14 @@ if Code.ensure_loaded?(Igniter) do
 
     defp install_client_main_packages(igniter, "vue") do
       pkg_manager = get_package_manager_command(igniter)
+      assets_dir = Path.join(File.cwd!(), "assets")
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "cd assets && bun add @inertiajs/vue3 vue vue-loader axios"
-          "pnpm" -> "pnpm add --dir assets @inertiajs/vue3 vue vue-loader axios"
-          "yarn" -> "cd assets && yarn add @inertiajs/vue3 vue vue-loader axios"
-          _ -> "npm install --prefix assets @inertiajs/vue3 vue vue-loader axios"
+          "bun" -> "cd #{assets_dir} && bun add @inertiajs/vue3 vue vue-loader axios"
+          "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/vue3 vue vue-loader axios"
+          "yarn" -> "cd #{assets_dir} && yarn add @inertiajs/vue3 vue vue-loader axios"
+          _ -> "npm install --prefix #{assets_dir} @inertiajs/vue3 vue vue-loader axios"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -489,13 +491,14 @@ if Code.ensure_loaded?(Igniter) do
 
     defp install_client_main_packages(igniter, "svelte") do
       pkg_manager = get_package_manager_command(igniter)
+      assets_dir = Path.join(File.cwd!(), "assets")
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "cd assets && bun add @inertiajs/svelte svelte axios"
-          "pnpm" -> "pnpm add --dir assets @inertiajs/svelte svelte axios"
-          "yarn" -> "cd assets && yarn add @inertiajs/svelte svelte axios"
-          _ -> "npm install --prefix assets @inertiajs/svelte svelte axios"
+          "bun" -> "cd #{assets_dir} && bun add @inertiajs/svelte svelte axios"
+          "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/svelte svelte axios"
+          "yarn" -> "cd #{assets_dir} && yarn add @inertiajs/svelte svelte axios"
+          _ -> "npm install --prefix #{assets_dir} @inertiajs/svelte svelte axios"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -505,20 +508,21 @@ if Code.ensure_loaded?(Igniter) do
 
     defp maybe_install_typescript_deps(igniter, "react", true) do
       pkg_manager = get_package_manager_command(igniter)
+      assets_dir = Path.join(File.cwd!(), "assets")
 
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "cd assets && bun add --dev @types/react @types/react-dom typescript"
+            "cd #{assets_dir} && bun add --dev @types/react @types/react-dom typescript"
 
           "pnpm" ->
-            "pnpm add --dir assets --save-dev @types/react @types/react-dom typescript"
+            "pnpm add --dir #{assets_dir} --save-dev @types/react @types/react-dom typescript"
 
           "yarn" ->
-            "cd assets && yarn add --dev @types/react @types/react-dom typescript"
+            "cd #{assets_dir} && yarn add --dev @types/react @types/react-dom typescript"
 
           _ ->
-            "npm install --prefix assets --save-dev @types/react @types/react-dom typescript"
+            "npm install --prefix #{assets_dir} --save-dev @types/react @types/react-dom typescript"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -526,13 +530,21 @@ if Code.ensure_loaded?(Igniter) do
 
     defp maybe_install_typescript_deps(igniter, "vue", true) do
       pkg_manager = get_package_manager_command(igniter)
+      assets_dir = Path.join(File.cwd!(), "assets")
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "cd assets && bun add --dev @vue/compiler-sfc vue-tsc typescript"
-          "pnpm" -> "pnpm add --dir assets --save-dev @vue/compiler-sfc vue-tsc typescript"
-          "yarn" -> "cd assets && yarn add --dev @vue/compiler-sfc vue-tsc typescript"
-          _ -> "npm install --prefix assets --save-dev @vue/compiler-sfc vue-tsc typescript"
+          "bun" ->
+            "cd #{assets_dir} && bun add --dev @vue/compiler-sfc vue-tsc typescript"
+
+          "pnpm" ->
+            "pnpm add --dir #{assets_dir} --save-dev @vue/compiler-sfc vue-tsc typescript"
+
+          "yarn" ->
+            "cd #{assets_dir} && yarn add --dev @vue/compiler-sfc vue-tsc typescript"
+
+          _ ->
+            "npm install --prefix #{assets_dir} --save-dev @vue/compiler-sfc vue-tsc typescript"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -540,13 +552,21 @@ if Code.ensure_loaded?(Igniter) do
 
     defp maybe_install_typescript_deps(igniter, "svelte", true) do
       pkg_manager = get_package_manager_command(igniter)
+      assets_dir = Path.join(File.cwd!(), "assets")
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "cd assets && bun add --dev svelte-loader svelte-preprocess typescript"
-          "pnpm" -> "pnpm add --dir assets --save-dev svelte-loader svelte-preprocess typescript"
-          "yarn" -> "cd assets && yarn add --dev svelte-loader svelte-preprocess typescript"
-          _ -> "npm install --prefix assets --save-dev svelte-loader svelte-preprocess typescript"
+          "bun" ->
+            "cd #{assets_dir} && bun add --dev svelte-loader svelte-preprocess typescript"
+
+          "pnpm" ->
+            "pnpm add --dir #{assets_dir} --save-dev svelte-loader svelte-preprocess typescript"
+
+          "yarn" ->
+            "cd #{assets_dir} && yarn add --dev svelte-loader svelte-preprocess typescript"
+
+          _ ->
+            "npm install --prefix #{assets_dir} --save-dev svelte-loader svelte-preprocess typescript"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
