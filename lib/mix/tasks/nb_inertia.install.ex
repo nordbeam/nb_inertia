@@ -516,18 +516,13 @@ if Code.ensure_loaded?(Igniter) do
     defp add_react_plugin_to_vite_config(content) do
       # Add react() with babel configuration to the plugins array
       # Look for "plugins: [" and add react() with babel plugin as first plugin
-      react_plugin_config = """
-        react({
-          babel: {
-            plugins: ['babel-plugin-react-compiler'],
-          },
-        }),
-      """
+      react_plugin =
+        "    react({\n      babel: {\n        plugins: ['babel-plugin-react-compiler'],\n      },\n    }),\n"
 
       content
       |> String.replace(
-        ~r/(plugins:\s*\[)(\s*)/,
-        "\\1\\2\n      #{String.trim(react_plugin_config)}",
+        ~r/(plugins:\s*\[\s*\n)/,
+        "\\1#{react_plugin}",
         global: false
       )
     end
@@ -621,13 +616,13 @@ if Code.ensure_loaded?(Igniter) do
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "cd #{assets_dir} && bun add @inertiajs/react react react-dom axios#{react_plugin}"
+            "bun add --cwd #{assets_dir} @inertiajs/react react react-dom axios#{react_plugin}"
 
           "pnpm" ->
             "pnpm add --dir #{assets_dir} @inertiajs/react react react-dom axios#{react_plugin}"
 
           "yarn" ->
-            "cd #{assets_dir} && yarn add @inertiajs/react react react-dom axios#{react_plugin}"
+            "yarn --cwd #{assets_dir} add @inertiajs/react react react-dom axios#{react_plugin}"
 
           _ ->
             "npm install --prefix #{assets_dir} @inertiajs/react react react-dom axios#{react_plugin}"
@@ -642,9 +637,9 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "cd #{assets_dir} && bun add @inertiajs/vue3 vue vue-loader axios"
+          "bun" -> "bun add --cwd #{assets_dir} @inertiajs/vue3 vue vue-loader axios"
           "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/vue3 vue vue-loader axios"
-          "yarn" -> "cd #{assets_dir} && yarn add @inertiajs/vue3 vue vue-loader axios"
+          "yarn" -> "yarn --cwd #{assets_dir} add @inertiajs/vue3 vue vue-loader axios"
           _ -> "npm install --prefix #{assets_dir} @inertiajs/vue3 vue vue-loader axios"
         end
 
@@ -657,9 +652,9 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "cd #{assets_dir} && bun add @inertiajs/svelte svelte axios"
+          "bun" -> "bun add --cwd #{assets_dir} @inertiajs/svelte svelte axios"
           "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/svelte svelte axios"
-          "yarn" -> "cd #{assets_dir} && yarn add @inertiajs/svelte svelte axios"
+          "yarn" -> "yarn --cwd #{assets_dir} add @inertiajs/svelte svelte axios"
           _ -> "npm install --prefix #{assets_dir} @inertiajs/svelte svelte axios"
         end
 
@@ -673,13 +668,13 @@ if Code.ensure_loaded?(Igniter) do
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "cd #{assets_dir} && bun add -D babel-plugin-react-compiler@latest"
+            "bun add --cwd #{assets_dir} -D babel-plugin-react-compiler@latest"
 
           "pnpm" ->
             "pnpm add --dir #{assets_dir} -D babel-plugin-react-compiler@latest"
 
           "yarn" ->
-            "cd #{assets_dir} && yarn add -D babel-plugin-react-compiler@latest"
+            "yarn --cwd #{assets_dir} add -D babel-plugin-react-compiler@latest"
 
           _ ->
             "npm install --prefix #{assets_dir} -D babel-plugin-react-compiler@latest"
@@ -699,13 +694,13 @@ if Code.ensure_loaded?(Igniter) do
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "cd #{assets_dir} && bun add --dev @types/react @types/react-dom typescript"
+            "bun add --cwd #{assets_dir} --dev @types/react @types/react-dom typescript"
 
           "pnpm" ->
             "pnpm add --dir #{assets_dir} --save-dev @types/react @types/react-dom typescript"
 
           "yarn" ->
-            "cd #{assets_dir} && yarn add --dev @types/react @types/react-dom typescript"
+            "yarn --cwd #{assets_dir} add --dev @types/react @types/react-dom typescript"
 
           _ ->
             "npm install --prefix #{assets_dir} --save-dev @types/react @types/react-dom typescript"
@@ -721,13 +716,13 @@ if Code.ensure_loaded?(Igniter) do
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "cd #{assets_dir} && bun add --dev @vue/compiler-sfc vue-tsc typescript"
+            "bun add --cwd #{assets_dir} --dev @vue/compiler-sfc vue-tsc typescript"
 
           "pnpm" ->
             "pnpm add --dir #{assets_dir} --save-dev @vue/compiler-sfc vue-tsc typescript"
 
           "yarn" ->
-            "cd #{assets_dir} && yarn add --dev @vue/compiler-sfc vue-tsc typescript"
+            "yarn --cwd #{assets_dir} add --dev @vue/compiler-sfc vue-tsc typescript"
 
           _ ->
             "npm install --prefix #{assets_dir} --save-dev @vue/compiler-sfc vue-tsc typescript"
@@ -743,13 +738,13 @@ if Code.ensure_loaded?(Igniter) do
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "cd #{assets_dir} && bun add --dev svelte-loader svelte-preprocess typescript"
+            "bun add --cwd #{assets_dir} --dev svelte-loader svelte-preprocess typescript"
 
           "pnpm" ->
             "pnpm add --dir #{assets_dir} --save-dev svelte-loader svelte-preprocess typescript"
 
           "yarn" ->
-            "cd #{assets_dir} && yarn add --dev svelte-loader svelte-preprocess typescript"
+            "yarn --cwd #{assets_dir} add --dev svelte-loader svelte-preprocess typescript"
 
           _ ->
             "npm install --prefix #{assets_dir} --save-dev svelte-loader svelte-preprocess typescript"
@@ -822,7 +817,9 @@ if Code.ensure_loaded?(Igniter) do
         igniter
         |> create_ssr_entry_files()
         |> create_vite_plugins()
-        |> update_vite_config_for_ssr()
+        # Skip automatic vite.config transformation - too complex for regex
+        # Users will update vite.config.js manually following the instructions
+        # |> update_vite_config_for_ssr()
         |> add_ssr_config()
       else
         if ssr_enabled do
@@ -850,9 +847,8 @@ if Code.ensure_loaded?(Igniter) do
       extension = if typescript, do: "tsx", else: "jsx"
 
       if Igniter.exists?(igniter, vite_config_path) do
-        igniter
-        |> Igniter.include_existing_file(vite_config_path)
-        |> Igniter.update_file(vite_config_path, fn source ->
+        # Don't include again - file is already included from update_vite_config_for_react
+        Igniter.update_file(igniter, vite_config_path, fn source ->
           Rewrite.Source.update(source, :content, fn
             content when is_binary(content) ->
               # Check if SSR config is already present
@@ -941,13 +937,15 @@ if Code.ensure_loaded?(Igniter) do
     defp add_ssr_server_config_and_closing(content) do
       # Find the closing of the config and replace }) with proper closing
       # Original ends with }) which closes the config object and defineConfig call
-      # We need to change it to }); to close return object, arrow function body, and defineConfig call
+      # We need to add server config inside the return object and close properly
       if String.contains?(content, "})") do
-        # Replace the ending }) with server config (optional) and proper closing
+        # Replace the ending }) with server config inside the return object
+        # Match: whitespace + } + whitespace + ) at end
+        # Capture only the }, not the whitespace before it
         String.replace(
           content,
-          ~r/(\s*})\s*\)\s*$/,
-          "\\1,\n    server: {\n      host: process.env.VITE_HOST || \"127.0.0.1\",\n      port: parseInt(process.env.VITE_PORT || \"5173\"),\n    },\n  };\n});"
+          ~r/\s*(})\s*\)\s*$/,
+          "\\1,\n  server: {\n    host: process.env.VITE_HOST || \"127.0.0.1\",\n    port: parseInt(process.env.VITE_PORT || \"5173\"),\n  }\n};\n});"
         )
       else
         content <> "\n});"
@@ -1254,14 +1252,57 @@ if Code.ensure_loaded?(Igniter) do
           - Created Vite plugin for Deno compatibility
           - SSR enabled in nb_inertia config
 
-          SSR Build Commands (add these to your vite.config.js and package.json):
-          1. Update your vite.config.js to include SSR config
-          2. Add build script to package.json:
-             "build:ssr": "vite build --ssr"
-          3. Build SSR bundle for production:
-             #{pkg_manager} run build:ssr
+          MANUAL SETUP REQUIRED:
 
-          Development SSR is handled automatically by the nb_vite ssrDev plugin.
+          1. Update your assets/vite.config.js to wrap the config in a function:
+
+             import nodePrefixPlugin from './vite-plugins/node-prefix-plugin.js'
+
+             export default defineConfig(({ command, mode, isSsrBuild }) => {
+               const isSSR = isSsrBuild || process.env.BUILD_SSR === "true";
+
+               if (isSSR) {
+                 return {
+                   plugins: [react(), nodePrefixPlugin()],
+                   build: {
+                     ssr: true,
+                     outDir: "../priv/static",
+                     rollupOptions: {
+                       input: "js/ssr_prod.#{if typescript, do: "tsx", else: "jsx"}",
+                       output: {
+                         format: "esm",
+                         entryFileNames: "ssr.js",
+                         footer: "globalThis.render = render;",
+                       },
+                     },
+                   },
+                   resolve: { alias: { "@": path.resolve(__dirname, "./js") } },
+                   ssr: { noExternal: true, target: "neutral" },
+                 };
+               }
+
+               // Return your existing client config here...
+               return { /* your existing config */ };
+             });
+
+          2. Add ssrDev to your phoenix plugin:
+             phoenix({
+               ...existing options...,
+               ssrDev: {
+                 enabled: true,
+                 path: '/ssr',
+                 healthPath: '/ssr-health',
+                 entryPoint: './js/ssr_dev.#{if typescript, do: "tsx", else: "jsx"}',
+                 hotFile: '../priv/ssr-hot',
+               },
+             })
+
+          3. Add build:ssr script to package.json:
+             "build:ssr": "vite build --ssr"
+
+          4. Build SSR bundle: #{pkg_manager} run build:ssr
+
+          Development SSR is handled automatically by nb_vite ssrDev plugin.
           Production SSR uses DenoRider for optimal performance.
           """
         else
