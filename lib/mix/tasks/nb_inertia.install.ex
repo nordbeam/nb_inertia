@@ -824,6 +824,7 @@ if Code.ensure_loaded?(Igniter) do
         # Users will update vite.config.js manually following the instructions
         # |> update_vite_config_for_ssr()
         |> add_ssr_config()
+        |> add_ssr_to_supervision_tree()
       else
         if ssr_enabled do
           Igniter.add_warning(
@@ -985,6 +986,10 @@ if Code.ensure_loaded?(Igniter) do
         [:ssr],
         {:code, Sourceror.parse_string!("[enabled: true]")}
       )
+    end
+
+    defp add_ssr_to_supervision_tree(igniter) do
+      Igniter.Project.Application.add_new_child(igniter, NbInertia.SSR)
     end
 
     defp ssr_dev_template() do
