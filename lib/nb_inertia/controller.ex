@@ -547,9 +547,6 @@ defmodule NbInertia.Controller do
     if MapSet.size(missing_props) > 0 do
       missing_list = MapSet.to_list(missing_props) |> Enum.map(&inspect/1) |> Enum.join(", ")
 
-      declared_list =
-        Enum.map(declared_props, & &1.name) |> Enum.map(&inspect/1) |> Enum.join(", ")
-
       raise ArgumentError, """
       Missing required props for Inertia page
 
@@ -584,9 +581,6 @@ defmodule NbInertia.Controller do
 
     if MapSet.size(extra_props) > 0 do
       extra_list = MapSet.to_list(extra_props) |> Enum.map(&inspect/1) |> Enum.join(", ")
-
-      declared_list =
-        Enum.map(declared_props, & &1.name) |> Enum.map(&inspect/1) |> Enum.join(", ")
 
       raise ArgumentError, """
       Undeclared props provided for Inertia page

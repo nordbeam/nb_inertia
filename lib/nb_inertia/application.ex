@@ -42,9 +42,12 @@ defmodule NbInertia.Application do
     # Forward configuration from :nb_inertia to :inertia
     forward_config()
 
-    # NbInertia doesn't have any supervised processes yet,
-    # but we need to return a supervisor spec
-    children = []
+    # Only start DenoRider if SSR is enabled
+    children =
+      case Application.get_env(:nb_inertia, :ssr, [])[:enabled] do
+        true -> [DenoRider]
+        _ -> []
+      end
 
     opts = [strategy: :one_for_one, name: NbInertia.Supervisor]
     Supervisor.start_link(children, opts)
@@ -88,5 +91,22 @@ defmodule NbInertia.Application do
           Application.put_env(:inertia, key, value)
       end
     end)
+
+    # Forward SSR config to :inertia so Inertia.Controller knows SSR is enabled
+    # The actual SSR rendering will be handled by our Inertia.SSR shim -> NbInertia.SSR
+    case Application.get_env(:nb_inertia, :ssr) do
+      nil ->
+        :ok
+
+      ssr_config when is_list(ssr_config) ->
+        # Convert our SSR config to what original Inertia expects
+        # Original Inertia checks if :ssr is truthy to enable SSR
+        if Keyword.get(ssr_config, :enabled, false) do
+          Application.put_env(:inertia, :ssr, true)
+        end
+
+      value ->
+        Application.put_env(:inertia, :ssr, value)
+    end
   end
 end

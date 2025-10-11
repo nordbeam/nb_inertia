@@ -20,7 +20,7 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     1. Adds `{:nb_inertia, "~> 0.1"}` to mix.exs dependencies
     2. Adds `{:inertia, "~> 2.5"}` to mix.exs dependencies
-    3. Sets up controller helpers (import NbInertia.Controller)
+    3. Sets up controller helpers (use NbInertia.Controller)
     4. Sets up HTML helpers (import Inertia.HTML)
     5. Adds `plug Inertia.Plug` to the browser pipeline
     6. Adds configuration to config/config.exs under :nb_inertia namespace
@@ -43,6 +43,7 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
         --camelize-props              Enable camelCase for props (stored in :nb_inertia config)
         --history-encrypt             Enable history encryption (stored in :nb_inertia config)
         --typescript                  Enable TypeScript
+        --ssr                         Enable Server-Side Rendering (SSR) support
         --yes                         Don't prompt for confirmations
 
     ## Examples
@@ -56,6 +57,9 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     # Install with React, TypeScript, and history encryption
     mix nb_inertia.install --client-framework react --typescript --history-encrypt --camelize-props
+
+    # Install with React, TypeScript, and SSR support
+    mix nb_inertia.install --client-framework react --typescript --ssr
     ```
 
     ## Using with nb_vite
@@ -98,6 +102,7 @@ if Code.ensure_loaded?(Igniter) do
           camelize_props: :boolean,
           history_encrypt: :boolean,
           typescript: :boolean,
+          ssr: :boolean,
           yes: :boolean
         ],
         example: __MODULE__.Docs.example(),
@@ -118,6 +123,7 @@ if Code.ensure_loaded?(Igniter) do
       |> update_root_layout()
       |> maybe_update_asset_bundler_config()
       |> setup_client()
+      |> maybe_setup_ssr()
       |> create_sample_page()
       |> print_next_steps()
     end
@@ -125,7 +131,7 @@ if Code.ensure_loaded?(Igniter) do
     @doc false
     def using_nb_vite?(igniter) do
       # Check if nb_vite is in the dependencies
-      case Igniter.Project.Deps.get_dependency_declaration(igniter, :nb_vite) do
+      case Igniter.Project.Deps.get_dep(igniter, :nb_vite) do
         {:ok, _} -> true
         _ -> false
       end
@@ -144,18 +150,28 @@ if Code.ensure_loaded?(Igniter) do
 
     @doc false
     def add_dependencies(igniter) do
-      igniter
-      |> Igniter.Project.Deps.add_dep({:nb_inertia, "~> 0.1"})
-      |> Igniter.Project.Deps.add_dep({:inertia, "~> 2.5"})
+      ssr_enabled = igniter.args.options[:ssr] || false
+
+      igniter =
+        igniter
+        |> Igniter.Project.Deps.add_dep({:nb_inertia, "~> 0.1"})
+        |> Igniter.Project.Deps.add_dep({:inertia, "~> 2.5"})
+
+      # Only add deno_rider if SSR is enabled AND nb_vite is present
+      if ssr_enabled && using_nb_vite?(igniter) do
+        Igniter.Project.Deps.add_dep(igniter, {:deno_rider, "~> 0.2"})
+      else
+        igniter
+      end
     end
 
     @doc false
     def setup_controller_helpers(igniter) do
       update_web_ex_helper(igniter, :controller, fn zipper ->
-        import_code = "import NbInertia.Controller"
+        use_code = "use NbInertia.Controller"
 
         with {:ok, zipper} <- move_to_last_import_or_alias(zipper) do
-          {:ok, Igniter.Code.Common.add_code(zipper, import_code)}
+          {:ok, Igniter.Code.Common.add_code(zipper, use_code)}
         end
       end)
     end
@@ -381,16 +397,9 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
-    def using_bun?(igniter) do
-      # Check if bun is configured in nb_vite
-      if using_nb_vite?(igniter) do
-        case Igniter.Project.Config.config_value(igniter, :bun, [:version]) do
-          {:ok, _} -> true
-          _ -> false
-        end
-      else
-        false
-      end
+    def using_bun?(_igniter) do
+      # Check if bun lockfile exists or bun is available
+      File.exists?("assets/bun.lockb") || System.find_executable("bun") != nil
     end
 
     @doc false
@@ -578,7 +587,7 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    defp inertia_app_jsx(igniter) do
+    defp inertia_app_jsx(_igniter) do
       # The app.jsx/tsx file is the same for both esbuild and Vite
       # Vite natively handles JSX/TSX, esbuild is configured to handle it too
       """
@@ -598,6 +607,222 @@ if Code.ensure_loaded?(Igniter) do
           createRoot(el).render(<App {...props} />);
         },
       });
+      """
+    end
+
+    @doc false
+    def maybe_setup_ssr(igniter) do
+      ssr_enabled = igniter.args.options[:ssr] || false
+
+      if ssr_enabled && using_nb_vite?(igniter) do
+        igniter
+        |> create_ssr_entry_files()
+        |> create_vite_plugins()
+        |> add_ssr_config()
+      else
+        if ssr_enabled do
+          Igniter.add_warning(
+            igniter,
+            """
+            SSR support requires nb_vite but it was not found in your dependencies.
+
+            To enable SSR:
+            1. First install nb_vite: mix nb_vite.install --typescript
+            2. Then run: mix nb_inertia.install --client-framework react --typescript --ssr
+
+            SSR setup has been skipped for now.
+            """
+          )
+        else
+          igniter
+        end
+      end
+    end
+
+    defp create_ssr_entry_files(igniter) do
+      typescript = igniter.args.options[:typescript] || false
+      extension = if typescript, do: "tsx", else: "jsx"
+
+      igniter
+      |> Igniter.create_new_file("assets/js/ssr_dev.#{extension}", ssr_dev_template(),
+        on_exists: :skip
+      )
+      |> Igniter.create_new_file("assets/js/ssr_prod.#{extension}", ssr_prod_template(),
+        on_exists: :skip
+      )
+    end
+
+    defp create_vite_plugins(igniter) do
+      Igniter.create_new_file(
+        igniter,
+        "assets/vite-plugins/node-prefix-plugin.js",
+        node_prefix_plugin(),
+        on_exists: :skip
+      )
+    end
+
+    defp add_ssr_config(igniter) do
+      Igniter.Project.Config.configure(
+        igniter,
+        "config.exs",
+        :nb_inertia,
+        [:ssr],
+        {:code, Sourceror.parse_string!("[enabled: true]")}
+      )
+    end
+
+    defp ssr_dev_template() do
+      """
+      import React from "react";
+      import ReactDOMServer from "react-dom/server";
+      import { createInertiaApp } from "@inertiajs/react";
+
+      /**
+       * Development SSR entry point with on-demand page loading
+       *
+       * Creates the page map once at module level, then only loads
+       * the specific requested page on each render.
+       */
+      // Lazy loading - create import functions once at module level
+      const pages = import.meta.glob("./pages/**/*.tsx");
+
+      export async function render(page) {
+        return await createInertiaApp({
+          page,
+          render: ReactDOMServer.renderToString,
+          resolve: async (name) => {
+            const pagePath = `./pages/${name}.tsx`;
+
+            if (!pages[pagePath]) {
+              // List available pages for debugging
+              const availablePages = Object.keys(pages)
+                .map(p => p.replace('./pages/', '').replace('.tsx', ''))
+                .sort();
+
+              throw new Error(
+                `❌ SSR Page Not Found\\n\\n` +
+                `Component: ${name}\\n` +
+                `Expected file: assets/js/pages/${name}.tsx\\n\\n` +
+                `This page file doesn't exist or wasn't found by Vite's glob.\\n\\n` +
+                `Common causes:\\n` +
+                `• The file hasn't been created yet\\n` +
+                `• The file name doesn't match the component name\\n` +
+                `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\\n` +
+                `• The component name in your controller doesn't match the file path\\n\\n` +
+                `Available pages (${availablePages.length}):\\n` +
+                availablePages.map(p => `  - ${p}`).join('\\n')
+              );
+            }
+
+            // Dynamically import only the requested page
+            return await pages[pagePath]();
+          },
+          setup: ({ App, props }) => <App {...props} />,
+        });
+      }
+      """
+    end
+
+    defp ssr_prod_template() do
+      """
+      import React from "react";
+      import ReactDOMServer from "react-dom/server";
+      import { createInertiaApp } from "@inertiajs/react";
+
+      /**
+       * Production SSR entry point with eager page loading
+       *
+       * Uses eager import.meta.glob() to bundle all pages into the SSR bundle.
+       * This is required for Deno/DenoRider which doesn't support dynamic imports
+       * in the same way as Node.js.
+       */
+      export async function render(page) {
+        return await createInertiaApp({
+          page,
+          render: ReactDOMServer.renderToString,
+          resolve: async (name) => {
+            // Eager loading - all pages are bundled
+            const pages = import.meta.glob("./pages/**/*.tsx", { eager: true });
+            const pagePath = `./pages/${name}.tsx`;
+
+            if (!pages[pagePath]) {
+              // List available pages for debugging
+              const availablePages = Object.keys(pages)
+                .map(p => p.replace('./pages/', '').replace('.tsx', ''))
+                .sort();
+
+              throw new Error(
+                `❌ SSR Page Not Found\\n\\n` +
+                `Component: ${name}\\n` +
+                `Expected file: assets/js/pages/${name}.tsx\\n\\n` +
+                `This page file doesn't exist or wasn't bundled in the SSR build.\\n\\n` +
+                `Common causes:\\n` +
+                `• The file hasn't been created yet\\n` +
+                `• The file name doesn't match the component name\\n` +
+                `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\\n` +
+                `• The component name in your controller doesn't match the file path\\n` +
+                `• The SSR bundle needs to be rebuilt (run: bun build:ssr)\\n\\n` +
+                `Available pages (${availablePages.length}):\\n` +
+                availablePages.map(p => `  - ${p}`).join('\\n')
+              );
+            }
+
+            return pages[pagePath];
+          },
+          setup: ({ App, props }) => <App {...props} />,
+        });
+      }
+      """
+    end
+
+    defp node_prefix_plugin() do
+      """
+      /**
+       * Vite plugin to add 'node:' prefix to Node.js built-in modules
+       *
+       * This is required for Deno compatibility in SSR builds.
+       * Deno requires the 'node:' prefix for Node.js built-ins (e.g., 'node:path'),
+       * while Vite and most Node.js code uses bare imports (e.g., 'path').
+       *
+       * This plugin transforms the imports during the SSR build to make the
+       * bundle compatible with Deno.
+       */
+
+      const nodeBuiltins = new Set([
+        'assert', 'async_hooks', 'buffer', 'child_process', 'cluster', 'console',
+        'constants', 'crypto', 'dgram', 'diagnostics_channel', 'dns', 'domain',
+        'events', 'fs', 'http', 'http2', 'https', 'inspector', 'module', 'net',
+        'os', 'path', 'perf_hooks', 'process', 'punycode', 'querystring',
+        'readline', 'repl', 'stream', 'string_decoder', 'sys', 'timers',
+        'tls', 'trace_events', 'tty', 'url', 'util', 'v8', 'vm', 'wasi',
+        'worker_threads', 'zlib'
+      ]);
+
+      export default function nodePrefixPlugin() {
+        return {
+          name: 'node-prefix',
+          enforce: 'pre',
+
+          // Transform imports to add 'node:' prefix to Node.js built-ins
+          resolveId(source, importer, options) {
+            // Only apply during SSR build
+            if (!options.ssr) return null;
+
+            // Check if this is a Node.js built-in module
+            if (nodeBuiltins.has(source)) {
+              return `node:${source}`;
+            }
+
+            // Check for path-based node built-ins (e.g., 'path/posix')
+            const baseModule = source.split('/')[0];
+            if (nodeBuiltins.has(baseModule)) {
+              return source.replace(baseModule, `node:${baseModule}`);
+            }
+
+            return null;
+          }
+        };
+      }
       """
     end
 
@@ -674,18 +899,26 @@ if Code.ensure_loaded?(Igniter) do
       typescript = igniter.args.options[:typescript] || false
       camelize_props = igniter.args.options[:camelize_props] || false
       history_encrypt = igniter.args.options[:history_encrypt] || false
+      ssr_enabled = igniter.args.options[:ssr] || false
       using_vite = using_nb_vite?(igniter)
       using_bun_runtime = using_bun?(igniter)
       pkg_manager = get_package_manager_command(igniter)
 
       config_info =
-        if camelize_props || history_encrypt do
-          "\n\nConfiguration added to config/config.exs under :nb_inertia:" <>
-            if(camelize_props, do: "\n  - camelize_props: true", else: "") <>
-            if(history_encrypt, do: "\n  - history: [encrypt: true]", else: "")
-        else
-          ""
-        end
+        config_items =
+        [
+          if(camelize_props, do: "\n  - camelize_props: true", else: nil),
+          if(history_encrypt, do: "\n  - history: [encrypt: true]", else: nil),
+          if(ssr_enabled && using_vite, do: "\n  - ssr: [enabled: true]", else: nil)
+        ]
+        |> Enum.filter(& &1)
+
+      if Enum.any?(config_items) do
+        "\n\nConfiguration added to config/config.exs under :nb_inertia:" <>
+          Enum.join(config_items, "")
+      else
+        ""
+      end
 
       bundler_info =
         if using_vite do
@@ -694,19 +927,45 @@ if Code.ensure_loaded?(Igniter) do
           "- Configured esbuild for code splitting"
         end
 
+      ssr_info =
+        if ssr_enabled && using_vite do
+          """
+
+          SSR Configuration:
+          - Added {:deno_rider, "~> 0.2"} for production SSR
+          - Created SSR entry points:
+            • assets/js/ssr_dev.#{if typescript, do: "tsx", else: "jsx"} - Development SSR with HMR
+            • assets/js/ssr_prod.#{if typescript, do: "tsx", else: "jsx"} - Production SSR for Deno
+          - Created Vite plugin for Deno compatibility
+          - SSR enabled in nb_inertia config
+
+          SSR Build Commands (add these to your vite.config.js and package.json):
+          1. Update your vite.config.js to include SSR config
+          2. Add build script to package.json:
+             "build:ssr": "vite build --ssr"
+          3. Build SSR bundle for production:
+             #{pkg_manager} run build:ssr
+
+          Development SSR is handled automatically by the nb_vite ssrDev plugin.
+          Production SSR uses DenoRider for optimal performance.
+          """
+        else
+          ""
+        end
+
       next_steps = """
       NbInertia has been successfully installed!
 
       What was configured:
       - Added {:nb_inertia, "~> 0.1"} and {:inertia, "~> 2.5"} to dependencies
-      - Set up controller helpers (import NbInertia.Controller)
+      - Set up controller helpers (use NbInertia.Controller)
       - Set up HTML helpers (import Inertia.HTML)
       - Added plug Inertia.Plug to the browser pipeline
       - Updated root layout for Inertia.js
       #{bundler_info}
       - Package manager: #{pkg_manager}#{config_info}
       - Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}
-      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}
+      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{ssr_info}
 
       Next steps:
       1. Create an Inertia-enabled controller action:
