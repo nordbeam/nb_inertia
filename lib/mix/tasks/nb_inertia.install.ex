@@ -1274,6 +1274,7 @@ if Code.ensure_loaded?(Igniter) do
                          entryFileNames: "ssr.js",
                          footer: "globalThis.render = render;",
                        },
+                       external: (id) => id.startsWith('node:'),
                      },
                    },
                    resolve: { alias: { "@": path.resolve(__dirname, "./js") } },
