@@ -613,7 +613,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp install_client_main_packages(igniter, "react") do
       pkg_manager = get_package_manager_command(igniter)
-      assets_dir = Path.join(File.cwd!(), "assets")
+      assets_dir = "assets"
 
       # Add @vitejs/plugin-react if using nb_vite
       react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react", else: ""
@@ -638,7 +638,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp install_client_main_packages(igniter, "vue") do
       pkg_manager = get_package_manager_command(igniter)
-      assets_dir = Path.join(File.cwd!(), "assets")
+      assets_dir = "assets"
 
       install_cmd =
         case pkg_manager do
@@ -653,7 +653,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp install_client_main_packages(igniter, "svelte") do
       pkg_manager = get_package_manager_command(igniter)
-      assets_dir = Path.join(File.cwd!(), "assets")
+      assets_dir = "assets"
 
       install_cmd =
         case pkg_manager do
@@ -668,7 +668,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp maybe_install_react_dev_deps(igniter, "react") do
       pkg_manager = get_package_manager_command(igniter)
-      assets_dir = Path.join(File.cwd!(), "assets")
+      assets_dir = "assets"
 
       install_cmd =
         case pkg_manager do
@@ -694,7 +694,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp maybe_install_typescript_deps(igniter, "react", true) do
       pkg_manager = get_package_manager_command(igniter)
-      assets_dir = Path.join(File.cwd!(), "assets")
+      assets_dir = "assets"
 
       install_cmd =
         case pkg_manager do
@@ -716,7 +716,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp maybe_install_typescript_deps(igniter, "vue", true) do
       pkg_manager = get_package_manager_command(igniter)
-      assets_dir = Path.join(File.cwd!(), "assets")
+      assets_dir = "assets"
 
       install_cmd =
         case pkg_manager do
@@ -738,7 +738,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp maybe_install_typescript_deps(igniter, "svelte", true) do
       pkg_manager = get_package_manager_command(igniter)
-      assets_dir = Path.join(File.cwd!(), "assets")
+      assets_dir = "assets"
 
       install_cmd =
         case pkg_manager do
@@ -864,8 +864,10 @@ if Code.ensure_loaded?(Igniter) do
                   add_ssr_dev_to_phoenix_plugin(content, extension)
                 end
               else
-                # Convert standard config to SSR config
-                convert_to_ssr_vite_config(content, extension)
+                # Convert standard config to SSR config and add ssrDev to phoenix plugin
+                content
+                |> convert_to_ssr_vite_config(extension)
+                |> add_ssr_dev_to_phoenix_plugin(extension)
               end
 
             content ->
@@ -890,9 +892,10 @@ if Code.ensure_loaded?(Igniter) do
       """
 
       # Find the phoenix plugin configuration and add ssrDev before the closing brace
+      # Use .*? (non-greedy) to match everything including newlines until we find }),
       String.replace(
         content,
-        ~r/(phoenix\(\{[^}]*)(}\))/s,
+        ~r/(phoenix\(\{.*?)(}\),)/s,
         "\\1  #{String.trim(ssr_dev_config)}\n        \\2"
       )
     end
@@ -936,13 +939,14 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp add_ssr_server_config_and_closing(content) do
-      # Find the closing of the phoenix plugin and add server config before the final closing brace
-      # Look for the last occurrence of "  }" or "})" to add server config before it
+      # Find the closing of the config and replace }) with proper closing
+      # Original ends with }) which closes the config object and defineConfig call
+      # We need to change it to }); to close return object, arrow function body, and defineConfig call
       if String.contains?(content, "})") do
-        # Add server config and closing before the last "})"
+        # Replace the ending }) with server config (optional) and proper closing
         String.replace(
           content,
-          ~r/(\s*})(\s*)$/,
+          ~r/(\s*})\s*\)\s*$/,
           "\\1,\n    server: {\n      host: process.env.VITE_HOST || \"127.0.0.1\",\n      port: parseInt(process.env.VITE_PORT || \"5173\"),\n    },\n  };\n});"
         )
       else
