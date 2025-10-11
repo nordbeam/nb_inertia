@@ -152,10 +152,8 @@ if Code.ensure_loaded?(Igniter) do
     def add_dependencies(igniter) do
       ssr_enabled = igniter.args.options[:ssr] || false
 
-      igniter =
-        igniter
-        |> Igniter.Project.Deps.add_dep({:nb_inertia, "~> 0.1"})
-        |> Igniter.Project.Deps.add_dep({:inertia, "~> 2.5"})
+      # Add inertia dependency (nb_inertia is already added by igniter.install)
+      igniter = Igniter.Project.Deps.add_dep(igniter, {:inertia, "~> 2.5"})
 
       # Only add deno_rider if SSR is enabled AND nb_vite is present
       if ssr_enabled && using_nb_vite?(igniter) do
@@ -466,7 +464,7 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "bun add @inertiajs/react react react-dom axios"
+          "bun" -> "bun --cwd assets add @inertiajs/react react react-dom axios"
           "pnpm" -> "pnpm add --dir assets @inertiajs/react react react-dom axios"
           "yarn" -> "cd assets && yarn add @inertiajs/react react react-dom axios"
           _ -> "npm install --prefix assets @inertiajs/react react react-dom axios"
@@ -480,7 +478,7 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "bun add @inertiajs/vue3 vue vue-loader axios"
+          "bun" -> "bun --cwd assets add @inertiajs/vue3 vue vue-loader axios"
           "pnpm" -> "pnpm add --dir assets @inertiajs/vue3 vue vue-loader axios"
           "yarn" -> "cd assets && yarn add @inertiajs/vue3 vue vue-loader axios"
           _ -> "npm install --prefix assets @inertiajs/vue3 vue vue-loader axios"
@@ -494,7 +492,7 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "bun add @inertiajs/svelte svelte axios"
+          "bun" -> "bun --cwd assets add @inertiajs/svelte svelte axios"
           "pnpm" -> "pnpm add --dir assets @inertiajs/svelte svelte axios"
           "yarn" -> "cd assets && yarn add @inertiajs/svelte svelte axios"
           _ -> "npm install --prefix assets @inertiajs/svelte svelte axios"
@@ -511,7 +509,7 @@ if Code.ensure_loaded?(Igniter) do
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "bun add --dev @types/react @types/react-dom typescript"
+            "bun --cwd assets add --dev @types/react @types/react-dom typescript"
 
           "pnpm" ->
             "pnpm add --dir assets --save-dev @types/react @types/react-dom typescript"
@@ -531,7 +529,7 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "bun add --dev @vue/compiler-sfc vue-tsc typescript"
+          "bun" -> "bun --cwd assets add --dev @vue/compiler-sfc vue-tsc typescript"
           "pnpm" -> "pnpm add --dir assets --save-dev @vue/compiler-sfc vue-tsc typescript"
           "yarn" -> "cd assets && yarn add --dev @vue/compiler-sfc vue-tsc typescript"
           _ -> "npm install --prefix assets --save-dev @vue/compiler-sfc vue-tsc typescript"
@@ -545,7 +543,7 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "bun add --dev svelte-loader svelte-preprocess typescript"
+          "bun" -> "bun --cwd assets add --dev svelte-loader svelte-preprocess typescript"
           "pnpm" -> "pnpm add --dir assets --save-dev svelte-loader svelte-preprocess typescript"
           "yarn" -> "cd assets && yarn add --dev svelte-loader svelte-preprocess typescript"
           _ -> "npm install --prefix assets --save-dev svelte-loader svelte-preprocess typescript"
