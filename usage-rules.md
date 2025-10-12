@@ -1,16 +1,32 @@
 # NbInertia Usage Rules
 
-## What It Does
-NbInertia provides an advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe props, shared props, and optional NbSerializer support. It adds compile-time validation and automatic component name inference on top of the base Inertia library.
+## Overview
+
+NbInertia provides advanced Inertia.js integration for Phoenix:
+- **Declarative page DSL** - Define pages and props with compile-time validation
+- **Component name inference** - Auto-convert `:users_index` to `"Users/Index"`
+- **Shared props** - Define props shared across all pages
+- **Type safety** - Compile-time validation in dev/test
+- **SSR support** - Built-in server-side rendering with DenoRider
+- **NbSerializer integration** - Optional high-performance serialization
+- **Test helpers** - Comprehensive testing utilities
 
 ## Installation
 
+### Quick Start
+```bash
+mix nb_inertia.install                # Basic installation
+mix nb_inertia.install --typescript   # With TypeScript support
+```
+
+### Manual Installation
 ```elixir
 # mix.exs
 def deps do
   [
     {:nb_inertia, "~> 0.1"},
-    {:nb_serializer, "~> 0.1", optional: true}  # Optional
+    {:nb_serializer, "~> 0.1", optional: true},  # Optional
+    {:nb_ts, "~> 0.1", optional: true}           # Optional
   ]
 end
 ```
@@ -21,128 +37,240 @@ end
 # config/config.exs
 config :nb_inertia,
   endpoint: MyAppWeb.Endpoint,           # Required for SSR/versioning
-  camelize_props: true,                  # Default: true (snake_case -> camelCase)
-  static_paths: ["/css", "/js"],         # For asset versioning
+  camelize_props: true,                  # Auto snake_case → camelCase (default: true)
+  static_paths: ["/css", "/js"],         # Paths for asset versioning
   default_version: "1",                  # Asset version
-  ssr: false,                            # Server-side rendering
-  raise_on_ssr_failure: true             # Raise on SSR errors
+  ssr: [
+    enabled: false,                      # Enable SSR (default: false)
+    raise_on_failure: true              # Raise on SSR errors (default: true)
+  ]
 ```
 
-**Important:** Configure `:nb_inertia`, not `:inertia`. NbInertia forwards config automatically.
+**Key Points:**
+- Always configure `:nb_inertia`, NOT `:inertia`
+- NbInertia automatically forwards config to base Inertia library
+- See [RELEASES.md](RELEASES.md) for SSR deployment guide
 
-## Basic Usage (Without NbSerializer)
+## Basic Usage
+
+### Define Inertia Pages
 
 ```elixir
 defmodule MyAppWeb.UserController do
   use MyAppWeb, :controller
   use NbInertia.Controller
 
+  # Define page and props
   inertia_page :users_index do
     prop :users, :list
     prop :total_count, :integer
+    prop :filters, :map, optional: true
   end
 
-  def index(conn, _params) do
+  def index(conn, params) do
+    users = list_users(params)
+
     render_inertia(conn, :users_index,
-      users: list_users(),
-      total_count: count_users()
+      users: users,
+      total_count: length(users),
+      filters: params["filters"]
     )
   end
 end
 ```
 
+### Prop Types
+
+**Primitive types:**
+- `:string`, `:integer`, `:float`, `:boolean`, `:map`, `:list`, `:any`
+
+**With NbSerializer:**
+- Use serializer modules: `prop :user, MyApp.UserSerializer`
+
+**With NbTs:**
+```elixir
+import NbTs.Sigil
+
+prop :stats, type: ~TS"{ total: number; active: number }"
+prop :status, type: ~TS"'active' | 'inactive'"
+```
+
 ## Component Name Inference
 
-Page atoms automatically convert to component paths:
-- `:users_index` → `"Users/Index"`
-- `:users_show` → `"Users/Show"`
-- `:admin_users_index` → `"Admin/Users/Index"`
-- `:dashboard` → `"Dashboard"`
-- `:user_profile` → `"UserProfile"`
+Page atoms automatically convert to React component paths:
 
-Override manually: `inertia_page :users, component: "Custom/Component" do ... end`
+| Page Atom | Component Path |
+|-----------|----------------|
+| `:users_index` | `"Users/Index"` |
+| `:users_show` | `"Users/Show"` |
+| `:users_new` | `"Users/New"` |
+| `:admin_users_index` | `"Admin/Users/Index"` |
+| `:admin_dashboard` | `"Admin/Dashboard"` |
+| `:dashboard` | `"Dashboard"` |
+| `:settings` | `"Settings"` |
 
-## Prop Types
-
-Primitive types: `:string`, `:integer`, `:float`, `:boolean`, `:map`, `:list`
-
-With NbSerializer installed: Use serializer modules as types
-
-## With NbSerializer (Optional)
-
+**Override if needed:**
 ```elixir
-inertia_page :users_index do
-  prop :users, MyApp.UserSerializer
-  prop :total_count, :integer
+inertia_page :custom, component: "Custom/Component" do
+  prop :data, :map
 end
+```
 
+## Rendering Patterns
+
+### Basic Rendering (Recommended)
+```elixir
 def index(conn, _params) do
-  render_inertia_serialized(conn, :users_index,
-    users: {MyApp.UserSerializer, list_users()},
+  render_inertia(conn, :users_index,
+    users: list_users(),
     total_count: count_users()
   )
 end
 ```
 
-### NbSerializer Functions
-- `assign_serialized/5` - Assign single prop with serialization
-- `assign_serialized_props/2` - Assign multiple serialized props
+### Pipe-Friendly
+```elixir
+def index(conn, _params) do
+  conn
+  |> assign_prop(:users, list_users())
+  |> assign_prop(:total_count, count_users())
+  |> render_inertia(:users_index)
+end
+```
+
+### With NbSerializer (High Performance)
+```elixir
+def index(conn, _params) do
+  render_inertia_serialized(conn, :users_index,
+    users: {UserSerializer, list_users()},
+    pagination: {PaginationSerializer, pagination()}
+  )
+end
+```
+
+## Advanced Features (with NbSerializer)
+
+### Serializer Functions
+- `assign_serialized/5` - Assign with automatic serialization
+- `assign_serialized_props/2` - Batch assign serialized props
 - `assign_serialized_errors/2` - Serialize Ecto changeset errors
 - `render_inertia_serialized/3` - Render with serialized props
 
-### Prop Options (with NbSerializer)
-- `lazy: true` - Only load on partial reloads
-- `defer: true` - Async load after initial render
-- `merge: true` - Merge with existing (infinite scroll)
-- `optional: true` - Excluded on first visit
+### Advanced Prop Options
+```elixir
+# Lazy - only load on partial reloads
+assign_serialized(conn, :posts, PostSerializer, posts, lazy: true)
+
+# Defer - async load after initial render
+assign_serialized(conn, :stats, StatsSerializer, stats, defer: true)
+
+# Merge - for infinite scroll/pagination
+assign_serialized(conn, :items, ItemSerializer, items, merge: true)
+
+# Optional - excluded on first visit
+assign_serialized(conn, :data, DataSerializer, data, optional: true)
+```
 
 ## Shared Props
 
-Define props shared across all pages:
-
+### Inline Shared Props
 ```elixir
-# Inline DSL
-inertia_shared do
-  prop :current_user, from: :assigns
-  prop :flash, from: :assigns
-end
+defmodule MyAppWeb.UserController do
+  use NbInertia.Controller
 
-# Or use a dedicated module
+  # Inline shared props
+  inertia_shared do
+    prop :current_user, from: :assigns
+    prop :flash, from: :assigns
+  end
+
+  inertia_page :index do
+    prop :users, :list
+  end
+end
+```
+
+### Shared Props Modules
+```elixir
 defmodule MyAppWeb.InertiaShared.Auth do
   use NbInertia.SharedProps
 
   inertia_shared do
     prop :locale, :string
-    prop :current_user, MyApp.UserSerializer
+    prop :current_user, :map
+    prop :flash, :map
   end
 
   def build_props(conn, _opts) do
     %{
       locale: conn.assigns[:locale] || "en",
-      current_user: conn.assigns[:current_user]
+      current_user: conn.assigns[:current_user],
+      flash: Phoenix.Controller.get_flash(conn)
     }
   end
 end
+```
 
-# Register in controller
-inertia_shared(MyAppWeb.InertiaShared.Auth)
+Register in controller:
+```elixir
+defmodule MyAppWeb.UserController do
+  use NbInertia.Controller
+
+  inertia_shared(MyAppWeb.InertiaShared.Auth)
+
+  inertia_page :index do
+    prop :users, :list
+  end
+end
 ```
 
 ## Testing
 
+### Setup
 ```elixir
 # test/support/conn_case.ex
-import NbInertia.TestHelpers
+defmodule MyAppWeb.ConnCase do
+  use ExUnit.CaseTemplate
 
-# In tests
-test "renders posts index", %{conn: conn} do
-  conn = inertia_get(conn, ~p"/posts")
+  using do
+    quote do
+      import Plug.Conn
+      import Phoenix.ConnTest
+      import NbInertia.TestHelpers
 
-  assert_inertia_page(conn, "Posts/Index")
-  assert_inertia_props(conn, [:posts, :total_count])
-  assert_inertia_prop(conn, :total_count, 1)
-  refute_inertia_prop(conn, :secret)
+      @endpoint MyAppWeb.Endpoint
+    end
+  end
 end
 ```
 
-Test helpers: `inertia_get/2`, `inertia_post/3`, `assert_inertia_page/2`, `assert_inertia_props/2`, `assert_inertia_prop/3`, `refute_inertia_prop/2`
+### Test Helpers
+
+**Request helpers:**
+```elixir
+conn = inertia_get(conn, ~p"/users")
+conn = inertia_post(conn, ~p"/users", user: params)
+conn = inertia_put(conn, ~p"/users/1", user: params)
+conn = inertia_patch(conn, ~p"/users/1", user: params)
+conn = inertia_delete(conn, ~p"/users/1")
+```
+
+**Assertion helpers:**
+```elixir
+assert_inertia_page(conn, "Users/Index")
+assert_inertia_props(conn, [:users, :total_count])
+assert_inertia_prop(conn, :total_count, 10)
+refute_inertia_prop(conn, :secret_data)
+```
+
+### Example Test
+```elixir
+test "renders users index", %{conn: conn} do
+  user = insert(:user, name: "John")
+  conn = inertia_get(conn, ~p"/users")
+
+  assert_inertia_page(conn, "Users/Index")
+  assert_inertia_props(conn, [:users, :total_count])
+  assert_inertia_prop(conn, :total_count, 1)
+end
+```

@@ -1,14 +1,26 @@
-# Release Configuration Guide
+# NbInertia Release & Deployment Guide
 
-This guide covers how to configure nb_inertia for production releases.
+Complete guide for deploying NbInertia applications with Server-Side Rendering (SSR) in production.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Configuration Details](#configuration-details)
+- [Troubleshooting](#troubleshooting)
+- [Advanced Configuration](#advanced-configuration)
+- [Testing Releases Locally](#testing-releases-locally)
+- [Migration Guide](#migration-guide)
+- [Best Practices](#best-practices)
 
 ## Overview
 
-nb_inertia is designed to work seamlessly in Mix releases without special configuration. The key improvements that make this possible:
+NbInertia is designed to work seamlessly in Mix releases with minimal configuration:
 
-1. **Clean Module Overriding**: nb_inertia provides `Inertia.SSR` as a compatibility shim that delegates to `NbInertia.SSR`, allowing seamless integration with the base inertia library while using our DenoRider-based SSR implementation
-2. **Automatic Path Resolution**: SSR script paths are resolved at runtime using `:code.priv_dir/1`, which works correctly in releases
-3. **Zero-Config by Default**: No need to configure script_path explicitly - it's automatically inferred from your endpoint module
+1. **Clean Module Integration**: Provides `Inertia.SSR` as a compatibility shim delegating to `NbInertia.SSR` with DenoRider-based SSR
+2. **Automatic Path Resolution**: SSR script paths resolved at runtime using `:code.priv_dir/1`
+3. **Zero-Config Default**: No manual path configuration needed - automatically inferred from endpoint module
+4. **Production Ready**: Optimized for Docker, Fly.io, Gigalixir, and traditional VPS deployments
 
 ### Module Redefining Warning (Expected Behavior)
 
@@ -24,7 +36,7 @@ In releases, only one version of the module will be included (nb_inertia's versi
 
 ## Quick Start
 
-### 1. Configure nb_inertia
+### 1. Configure NbInertia
 
 ```elixir
 # config/config.exs
@@ -32,13 +44,37 @@ config :nb_inertia,
   endpoint: MyAppWeb.Endpoint,
   ssr: [
     enabled: true,
-    raise_on_failure: config_env() != :prod
+    raise_on_failure: config_env() != :prod,
+    dev_server_url: "http://localhost:5173"  # Optional: Vite dev server
   ]
 ```
 
-**Note**: The `endpoint` configuration is required as it's used to automatically infer your application name for path resolution.
+**Important:**
+- `endpoint` is required for automatic path resolution
+- `raise_on_failure: false` in production allows graceful fallback to client-side rendering
+- SSR errors in development/test will raise for easier debugging
 
-### 2. Build Assets
+### 2. Add SSR to Supervision Tree
+
+Ensure `NbInertia.SSR` is in your application's supervision tree:
+
+```elixir
+# lib/my_app/application.ex
+def start(_type, _args) do
+  children = [
+    # ... other children
+    MyAppWeb.Endpoint,
+    NbInertia.SSR  # Add this for SSR support
+  ]
+
+  opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+  Supervisor.start_link(children, opts)
+end
+```
+
+**Note:** This should be added automatically by `mix nb_inertia.install --ssr`.
+
+### 3. Build Assets
 
 Build your client and SSR bundles:
 
@@ -46,24 +82,67 @@ Build your client and SSR bundles:
 cd assets
 npm run build        # or: bun run build
 npm run build:ssr    # or: bun run build:ssr
+cd ..
 ```
 
-This will create:
+This creates:
 - `priv/static/assets/app.js` - Client bundle
 - `priv/static/ssr.js` - SSR bundle (for DenoRider)
 
-### 3. Build Release
+**Vite Configuration Example:**
+
+```javascript
+// vite.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    rollupOptions: {
+      input: {
+        app: './js/app.jsx',
+      },
+    },
+    outDir: '../priv/static/assets',
+  },
+})
+
+// vite.ssr.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    ssr: true,
+    rollupOptions: {
+      input: './js/ssr.jsx',
+    },
+    outDir: '../priv/static',
+  },
+})
+```
+
+### 4. Build Release
 
 ```bash
 MIX_ENV=prod mix release
 ```
 
-The SSR bundle will be automatically included in your release's priv directory.
+The SSR bundle is automatically included in your release's priv directory.
 
-### 4. Run Release
+### 5. Run Release
 
 ```bash
+# Start in foreground
 _build/prod/rel/my_app/bin/my_app start
+
+# Or with console for debugging
+_build/prod/rel/my_app/bin/my_app console
+
+# Or as daemon
+_build/prod/rel/my_app/bin/my_app daemon
 ```
 
 ## Configuration Details
