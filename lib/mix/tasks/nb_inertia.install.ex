@@ -1203,32 +1203,16 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp maybe_setup_nb_ts_watcher(igniter, output_dir) do
-      # Add file_system dependency for FileSystem-based watching
-      igniter = Igniter.Project.Deps.add_dep(igniter, {:file_system, "~> 1.0"})
+      igniter
+      |> Igniter.Project.Application.add_new_child(
+        {NbTs.Watcher, [output_dir: output_dir]},
+        opts: [env: :dev]
+      )
+      |> Igniter.add_notice("""
+      Added NbTs.Watcher to application supervision tree (dev environment only).
 
-      web_module = Igniter.Libs.Phoenix.web_module(igniter)
-
-      case web_module do
-        nil ->
-          Igniter.add_warning(
-            igniter,
-            "Could not find Phoenix web module. File watcher for automatic type generation was not configured. You can manually run 'mix ts.gen' to generate types."
-          )
-
-        web_module ->
-          # Extract the base app name from web module
-          app_module_parts =
-            web_module
-            |> Module.split()
-            |> Enum.take(1)
-
-          app_module = Module.concat(app_module_parts)
-          watcher_module = Module.concat([app_module, "NbTs", "Watcher"])
-
-          igniter
-          |> create_nb_ts_watcher_module(watcher_module, output_dir)
-          |> add_watcher_to_supervision_tree(watcher_module)
-      end
+      The watcher will automatically regenerate TypeScript types when Elixir files change.
+      """)
     end
 
     defp create_nb_ts_output_directory(igniter, output_dir) do
@@ -1432,103 +1416,6 @@ if Code.ensure_loaded?(Igniter) do
 
       This will discover your NbSerializer serializers and Inertia pages,
       and generate TypeScript interfaces for type-safe frontend development.
-      """)
-    end
-
-    defp create_nb_ts_watcher_module(igniter, watcher_module, output_dir) do
-      watcher_content = """
-      defmodule #{inspect(watcher_module)} do
-        @moduledoc \"\"\"
-        FileSystem-based watcher for automatic TypeScript type generation.
-
-        This GenServer watches for changes in Elixir files and automatically
-        regenerates TypeScript types when serializers or Inertia pages are modified.
-        \"\"\"
-
-        use GenServer
-        require Logger
-
-        def start_link(opts) do
-          GenServer.start_link(__MODULE__, opts, name: __MODULE__)
-        end
-
-        @impl true
-        def init(_opts) do
-          dirs = ["lib"]
-          {:ok, watcher_pid} = FileSystem.start_link(dirs: dirs)
-          FileSystem.subscribe(watcher_pid)
-
-          Logger.info("NbTs file watcher started, watching: \#{inspect(dirs)}")
-
-          {:ok, %{watcher_pid: watcher_pid, debounce_ref: nil}}
-        end
-
-        @impl true
-        def handle_info({:file_event, _watcher_pid, {path, _events}}, state) do
-          # Only regenerate for .ex files
-          if Path.extname(path) == ".ex" do
-            # Cancel previous debounce timer if exists
-            if state.debounce_ref do
-              Process.cancel_timer(state.debounce_ref)
-            end
-
-            # Debounce regeneration to avoid multiple runs
-            ref = Process.send_after(self(), :regenerate_types, 500)
-            {:noreply, %{state | debounce_ref: ref}}
-          else
-            {:noreply, state}
-          end
-        end
-
-        @impl true
-        def handle_info({:file_event, _watcher_pid, :stop}, state) do
-          Logger.info("NbTs file watcher stopped")
-          {:noreply, state}
-        end
-
-        @impl true
-        def handle_info(:regenerate_types, state) do
-          Logger.info("Regenerating TypeScript types...")
-
-          case System.cmd("mix", ["nb_ts.gen.types", "--output-dir", "#{output_dir}"],
-                 stderr_to_stdout: true
-               ) do
-            {_output, 0} ->
-              Logger.info("TypeScript types regenerated successfully")
-
-            {output, _code} ->
-              Logger.warning("Failed to regenerate TypeScript types: \#{output}")
-          end
-
-          {:noreply, %{state | debounce_ref: nil}}
-        end
-      end
-      """
-
-      watcher_path =
-        watcher_module
-        |> Module.split()
-        |> Enum.map(&Macro.underscore/1)
-        |> Path.join()
-        |> then(&"lib/#{&1}.ex")
-
-      igniter
-      |> Igniter.create_new_file(watcher_path, watcher_content, on_exists: :skip)
-      |> Igniter.add_notice("""
-      Created NbTs file watcher at #{watcher_path}
-
-      This GenServer watches for Elixir file changes and automatically
-      regenerates TypeScript types when serializers or Inertia pages are modified.
-      """)
-    end
-
-    defp add_watcher_to_supervision_tree(igniter, watcher_module) do
-      igniter
-      |> Igniter.Project.Application.add_new_child(watcher_module, opts: [env: :dev])
-      |> Igniter.add_notice("""
-      Added NbTs file watcher to application supervision tree (dev environment only).
-
-      The watcher will automatically regenerate TypeScript types when Elixir files change.
       """)
     end
 
