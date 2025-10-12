@@ -36,6 +36,7 @@ defmodule NbInertia.MixProject do
 
   defp deps do
     [
+      {:igniter, "~> 0.6", only: [:dev, :test]},
       # Required dependencies
       {:inertia, "~> 2.0"},
       {:phoenix, "~> 1.7"},

@@ -20,15 +20,17 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     1. Adds `{:nb_inertia, "~> 0.1"}` to mix.exs dependencies
     2. Adds `{:inertia, "~> 2.5"}` to mix.exs dependencies
-    3. Sets up controller helpers (use NbInertia.Controller)
-    4. Sets up HTML helpers (import Inertia.HTML)
-    5. Adds `plug Inertia.Plug` to the browser pipeline
-    6. Adds configuration to config/config.exs under :nb_inertia namespace
-    7. Updates root layout template (with nb_vite support if detected)
-    8. Configures asset bundler (esbuild by default, or skips if nb_vite is present)
-    9. Detects and uses appropriate package manager (npm, yarn, pnpm, or bun)
-    10. Creates sample Inertia page component
-    11. Prints helpful next steps
+    3. Adds `{:nb_ts, "~> 0.1"}` when --typescript is used
+    4. Sets up controller helpers (use NbInertia.Controller)
+    5. Sets up HTML helpers (import Inertia.HTML)
+    6. Adds `plug Inertia.Plug` to the browser pipeline
+    7. Adds configuration to config/config.exs under :nb_inertia namespace
+    8. Updates root layout template (with nb_vite support if detected)
+    9. Configures asset bundler (esbuild by default, or skips if nb_vite is present)
+    10. Detects and uses appropriate package manager (npm, yarn, pnpm, or bun)
+    11. Sets up TypeScript type generation (when --typescript is used)
+    12. Creates sample Inertia page component
+    13. Prints helpful next steps
 
     ## Usage
 
@@ -124,6 +126,7 @@ if Code.ensure_loaded?(Igniter) do
       |> maybe_update_asset_bundler_config()
       |> setup_client()
       |> maybe_setup_ssr()
+      |> maybe_setup_nb_ts()
       |> create_sample_page()
       |> print_next_steps()
     end
@@ -151,9 +154,18 @@ if Code.ensure_loaded?(Igniter) do
     @doc false
     def add_dependencies(igniter) do
       ssr_enabled = igniter.args.options[:ssr] || false
+      typescript_enabled = igniter.args.options[:typescript] || false
 
       # Add inertia dependency (nb_inertia is already added by igniter.install)
       igniter = Igniter.Project.Deps.add_dep(igniter, {:inertia, "~> 2.5"})
+
+      # Add nb_ts if TypeScript is enabled
+      igniter =
+        if typescript_enabled do
+          Igniter.Project.Deps.add_dep(igniter, {:nb_ts, "~> 0.1"})
+        else
+          igniter
+        end
 
       # Only add deno_rider if SSR is enabled AND nb_vite is present
       if ssr_enabled && using_nb_vite?(igniter) do
@@ -1148,6 +1160,312 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
+    def maybe_setup_nb_ts(igniter) do
+      typescript_enabled = igniter.args.options[:typescript] || false
+
+      if typescript_enabled do
+        setup_nb_ts(igniter)
+      else
+        igniter
+      end
+    end
+
+    defp setup_nb_ts(igniter) do
+      # Determine output directory from config or use default
+      # Priority: nb_inertia config > nb_ts config > default
+      output_dir = get_nb_ts_output_dir(igniter)
+
+      igniter
+      |> create_nb_ts_output_directory(output_dir)
+      |> update_tsconfig_for_nb_ts(output_dir)
+      |> add_nb_ts_type_generation_alias()
+      |> maybe_setup_nb_ts_watcher(output_dir)
+      |> create_nb_ts_example_file()
+      |> add_nb_ts_initial_type_generation_task(output_dir)
+      |> add_nb_ts_output_dir_config(output_dir)
+    end
+
+    defp get_nb_ts_output_dir(_igniter) do
+      # Always use assets/js/types for consistency
+      # Users can configure via Application config after installation if needed
+      "assets/js/types"
+    end
+
+    defp add_nb_ts_output_dir_config(igniter, output_dir) do
+      # Add the output_dir to nb_ts config so it's persisted
+      Igniter.Project.Config.configure(
+        igniter,
+        "config.exs",
+        :nb_ts,
+        [:output_dir],
+        output_dir
+      )
+    end
+
+    defp maybe_setup_nb_ts_watcher(igniter, output_dir) do
+      # Always set up the watcher when using nb_vite (development mode)
+      # This integrates with the existing Phoenix watcher system
+      if using_nb_vite?(igniter) do
+        setup_nb_ts_file_watcher(igniter, output_dir)
+      else
+        igniter
+      end
+    end
+
+    defp setup_nb_ts_file_watcher(igniter, output_dir) do
+      # Get the app name and endpoint
+      app_name = Igniter.Project.Application.app_name(igniter)
+
+      case Igniter.Libs.Phoenix.select_endpoint(igniter) do
+        {igniter, nil} ->
+          Igniter.add_warning(
+            igniter,
+            "Could not find Phoenix endpoint. File watcher for automatic TypeScript type generation was not configured. You can manually run 'mix ts.gen' to generate types."
+          )
+
+        {igniter, endpoint} ->
+          # Add the watcher configuration to dev.exs
+          watcher_value =
+            {:code,
+             quote do
+               [
+                 "mix",
+                 "nb_ts.gen.types",
+                 "--output-dir",
+                 unquote(output_dir),
+                 cd: Path.expand("..", __DIR__)
+               ]
+             end}
+
+          case Igniter.Project.Config.configure(
+                 igniter,
+                 "dev.exs",
+                 app_name,
+                 [endpoint, :watchers, :nb_ts],
+                 watcher_value
+               ) do
+            {:error, igniter} ->
+              Igniter.add_warning(
+                igniter,
+                "Could not configure file watcher in dev.exs. You can manually run 'mix ts.gen' to generate types."
+              )
+
+            result ->
+              Igniter.add_notice(result, """
+              Configured file watcher for automatic TypeScript type generation.
+
+              TypeScript types will be regenerated automatically when serializers or Inertia pages change.
+              The watcher runs 'mix nb_ts.gen.types' on file changes.
+              """)
+          end
+      end
+    end
+
+    defp create_nb_ts_output_directory(igniter, output_dir) do
+      # Create a .gitkeep file to ensure the directory exists
+      gitkeep_path = Path.join(output_dir, ".gitkeep")
+
+      igniter
+      |> Igniter.create_new_file(gitkeep_path, "", on_exists: :skip)
+      |> Igniter.add_notice("""
+      Created TypeScript types output directory at #{output_dir}
+
+      Generated TypeScript types from serializers will be placed here.
+      """)
+    end
+
+    defp update_tsconfig_for_nb_ts(igniter, output_dir) do
+      tsconfig_path = "assets/tsconfig.json"
+
+      # Update the existing tsconfig.json to include the types directory
+      if Igniter.exists?(igniter, tsconfig_path) do
+        igniter
+        |> Igniter.include_existing_file(tsconfig_path)
+        |> Igniter.update_file(tsconfig_path, fn source ->
+          Rewrite.Source.update(source, :content, fn
+            content when is_binary(content) ->
+              # Parse the JSON to add types directory to include
+              types_dir = Path.basename(output_dir)
+
+              # Check if types directory is already in include
+              if String.contains?(content, "\"#{types_dir}/**/*\"") do
+                content
+              else
+                # Add types directory to include array
+                # Find the "include" array and add types to it
+                String.replace(
+                  content,
+                  ~r/"include":\s*\[(.*?)\]/s,
+                  fn match ->
+                    if String.contains?(match, "\"#{types_dir}/**/*\"") do
+                      match
+                    else
+                      # Add types to existing include
+                      String.replace(match, "]", ", \"#{types_dir}/**/*\"]")
+                    end
+                  end
+                )
+              end
+
+            content ->
+              content
+          end)
+        end)
+      else
+        igniter
+      end
+    end
+
+    defp add_nb_ts_type_generation_alias(igniter) do
+      igniter
+      |> Igniter.Project.TaskAliases.add_alias("ts.gen", ["nb_ts.gen.types"])
+      |> Igniter.add_notice("""
+      Added mix alias: mix ts.gen
+
+      Run 'mix ts.gen' to generate TypeScript types from your serializers and Inertia pages.
+      """)
+    end
+
+    defp create_nb_ts_example_file(igniter) do
+      # Find the web module to place the example in the right location
+      web_module = Igniter.Libs.Phoenix.web_module(igniter)
+
+      # Extract the base app name from web module (e.g., MyAppWeb -> MyApp)
+      app_module_parts =
+        case web_module do
+          nil ->
+            # Fallback to app name if web module not found
+            [Igniter.Project.Application.app_name(igniter) |> to_string() |> Macro.camelize()]
+
+          module ->
+            module
+            |> Module.split()
+            |> Enum.take(1)
+        end
+
+      app_module = Module.concat(app_module_parts)
+
+      example_module = Module.concat([app_module, "Examples", "InertiaTypeScriptExample"])
+
+      example_content = """
+      defmodule #{inspect(example_module)} do
+        @moduledoc \"\"\"
+        Example demonstrating NbInertia TypeScript integration with NbTs.
+
+        This module shows how to:
+        1. Use the ~TS sigil for compile-time TypeScript validation in page props
+        2. Generate TypeScript interfaces from NbSerializer serializers
+        3. Generate TypeScript interfaces for Inertia page props
+        4. Import and use generated types in your frontend code
+
+        ## Type Generation
+
+        To generate TypeScript types from your serializers and Inertia pages, run:
+
+            mix nb_ts.gen.types
+
+        Or use the alias:
+
+            mix ts.gen
+
+        ## Using Generated Types
+
+        In your TypeScript/React code:
+
+        ```typescript
+        import type { User, Post } from "@/types";
+        import type { UsersIndexProps } from "@/types";
+
+        // Use the generated page props type
+        export default function UsersIndex({ users, total }: UsersIndexProps) {
+          return (
+            <div>
+              <h1>Users ({total})</h1>
+              {users.map((user: User) => (
+                <div key={user.id}>{user.name}</div>
+              ))}
+            </div>
+          );
+        }
+        ```
+
+        ## Using the ~TS Sigil in Inertia Pages
+
+        The ~TS sigil validates TypeScript syntax at compile time:
+
+        ```elixir
+        import NbTs.Sigil
+
+        defmodule MyAppWeb.UserController do
+          use MyAppWeb, :controller
+          use NbInertia.Controller
+          import NbTs.Sigil
+
+          inertia_page :index do
+            prop :users, type: ~TS"Array<User>"
+            prop :total, type: ~TS"number"
+            prop :filters, type: ~TS"{ search?: string; status?: 'active' | 'inactive' }"
+          end
+
+          def index(conn, params) do
+            users = Accounts.list_users(params)
+
+            render_inertia(conn, :index,
+              users: users,
+              total: length(users),
+              filters: Map.take(params, ["search", "status"])
+            )
+          end
+        end
+        ```
+
+        ## Benefits
+
+        - **Type Safety**: Compile-time validation of TypeScript types in Elixir
+        - **Auto-generation**: TypeScript interfaces generated from serializers
+        - **Page Props Types**: TypeScript interfaces for each Inertia page
+        - **DX**: Full IntelliSense and type checking in your frontend code
+        \"\"\"
+
+        # This is just a documentation module - no implementation needed
+      end
+      """
+
+      example_path =
+        example_module
+        |> Module.split()
+        |> Enum.map(&Macro.underscore/1)
+        |> Path.join()
+        |> then(&"lib/#{&1}.ex")
+
+      igniter
+      |> Igniter.create_new_file(example_path, example_content, on_exists: :skip)
+      |> Igniter.add_notice("""
+      Created TypeScript integration example at #{example_path}
+
+      This file demonstrates:
+      - How to use the ~TS sigil in Inertia page props
+      - How to import and use generated types in React components
+      - How to generate TypeScript interfaces for serializers and pages
+      """)
+    end
+
+    defp add_nb_ts_initial_type_generation_task(igniter, output_dir) do
+      # Add a task to run after installation
+      igniter
+      |> Igniter.add_task("nb_ts.gen.types", [
+        "--output-dir",
+        output_dir
+      ])
+      |> Igniter.add_notice("""
+      Initial TypeScript type generation will run after installation.
+
+      This will discover your NbSerializer serializers and Inertia pages,
+      and generate TypeScript interfaces for type-safe frontend development.
+      """)
+    end
+
+    @doc false
     def create_sample_page(igniter) do
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
@@ -1225,8 +1543,7 @@ if Code.ensure_loaded?(Igniter) do
       using_bun_runtime = using_bun?(igniter)
       pkg_manager = get_package_manager_command(igniter)
 
-      config_info =
-        config_items =
+      config_items =
         [
           if(camelize_props, do: "\n  - camelize_props: true", else: nil),
           if(history_encrypt, do: "\n  - history: [encrypt: true]", else: nil),
@@ -1234,12 +1551,13 @@ if Code.ensure_loaded?(Igniter) do
         ]
         |> Enum.filter(& &1)
 
-      if Enum.any?(config_items) do
-        "\n\nConfiguration added to config/config.exs under :nb_inertia:" <>
-          Enum.join(config_items, "")
-      else
-        ""
-      end
+      config_info =
+        if Enum.any?(config_items) do
+          "\n\nConfiguration added to config/config.exs under :nb_inertia:" <>
+            Enum.join(config_items, "")
+        else
+          ""
+        end
 
       bundler_info =
         if using_vite do
@@ -1321,11 +1639,36 @@ if Code.ensure_loaded?(Igniter) do
           ""
         end
 
+      typescript_info =
+        if typescript do
+          watcher_status =
+            if using_vite do
+              "enabled (automatic regeneration on file changes)"
+            else
+              "not enabled (run 'mix ts.gen' manually)"
+            end
+
+          """
+
+          TypeScript Integration (nb_ts):
+          - Added {:nb_ts, "~> 0.1"} for TypeScript type generation
+          - Created types output directory at #{get_nb_ts_output_dir(igniter)}
+          - Added mix alias: mix ts.gen
+          - File watcher: #{watcher_status}
+          - Will generate TypeScript interfaces for:
+            • NbSerializer serializers
+            • Inertia page props
+          - Use the ~TS sigil for compile-time type validation in page props
+          """
+        else
+          ""
+        end
+
       next_steps = """
       NbInertia has been successfully installed!
 
       What was configured:
-      - Added {:nb_inertia, "~> 0.1"} and {:inertia, "~> 2.5"} to dependencies
+      - Added {:nb_inertia, "~> 0.1"} and {:inertia, "~> 2.5"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}
       - Set up controller helpers (use NbInertia.Controller)
       - Set up HTML helpers (import Inertia.HTML)
       - Added plug Inertia.Plug to the browser pipeline
@@ -1333,17 +1676,17 @@ if Code.ensure_loaded?(Igniter) do
       #{bundler_info}
       - Package manager: #{pkg_manager}#{config_info}
       - Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}
-      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{ssr_info}
+      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{typescript_info}#{ssr_info}
 
       Next steps:
       1. Create an Inertia-enabled controller action:
 
          defmodule MyAppWeb.PageController do
            use MyAppWeb, :controller
-           use NbInertia.Controller
+           use NbInertia.Controller#{if typescript, do: "\n           import NbTs.Sigil", else: ""}
 
            inertia_page :home do
-             prop :greeting, :string
+             prop :greeting, #{if typescript, do: "type: ~TS\"string\"", else: ":string"}
            end
 
            def home(conn, _params) do
@@ -1359,15 +1702,15 @@ if Code.ensure_loaded?(Igniter) do
 
       3. Create page components in assets/js/pages/
          - NbInertia automatically converts :home to "Home"
-         - Use :users_index to render "Users/Index" component
+         - Use :users_index to render "Users/Index" component#{if typescript, do: "\n\n      4. Generate TypeScript types from your serializers and pages:\n\n         mix ts.gen\n\n      5. Import generated types in your React components:\n\n         import type { HomeProps } from \"@/types\";\n\n         export default function Home({ greeting }: HomeProps) {\n           return <h1>{greeting}</h1>;\n         }", else: ""}
 
-      4. Start your Phoenix server:
+      #{if typescript, do: "6", else: "4"}. Start your Phoenix server:
 
          mix phx.server
 
       For more information:
       - NbInertia docs: https://hexdocs.pm/nb_inertia
-      - Inertia.js docs: https://inertiajs.com
+      - Inertia.js docs: https://inertiajs.com#{if typescript, do: "\n      - NbTs docs: https://hexdocs.pm/nb_ts", else: ""}
       """
 
       Igniter.add_notice(igniter, next_steps)
