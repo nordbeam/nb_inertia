@@ -384,29 +384,6 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    # This function is deprecated - kept for reference only
-    # The new approach appends Inertia lines to existing vite layout using build_inertia_vite_lines/2
-    defp inertia_root_html_vite() do
-      """
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <meta name="csrf-token" content={get_csrf_token()} />
-          <.inertia_title><%= assigns[:page_title] %></.inertia_title>
-          <.inertia_head content={@inertia_head} />
-          <%= NbVite.vite_client() %>
-          <%= NbVite.react_refresh() %>
-          <%= NbVite.vite_assets("js/app.tsx") %>
-        </head>
-        <body>
-          {@inner_content}
-        </body>
-      </html>
-      """
-    end
-
     @doc false
     def update_esbuild_config(igniter) do
       igniter
@@ -857,117 +834,6 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    defp update_vite_config_for_ssr(igniter) do
-      vite_config_path = "assets/vite.config.js"
-      typescript = igniter.args.options[:typescript] || false
-      extension = if typescript, do: "tsx", else: "jsx"
-
-      if Igniter.exists?(igniter, vite_config_path) do
-        # Don't include again - file is already included from update_vite_config_for_react
-        Igniter.update_file(igniter, vite_config_path, fn source ->
-          Rewrite.Source.update(source, :content, fn
-            content when is_binary(content) ->
-              # Check if SSR config is already present
-              if String.contains?(content, "isSsrBuild") or String.contains?(content, "BUILD_SSR") do
-                # Already configured for SSR - just add ssrDev if missing
-                if String.contains?(content, "ssrDev:") do
-                  content
-                else
-                  add_ssr_dev_to_phoenix_plugin(content, extension)
-                end
-              else
-                # Convert standard config to SSR config and add ssrDev to phoenix plugin
-                content
-                |> convert_to_ssr_vite_config(extension)
-                |> add_ssr_dev_to_phoenix_plugin(extension)
-              end
-
-            content ->
-              content
-          end)
-        end)
-      else
-        igniter
-      end
-    end
-
-    defp add_ssr_dev_to_phoenix_plugin(content, extension) do
-      # Add ssrDev configuration to phoenix plugin
-      ssr_dev_config = """
-      ssrDev: {
-                enabled: true,
-                path: '/ssr',
-                healthPath: '/ssr-health',
-                entryPoint: './js/ssr_dev.#{extension}',
-                hotFile: '../priv/ssr-hot',
-              },
-      """
-
-      # Find the phoenix plugin configuration and add ssrDev before the closing brace
-      # Use .*? (non-greedy) to match everything including newlines until we find }),
-      String.replace(
-        content,
-        ~r/(phoenix\(\{.*?)(}\),)/s,
-        "\\1  #{String.trim(ssr_dev_config)}\n        \\2"
-      )
-    end
-
-    defp convert_to_ssr_vite_config(content, extension) do
-      # Add import for node-prefix-plugin if not present
-      content =
-        if not String.contains?(content, "node-prefix-plugin") do
-          add_node_prefix_plugin_import(content)
-        else
-          content
-        end
-
-      # Convert the export to a function that checks for SSR build
-      # This is complex, so we'll do a simple check and replacement
-      if String.contains?(content, "export default defineConfig({") do
-        # Standard config - convert to function form
-        content
-        |> String.replace(
-          "export default defineConfig({",
-          "export default defineConfig(({ command, mode, isSsrBuild }) => {\n  const isSSR = isSsrBuild || process.env.BUILD_SSR === \"true\";\n\n  if (isSSR) {\n    // SSR build configuration for Deno compatibility\n    return {\n      plugins: [react(), nodePrefixPlugin()],\n      build: {\n        ssr: true,\n        outDir: \"../priv/static\",\n        rollupOptions: {\n          input: \"js/ssr_prod.#{extension}\",\n          output: {\n            format: \"esm\",\n            entryFileNames: \"ssr.js\",\n            footer: \"globalThis.render = render;\",\n          },\n        },\n      },\n      resolve: {\n        alias: {\n          \"@\": path.resolve(__dirname, \"./js\"),\n        },\n      },\n      ssr: {\n        noExternal: true,\n        target: \"neutral\",\n      },\n    };\n  }\n\n  // Client build configuration\n  return {"
-        )
-        |> add_ssr_server_config_and_closing()
-      else
-        # Already in function form or different structure - just add warning
-        content
-      end
-    end
-
-    defp add_node_prefix_plugin_import(content) do
-      # Add after other imports
-      lines = String.split(content, "\n")
-
-      {imports, rest} =
-        Enum.split_while(lines, fn line ->
-          String.starts_with?(String.trim(line), "import") or String.trim(line) == ""
-        end)
-
-      import_line = "import nodePrefixPlugin from './vite-plugins/node-prefix-plugin.js'"
-      Enum.join(imports ++ [import_line, ""] ++ rest, "\n")
-    end
-
-    defp add_ssr_server_config_and_closing(content) do
-      # Find the closing of the config and replace }) with proper closing
-      # Original ends with }) which closes the config object and defineConfig call
-      # We need to add server config inside the return object and close properly
-      if String.contains?(content, "})") do
-        # Replace the ending }) with server config inside the return object
-        # Match: whitespace + } + whitespace + ) at end
-        # Capture only the }, not the whitespace before it
-        String.replace(
-          content,
-          ~r/\s*(})\s*\)\s*$/,
-          "\\1,\n  server: {\n    host: process.env.VITE_HOST || \"127.0.0.1\",\n    port: parseInt(process.env.VITE_PORT || \"5173\"),\n  }\n};\n});"
-        )
-      else
-        content <> "\n});"
-      end
-    end
-
     defp create_ssr_entry_files(igniter) do
       typescript = igniter.args.options[:typescript] || false
       extension = if typescript, do: "tsx", else: "jsx"
@@ -1179,7 +1045,6 @@ if Code.ensure_loaded?(Igniter) do
       |> create_nb_ts_output_directory(output_dir)
       |> update_tsconfig_for_nb_ts(output_dir)
       |> add_nb_ts_type_generation_alias()
-      |> maybe_setup_nb_ts_watcher(output_dir)
       |> create_nb_ts_example_file()
       |> add_nb_ts_initial_type_generation_task(output_dir)
       |> add_nb_ts_output_dir_config(output_dir)
@@ -1200,19 +1065,6 @@ if Code.ensure_loaded?(Igniter) do
         [:output_dir],
         output_dir
       )
-    end
-
-    defp maybe_setup_nb_ts_watcher(igniter, output_dir) do
-      igniter
-      |> Igniter.Project.Application.add_new_child(
-        {NbTs.Watcher, [output_dir: output_dir]},
-        opts: [env: :dev]
-      )
-      |> Igniter.add_notice("""
-      Added NbTs.Watcher to application supervision tree (dev environment only).
-
-      The watcher will automatically regenerate TypeScript types when Elixir files change.
-      """)
     end
 
     defp create_nb_ts_output_directory(igniter, output_dir) do
@@ -1595,24 +1447,18 @@ if Code.ensure_loaded?(Igniter) do
 
       typescript_info =
         if typescript do
-          watcher_status =
-            if using_vite do
-              "enabled (automatic regeneration on file changes)"
-            else
-              "not enabled (run 'mix ts.gen' manually)"
-            end
-
           """
 
           TypeScript Integration (nb_ts):
           - Added {:nb_ts, "~> 0.1"} for TypeScript type generation
           - Created types output directory at #{get_nb_ts_output_dir(igniter)}
-          - Added mix alias: mix ts.gen
-          - File watcher: #{watcher_status}
+          - Added mix alias: mix ts.gen (run after modifying props or serializers)
           - Will generate TypeScript interfaces for:
             • NbSerializer serializers
             • Inertia page props
           - Use the ~TS sigil for compile-time type validation in page props
+
+          NOTE: Type generation is manual. Run 'mix ts.gen' after making changes to keep types in sync.
           """
         else
           ""
