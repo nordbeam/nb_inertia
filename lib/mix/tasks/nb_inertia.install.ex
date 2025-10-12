@@ -162,7 +162,7 @@ if Code.ensure_loaded?(Igniter) do
       # Add nb_ts if TypeScript is enabled
       igniter =
         if typescript_enabled do
-          Igniter.Project.Deps.add_dep(igniter, {:nb_ts, "~> 0.1"})
+          Igniter.Project.Deps.add_dep(igniter, {:nb_ts, github: "nordbeam/nb_ts"})
         else
           igniter
         end
