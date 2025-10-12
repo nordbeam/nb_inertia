@@ -12,7 +12,18 @@ defmodule NbInertia.SSR do
       config :nb_inertia,
         ssr: [
           enabled: true,
-          script_path: Path.join([__DIR__, "..", "priv", "static", "ssr.js"]),
+          raise_on_failure: config_env() != :prod
+        ]
+
+  The `script_path` will automatically default to your application's priv directory
+  (e.g., `priv/static/ssr.js`) which works correctly in both development and releases.
+
+  You can optionally override the script path:
+
+      config :nb_inertia,
+        ssr: [
+          enabled: true,
+          script_path: "/custom/path/to/ssr.js",
           raise_on_failure: config_env() != :prod
         ]
 
@@ -79,6 +90,68 @@ defmodule NbInertia.SSR do
       conn
       |> disable_ssr()
       |> render_inertia("Dashboard")
+
+  ## Release Configuration
+
+  NbInertia.SSR is designed to work seamlessly in releases without additional configuration.
+  The script_path automatically resolves to your application's priv directory using
+  `:code.priv_dir/1`, which works correctly in both development and production releases.
+
+  ### Building for Production
+
+  1. Build your SSR bundle (typically done in your assets build step):
+
+         cd assets && npm run build:ssr
+
+  2. Ensure the SSR bundle is included in your release:
+
+         # In mix.exs, ensure priv/static is included (this is the default)
+         overlays: [
+           {"/priv/static/ssr.js", "priv/static/ssr.js"}
+         ]
+
+  3. Build your release:
+
+         MIX_ENV=prod mix release
+
+  ### Troubleshooting Releases
+
+  If SSR is not working in your release:
+
+  1. Verify the SSR bundle exists:
+
+         ls _build/prod/rel/my_app/lib/my_app-0.1.0/priv/static/ssr.js
+
+  2. Check that NbInertia.SSR is in your supervision tree (added automatically by installer):
+
+         # In lib/my_app/application.ex
+         children = [
+           ...,
+           NbInertia.SSR
+         ]
+
+  3. Check logs for SSR initialization messages:
+
+         # You should see:
+         # [info] SSR: Using production bundle at /path/to/priv/static/ssr.js
+
+  ### Important Notes
+
+  - **Module Overriding**: nb_inertia provides `Inertia.SSR` as a compatibility shim that
+    delegates to `NbInertia.SSR`. You may see a "redefining module" warning during compilation,
+    which is expected and safe - it means we're successfully replacing the base library's NodeJS-based
+    SSR with our DenoRider-based implementation.
+
+  - **Automatic Path Resolution**: The script_path is automatically resolved at runtime using
+    `:code.priv_dir/1`, which works correctly in releases where paths are different from
+    development.
+
+  - **Endpoint Configuration Required**: Make sure you have configured the `:endpoint` in your
+    nb_inertia config, as it's used to infer your application name:
+
+        config :nb_inertia,
+          endpoint: MyAppWeb.Endpoint,
+          ssr: [enabled: true]
   """
 
   use GenServer
@@ -155,7 +228,13 @@ defmodule NbInertia.SSR do
   def init(opts) do
     config = Application.get_env(:nb_inertia, :ssr, [])
     enabled = Keyword.get(opts, :enabled, Keyword.get(config, :enabled, false))
-    script_path = Keyword.get(opts, :script_path, Keyword.get(config, :script_path))
+
+    # Use configured script_path or fall back to default based on app's priv_dir
+    script_path =
+      Keyword.get(opts, :script_path) ||
+        Keyword.get(config, :script_path) ||
+        default_script_path()
+
     dev_server_url = Keyword.get(opts, :dev_server_url, Keyword.get(config, :dev_server_url))
 
     # Detect if we're in development mode
@@ -284,6 +363,45 @@ defmodule NbInertia.SSR do
 
   defp dev_mode? do
     Application.get_env(:nb_inertia, :env, :prod) == :dev
+  end
+
+  defp default_script_path do
+    case infer_app_name() do
+      nil ->
+        nil
+
+      app ->
+        case :code.priv_dir(app) do
+          {:error, :bad_name} ->
+            nil
+
+          priv_dir ->
+            Path.join([priv_dir, "static", "ssr.js"])
+        end
+    end
+  end
+
+  defp infer_app_name do
+    # Try to infer the app name from the endpoint module
+    case NbInertia.Config.endpoint() do
+      nil ->
+        nil
+
+      endpoint_module when is_atom(endpoint_module) ->
+        # Convert MyAppWeb.Endpoint to :my_app
+        endpoint_module
+        |> Module.split()
+        |> List.first()
+        |> then(fn module_name ->
+          module_name
+          |> String.replace(~r/Web$/, "")
+          |> Macro.underscore()
+          |> String.to_atom()
+        end)
+
+      _ ->
+        nil
+    end
   end
 
   defp check_dev_server_health(base_url) do

@@ -421,7 +421,8 @@ defmodule NbInertia.Controller do
           conn
         end
 
-      Inertia.Controller.render_inertia(conn, component)
+      # Don't delegate to Inertia.Controller for final render - handle SSR ourselves
+      NbInertia.Controller.do_render_inertia(conn, component)
     end
   end
 
@@ -440,7 +441,7 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          Inertia.Controller.render_inertia(conn_value, unquote(component_or_page))
+          NbInertia.Controller.do_render_inertia(conn_value, unquote(component_or_page))
         end
 
       # If it's an atom literal
@@ -492,7 +493,7 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          Inertia.Controller.render_inertia(conn_value, component)
+          NbInertia.Controller.do_render_inertia(conn_value, component)
         end
 
       # Default: pass through
@@ -507,7 +508,7 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          Inertia.Controller.render_inertia(conn_value, unquote(component_or_page))
+          NbInertia.Controller.do_render_inertia(conn_value, unquote(component_or_page))
         end
     end
   end
@@ -971,7 +972,7 @@ defmodule NbInertia.Controller do
             conn
           end
 
-        Inertia.Controller.render_inertia(conn, component)
+        NbInertia.Controller.do_render_inertia(conn, component)
       end
     end
   else
@@ -1135,4 +1136,96 @@ defmodule NbInertia.Controller do
       value -> value
     end
   end
+
+  @doc false
+  def do_render_inertia(conn, component) do
+    # Call Inertia.Controller.render_inertia but intercept SSR rendering
+    # We do this by ensuring the conn doesn't have :inertia_ssr set,
+    # then handling SSR ourselves based on :nb_inertia_ssr_enabled
+
+    conn = Plug.Conn.put_private(conn, :inertia_ssr, false)
+
+    if ssr_enabled?(conn) do
+      # Handle SSR ourselves with NbInertia.SSR
+      do_render_with_ssr(conn, component)
+    else
+      # Let Inertia.Controller handle CSR
+      Inertia.Controller.render_inertia(conn, component)
+    end
+  end
+
+  defp do_render_with_ssr(conn, component) do
+    # Set component and render
+    conn =
+      Plug.Conn.put_private(conn, :inertia_page, %{
+        component: component,
+        props: conn.private[:inertia_page][:props] || %{}
+      })
+
+    # Check if this is an inertia request (partial reload)
+    if conn.private[:inertia_request] do
+      # For partial reloads, return JSON (no SSR)
+      conn
+      |> Plug.Conn.put_status(200)
+      |> Plug.Conn.put_resp_header("x-inertia", "true")
+      |> Plug.Conn.put_resp_header("vary", "X-Inertia")
+      |> Phoenix.Controller.json(inertia_page_data(conn))
+    else
+      # For initial page load, use SSR
+      page_data = inertia_page_data(conn)
+      ssr_module = NbInertia.Config.ssr_module()
+
+      case ssr_module.call(page_data) do
+        {:ok, %{"head" => head, "body" => body}} ->
+          render_ssr_response(conn, head, body)
+
+        {:error, message} ->
+          # Fall back to CSR on error
+          require Logger
+          Logger.error("SSR rendering failed with #{inspect(ssr_module)}: #{inspect(message)}")
+          Inertia.Controller.render_inertia(conn, component)
+      end
+    end
+  end
+
+  defp inertia_page_data(conn) do
+    %{
+      component: conn.private.inertia_page.component,
+      props: conn.private.inertia_page.props,
+      url: Phoenix.Controller.current_path(conn),
+      version: conn.private[:inertia_version] || "1"
+    }
+  end
+
+  defp render_ssr_response(conn, head, body) do
+    # Compile head tags
+    conn = compile_ssr_head(conn, head)
+
+    conn
+    |> Phoenix.Controller.put_view(Inertia.HTML)
+    |> Plug.Conn.assign(:body, body)
+    |> Phoenix.Controller.render(:inertia_ssr)
+  end
+
+  @title_regex ~r/<title inertia>(.*?)<\/title>/
+
+  defp compile_ssr_head(conn, incoming_head) do
+    current_head = conn.assigns[:inertia_head] || []
+    all_tags = current_head ++ incoming_head
+
+    {titles, other_tags} = Enum.split_with(all_tags, &(&1 =~ @title_regex))
+
+    conn
+    |> Plug.Conn.assign(:inertia_head, other_tags)
+    |> update_ssr_page_title(Enum.reverse(titles))
+  end
+
+  defp update_ssr_page_title(conn, [title_tag | _]) do
+    case Regex.run(@title_regex, title_tag) do
+      [_, page_title] -> Plug.Conn.assign(conn, :page_title, page_title)
+      _ -> conn
+    end
+  end
+
+  defp update_ssr_page_title(conn, _), do: conn
 end

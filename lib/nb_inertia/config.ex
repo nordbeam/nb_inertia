@@ -107,6 +107,22 @@ defmodule NbInertia.Config do
   end
 
   @doc """
+  Returns the SSR module to use for server-side rendering.
+
+  Defaults to `NbInertia.SSR` (DenoRider-based).
+
+  You can configure this to use a different SSR implementation:
+
+      config :nb_inertia,
+        ssr_module: Inertia.SSR  # Use base inertia's NodeJS-based SSR
+
+  Or provide your own custom SSR module that implements `call/1`.
+  """
+  def ssr_module do
+    get(:ssr_module, NbInertia.SSR)
+  end
+
+  @doc """
   Returns whether props should be automatically camelized for Inertia.
 
   Defaults to `true` to match Inertia.js conventions.

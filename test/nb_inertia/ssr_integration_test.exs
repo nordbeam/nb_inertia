@@ -60,9 +60,9 @@ defmodule NbInertia.SSRIntegrationTest do
       result = GenServer.call(ssr_pid, {:render, page}, 10_000)
 
       assert {:ok, rendered} = result
-      assert rendered.head == ["<title>Dashboard</title>"]
-      assert rendered.body =~ "Dashboard"
-      assert rendered.body =~ "John"
+      assert rendered["head"] == ["<title>Dashboard</title>"]
+      assert rendered["body"] =~ "Dashboard"
+      assert rendered["body"] =~ "John"
 
       Process.exit(ssr_pid, :normal)
     end
@@ -111,14 +111,14 @@ defmodule NbInertia.SSRIntegrationTest do
 
       # Verify each result contains the correct component
       assert {:ok, home} = Enum.at(results, 0)
-      assert home.body =~ "Home"
+      assert home["body"] =~ "Home"
 
       assert {:ok, about} = Enum.at(results, 1)
-      assert about.body =~ "About"
+      assert about["body"] =~ "About"
 
       assert {:ok, contact} = Enum.at(results, 2)
-      assert contact.body =~ "Contact"
-      assert contact.body =~ "test@test.com"
+      assert contact["body"] =~ "Contact"
+      assert contact["body"] =~ "test@test.com"
 
       Process.exit(ssr_pid, :normal)
     end
@@ -150,10 +150,10 @@ defmodule NbInertia.SSRIntegrationTest do
       result = GenServer.call(ssr_pid, {:render, page}, 10_000)
 
       assert {:ok, rendered} = result
-      assert rendered.body =~ "UserProfile"
-      assert rendered.body =~ "Alice"
-      assert rendered.body =~ "Elixir"
-      assert rendered.body =~ "Hello World"
+      assert rendered["body"] =~ "UserProfile"
+      assert rendered["body"] =~ "Alice"
+      assert rendered["body"] =~ "Elixir"
+      assert rendered["body"] =~ "Hello World"
 
       Process.exit(ssr_pid, :normal)
     end
@@ -173,8 +173,8 @@ defmodule NbInertia.SSRIntegrationTest do
       result = SSR.render(page)
 
       assert {:ok, rendered} = result
-      assert rendered.body =~ "TestPage"
-      assert rendered.body =~ "Hello from SSR"
+      assert rendered["body"] =~ "TestPage"
+      assert rendered["body"] =~ "Hello from SSR"
     end
 
     test "returns error when SSR is disabled" do
@@ -290,7 +290,7 @@ defmodule NbInertia.SSRIntegrationTest do
       # Each should contain the correct component
       Enum.zip(1..10, results)
       |> Enum.each(fn {i, {:ok, rendered}} ->
-        assert rendered.body =~ "Page#{i}"
+        assert rendered["body"] =~ "Page#{i}"
       end)
     end
   end
