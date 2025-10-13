@@ -1058,9 +1058,13 @@ defmodule NbInertia.Controller do
     # Compile head tags
     conn = compile_ssr_head(conn, head)
 
+    # Get the page data to embed in data-page attribute
+    page_data = inertia_page_data(conn)
+
     conn
-    |> Phoenix.Controller.put_view(Inertia.HTML)
+    |> Phoenix.Controller.put_view(NbInertia.HTML)
     |> Plug.Conn.assign(:body, body)
+    |> Plug.Conn.assign(:page, page_data)
     |> Phoenix.Controller.render(:inertia_ssr)
   end
 
