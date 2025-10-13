@@ -46,8 +46,8 @@ defmodule NbInertia.Controller do
     quote do
       import NbInertia.Controller
 
-      # Import Inertia.Controller functions except those we override
-      import Inertia.Controller,
+      # Import NbInertia.CoreController functions except those we override
+      import NbInertia.CoreController,
         except: [
           render_inertia: 2,
           render_inertia: 3,
@@ -265,7 +265,7 @@ defmodule NbInertia.Controller do
 
               render_inertia(conn, "MyComponent")
 
-          See: https://hexdocs.pm/nb_inertia/NbInertia.Controller.html#inertia_page/2
+          See: https://hexdocs.pm/nb_inertia/NbNbInertia.CoreController.html#inertia_page/2
           """
         end
       end
@@ -317,7 +317,7 @@ defmodule NbInertia.Controller do
   @doc """
   Renders an Inertia response with support for atom-based page references.
 
-  This overrides Inertia.Controller.render_inertia to support:
+  This overrides NbInertia.CoreController.render_inertia to support:
   - Atom page references (e.g., `:users_index`) with automatic component name lookup
   - All-in-one pattern with props and validation (3-arity)
   - Pipe-friendly pattern (2-arity)
@@ -349,7 +349,7 @@ defmodule NbInertia.Controller do
   defmacro render_inertia(conn, page_ref, props)
            when is_atom(page_ref) and is_list(props) and props != [] do
     quote bind_quoted: [conn: conn, page_ref: page_ref, props: props] do
-      import Inertia.Controller, only: [assign_prop: 3]
+      import NbInertia.CoreController, only: [assign_prop: 3]
 
       # Look up the component name
       component = page(page_ref)
@@ -366,7 +366,7 @@ defmodule NbInertia.Controller do
 
       # Validate props in dev mode
       if Application.get_env(:nb_inertia, :env, :prod) in [:dev, :test] do
-        NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props)
+        NbNbInertia.CoreController.validate_page_props!(__MODULE__, page_ref, props)
 
         # Check for collisions between shared module props and page props
         provided_prop_names = Keyword.keys(props) |> MapSet.new()
@@ -410,7 +410,7 @@ defmodule NbInertia.Controller do
       # Assign serialized props if any (and if nb_serializer is available)
       conn =
         if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
-          NbInertia.Controller.assign_serialized_props(conn, serialized_props)
+          NbNbInertia.CoreController.assign_serialized_props(conn, serialized_props)
         else
           conn
         end
@@ -430,13 +430,13 @@ defmodule NbInertia.Controller do
       # Apply camelization if configured
       conn =
         if NbInertia.Config.camelize_props?() do
-          Inertia.Controller.camelize_props(conn, true)
+          NbInertia.CoreController.camelize_props(conn, true)
         else
           conn
         end
 
       # Don't delegate to Inertia.Controller for final render - handle SSR ourselves
-      NbInertia.Controller.do_render_inertia(conn, component)
+      NbNbInertia.CoreController.do_render_inertia(conn, component)
     end
   end
 
@@ -450,12 +450,12 @@ defmodule NbInertia.Controller do
 
           conn_value =
             if NbInertia.Config.camelize_props?() do
-              Inertia.Controller.camelize_props(conn_value, true)
+              NbInertia.CoreController.camelize_props(conn_value, true)
             else
               conn_value
             end
 
-          NbInertia.Controller.do_render_inertia(conn_value, unquote(component_or_page))
+          NbNbInertia.CoreController.do_render_inertia(conn_value, unquote(component_or_page))
         end
 
       # If it's an atom literal
@@ -486,7 +486,7 @@ defmodule NbInertia.Controller do
               case prop_config do
                 %{from: :assigns, name: name} ->
                   data = Map.get(acc.assigns, name)
-                  Inertia.Controller.assign_prop(acc, name, data)
+                  NbInertia.CoreController.assign_prop(acc, name, data)
 
                 _ ->
                   acc
@@ -496,18 +496,18 @@ defmodule NbInertia.Controller do
           # Add shared module props
           conn_value =
             Enum.reduce(shared_module_props, conn_value, fn {key, value}, acc ->
-              Inertia.Controller.assign_prop(acc, key, value)
+              NbInertia.CoreController.assign_prop(acc, key, value)
             end)
 
           # Apply camelization if configured
           conn_value =
             if NbInertia.Config.camelize_props?() do
-              Inertia.Controller.camelize_props(conn_value, true)
+              NbInertia.CoreController.camelize_props(conn_value, true)
             else
               conn_value
             end
 
-          NbInertia.Controller.do_render_inertia(conn_value, component)
+          NbNbInertia.CoreController.do_render_inertia(conn_value, component)
         end
 
       # Default: pass through
@@ -517,12 +517,12 @@ defmodule NbInertia.Controller do
 
           conn_value =
             if NbInertia.Config.camelize_props?() do
-              Inertia.Controller.camelize_props(conn_value, true)
+              NbInertia.CoreController.camelize_props(conn_value, true)
             else
               conn_value
             end
 
-          NbInertia.Controller.do_render_inertia(conn_value, unquote(component_or_page))
+          NbNbInertia.CoreController.do_render_inertia(conn_value, unquote(component_or_page))
         end
     end
   end
@@ -587,7 +587,7 @@ defmodule NbInertia.Controller do
       Or mark them as optional in the page declaration:
         prop #{Enum.at(MapSet.to_list(missing_props), 0)}, :type, optional: true
 
-      See: https://hexdocs.pm/nb_inertia/NbInertia.Controller.html#render_inertia/3
+      See: https://hexdocs.pm/nb_inertia/NbNbInertia.CoreController.html#render_inertia/3
       """
     end
 
@@ -624,7 +624,7 @@ defmodule NbInertia.Controller do
            #{format_missing_props_declaration(MapSet.to_list(extra_props))}  # Add these
          end
 
-      See: https://hexdocs.pm/nb_inertia/NbInertia.Controller.html#inertia_page/2
+      See: https://hexdocs.pm/nb_inertia/NbNbInertia.CoreController.html#inertia_page/2
       """
     end
 
@@ -771,13 +771,13 @@ defmodule NbInertia.Controller do
       value =
         cond do
           optional? ->
-            Inertia.Controller.inertia_optional(serialize_fn)
+            NbInertia.CoreController.inertia_optional(serialize_fn)
 
           is_binary(defer) ->
-            Inertia.Controller.inertia_defer(serialize_fn, defer)
+            NbInertia.CoreController.inertia_defer(serialize_fn, defer)
 
           defer == true ->
-            Inertia.Controller.inertia_defer(serialize_fn)
+            NbInertia.CoreController.inertia_defer(serialize_fn)
 
           lazy? ->
             serialize_fn
@@ -789,13 +789,13 @@ defmodule NbInertia.Controller do
       # Apply merge wrapper if needed
       value =
         case merge do
-          :deep -> Inertia.Controller.inertia_deep_merge(value)
-          true -> Inertia.Controller.inertia_merge(value)
+          :deep -> NbInertia.CoreController.inertia_deep_merge(value)
+          true -> NbInertia.CoreController.inertia_merge(value)
           false -> value
         end
 
       # Assign the prop
-      Inertia.Controller.assign_prop(conn, key, value)
+      NbInertia.CoreController.assign_prop(conn, key, value)
     end
 
     @doc """
@@ -826,7 +826,7 @@ defmodule NbInertia.Controller do
     """
     @spec assign_serialized_errors(Plug.Conn.t(), Ecto.Changeset.t() | map()) :: Plug.Conn.t()
     def assign_serialized_errors(conn, errors) do
-      Inertia.Controller.assign_errors(conn, errors)
+      NbInertia.CoreController.assign_errors(conn, errors)
     end
 
     @doc """
@@ -996,7 +996,7 @@ defmodule NbInertia.Controller do
 
   @doc false
   def do_render_inertia(conn, component) do
-    # Call Inertia.Controller.render_inertia but intercept SSR rendering
+    # Call NbInertia.CoreController.render_inertia but intercept SSR rendering
     # We do this by ensuring the conn doesn't have :inertia_ssr set,
     # then handling SSR ourselves based on :nb_inertia_ssr_enabled
 
@@ -1007,94 +1007,13 @@ defmodule NbInertia.Controller do
       do_render_with_ssr(conn, component)
     else
       # Let Inertia.Controller handle CSR
-      Inertia.Controller.render_inertia(conn, component)
+      NbInertia.CoreController.render_inertia(conn, component)
     end
   end
 
   defp do_render_with_ssr(conn, component) do
-    # Build inertia_page structure like original Inertia.Controller does
-    # Props are in :inertia_shared (populated by assign_prop calls)
-    shared_props = conn.private[:inertia_shared] || %{}
-
-    # Build complete inertia_page map with required structure
-    conn =
-      Plug.Conn.put_private(conn, :inertia_page, %{
-        component: component,
-        props: shared_props,
-        merge_props: [],
-        deep_merge_props: [],
-        deferred_props: %{},
-        is_partial: false
-      })
-
-    # Check if this is an inertia request (partial reload)
-    if conn.private[:inertia_request] do
-      # For partial reloads, return JSON (no SSR)
-      conn
-      |> Plug.Conn.put_status(200)
-      |> Plug.Conn.put_resp_header("x-inertia", "true")
-      |> Plug.Conn.put_resp_header("vary", "X-Inertia")
-      |> Phoenix.Controller.json(inertia_page_data(conn))
-    else
-      # For initial page load, use SSR
-      page_data = inertia_page_data(conn)
-      ssr_module = NbInertia.Config.ssr_module()
-
-      case ssr_module.call(page_data) do
-        {:ok, %{"head" => head, "body" => body}} ->
-          render_ssr_response(conn, head, body)
-
-        {:error, message} ->
-          # Fall back to CSR on error
-          require Logger
-          Logger.error("SSR rendering failed with #{inspect(ssr_module)}: #{inspect(message)}")
-          Inertia.Controller.render_inertia(conn, component)
-      end
-    end
+    # Use CoreController.render_inertia with SSR enabled
+    # It will handle prop resolution, deferred props, etc.
+    NbInertia.CoreController.render_inertia(conn, component, ssr: true)
   end
-
-  defp inertia_page_data(conn) do
-    %{
-      component: conn.private.inertia_page.component,
-      props: conn.private.inertia_page.props,
-      url: Phoenix.Controller.current_path(conn),
-      version: conn.private[:inertia_version] || "1"
-    }
-  end
-
-  defp render_ssr_response(conn, head, body) do
-    # Compile head tags
-    conn = compile_ssr_head(conn, head)
-
-    # Get the page data to embed in data-page attribute
-    page_data = inertia_page_data(conn)
-
-    conn
-    |> Phoenix.Controller.put_view(NbInertia.HTML)
-    |> Plug.Conn.assign(:body, body)
-    |> Plug.Conn.assign(:page, page_data)
-    |> Phoenix.Controller.render(:inertia_ssr)
-  end
-
-  @title_regex ~r/<title inertia>(.*?)<\/title>/
-
-  defp compile_ssr_head(conn, incoming_head) do
-    current_head = conn.assigns[:inertia_head] || []
-    all_tags = current_head ++ incoming_head
-
-    {titles, other_tags} = Enum.split_with(all_tags, &(&1 =~ @title_regex))
-
-    conn
-    |> Plug.Conn.assign(:inertia_head, other_tags)
-    |> update_ssr_page_title(Enum.reverse(titles))
-  end
-
-  defp update_ssr_page_title(conn, [title_tag | _]) do
-    case Regex.run(@title_regex, title_tag) do
-      [_, page_title] -> Plug.Conn.assign(conn, :page_title, page_title)
-      _ -> conn
-    end
-  end
-
-  defp update_ssr_page_title(conn, _), do: conn
 end
