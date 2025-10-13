@@ -401,9 +401,23 @@ defmodule NbInertia.Controller do
       # Combine shared props with provided props
       all_props = shared_prop_assignments ++ props
 
-      # Assign all props
+      # Split props into serialized (tuples) and raw values
+      {serialized_props, raw_props} =
+        Enum.split_with(all_props, fn {_key, value} ->
+          is_tuple(value) and tuple_size(value) >= 2 and is_atom(elem(value, 0))
+        end)
+
+      # Assign serialized props if any (and if nb_serializer is available)
       conn =
-        Enum.reduce(all_props, conn, fn {key, value}, acc ->
+        if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
+          NbInertia.Controller.assign_serialized_props(conn, serialized_props)
+        else
+          conn
+        end
+
+      # Assign raw props
+      conn =
+        Enum.reduce(raw_props, conn, fn {key, value}, acc ->
           assign_prop(acc, key, value)
         end)
 
