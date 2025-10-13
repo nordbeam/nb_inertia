@@ -265,7 +265,7 @@ defmodule NbInertia.Controller do
 
               render_inertia(conn, "MyComponent")
 
-          See: https://hexdocs.pm/nb_inertia/NbNbInertia.CoreController.html#inertia_page/2
+          See: https://hexdocs.pm/nb_inertia/NbInertia.Controller.html#inertia_page/2
           """
         end
       end
@@ -366,7 +366,7 @@ defmodule NbInertia.Controller do
 
       # Validate props in dev mode
       if Application.get_env(:nb_inertia, :env, :prod) in [:dev, :test] do
-        NbNbInertia.CoreController.validate_page_props!(__MODULE__, page_ref, props)
+        NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props)
 
         # Check for collisions between shared module props and page props
         provided_prop_names = Keyword.keys(props) |> MapSet.new()
@@ -410,7 +410,7 @@ defmodule NbInertia.Controller do
       # Assign serialized props if any (and if nb_serializer is available)
       conn =
         if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
-          NbNbInertia.CoreController.assign_serialized_props(conn, serialized_props)
+          NbInertia.Controller.assign_serialized_props(conn, serialized_props)
         else
           conn
         end
@@ -436,7 +436,7 @@ defmodule NbInertia.Controller do
         end
 
       # Don't delegate to Inertia.Controller for final render - handle SSR ourselves
-      NbNbInertia.CoreController.do_render_inertia(conn, component)
+      NbInertia.Controller.do_render_inertia(conn, component)
     end
   end
 
@@ -455,7 +455,7 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          NbNbInertia.CoreController.do_render_inertia(conn_value, unquote(component_or_page))
+          NbInertia.Controller.do_render_inertia(conn_value, unquote(component_or_page))
         end
 
       # If it's an atom literal
@@ -507,7 +507,7 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          NbNbInertia.CoreController.do_render_inertia(conn_value, component)
+          NbInertia.Controller.do_render_inertia(conn_value, component)
         end
 
       # Default: pass through
@@ -522,7 +522,7 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          NbNbInertia.CoreController.do_render_inertia(conn_value, unquote(component_or_page))
+          NbInertia.Controller.do_render_inertia(conn_value, unquote(component_or_page))
         end
     end
   end
@@ -587,7 +587,7 @@ defmodule NbInertia.Controller do
       Or mark them as optional in the page declaration:
         prop #{Enum.at(MapSet.to_list(missing_props), 0)}, :type, optional: true
 
-      See: https://hexdocs.pm/nb_inertia/NbNbInertia.CoreController.html#render_inertia/3
+      See: https://hexdocs.pm/nb_inertia/NbInertia.Controller.html#render_inertia/3
       """
     end
 
@@ -624,7 +624,7 @@ defmodule NbInertia.Controller do
            #{format_missing_props_declaration(MapSet.to_list(extra_props))}  # Add these
          end
 
-      See: https://hexdocs.pm/nb_inertia/NbNbInertia.CoreController.html#inertia_page/2
+      See: https://hexdocs.pm/nb_inertia/NbInertia.Controller.html#inertia_page/2
       """
     end
 
