@@ -1012,18 +1012,20 @@ defmodule NbInertia.Controller do
   end
 
   defp do_render_with_ssr(conn, component) do
-    # Get existing inertia_page data (which already has props from assign_prop calls)
-    existing_page = conn.private[:inertia_page] || %{}
+    # Build inertia_page structure like original Inertia.Controller does
+    # Props are in :inertia_shared (populated by assign_prop calls)
+    shared_props = conn.private[:inertia_shared] || %{}
 
-    # Merge in the component, preserving existing props
+    # Build complete inertia_page map with required structure
     conn =
-      Plug.Conn.put_private(
-        conn,
-        :inertia_page,
-        Map.merge(existing_page, %{
-          component: component
-        })
-      )
+      Plug.Conn.put_private(conn, :inertia_page, %{
+        component: component,
+        props: shared_props,
+        merge_props: [],
+        deep_merge_props: [],
+        deferred_props: %{},
+        is_partial: false
+      })
 
     # Check if this is an inertia request (partial reload)
     if conn.private[:inertia_request] do
