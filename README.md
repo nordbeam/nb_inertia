@@ -332,6 +332,8 @@ inertia_page :dashboard do
 end
 ```
 
+**Real-Time Type Regeneration:** When NbTs is installed, NbInertia automatically registers a compile hook that regenerates TypeScript types whenever your controllers are recompiled. This means your frontend types stay in sync with your backend prop definitions during development without any manual intervention.
+
 ### Serializer Types (with NbSerializer)
 
 When NbSerializer is installed, use serializer modules as types:

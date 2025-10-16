@@ -39,6 +39,13 @@ defmodule NbInertia.Controller do
           total_count: count_users()
         )
       end
+
+  ## With NbTs (Optional)
+
+  If you have `nb_ts` installed, this module automatically registers a compile hook
+  that regenerates TypeScript types whenever your controllers are recompiled. This
+  provides real-time type synchronization between your backend prop definitions and
+  frontend TypeScript types during development, with no manual intervention required.
   """
 
   @doc false
@@ -62,6 +69,13 @@ defmodule NbInertia.Controller do
 
       Module.put_attribute(__MODULE__, :inertia_pages, %{})
       Module.put_attribute(__MODULE__, :inertia_shared, [])
+
+      # Optional: Register compile hook for NbTs type generation
+      # This enables real-time TypeScript type regeneration when controllers are recompiled
+      # Only activates if nb_ts is installed (it's an optional dependency)
+      if Code.ensure_loaded?(NbTs.CompileHooks) do
+        @after_compile {NbTs.CompileHooks, :__after_compile__}
+      end
 
       @before_compile NbInertia.Controller
     end
