@@ -8,6 +8,7 @@ defmodule NbInertia.Config do
 
   - `:endpoint` - Your Phoenix endpoint module (required for SSR and asset versioning)
   - `:camelize_props` - Whether to automatically camelize Inertia props (default: `true`)
+  - `:snake_case_params` - Whether to convert incoming camelCase params to snake_case (default: `true`)
   - `:history` - History configuration for preserving scroll positions (default: `[]`)
   - `:static_paths` - List of static paths for asset versioning (default: `[]`)
   - `:default_version` - Default asset version (default: `"1"`)
@@ -59,6 +60,29 @@ defmodule NbInertia.Config do
   """
   def camelize_props do
     get(:camelize_props, true)
+  end
+
+  @doc """
+  Returns whether incoming params should be converted from camelCase to snake_case.
+
+  When enabled, this automatically converts all camelCase parameter keys to snake_case
+  before they reach your controller actions. This is useful when using `camelize_props: true`
+  to ensure bi-directional compatibility between frontend (camelCase) and backend (snake_case).
+
+  Defaults to `true` to match backend conventions and work seamlessly with Ecto changesets.
+
+  ## Examples
+
+      # With snake_case_params: true (default)
+      # Frontend sends: { "primaryProductId": 123 }
+      # Controller receives: %{"primary_product_id" => 123}
+
+      # With snake_case_params: false
+      # Frontend sends: { "primaryProductId": 123 }
+      # Controller receives: %{"primaryProductId" => 123}
+  """
+  def snake_case_params do
+    get(:snake_case_params, true)
   end
 
   @doc """

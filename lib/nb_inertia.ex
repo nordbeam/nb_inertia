@@ -139,6 +139,7 @@ defmodule NbInertia do
       config :nb_inertia,
         endpoint: MyAppWeb.Endpoint,           # Required for SSR and versioning
         camelize_props: true,                  # Default: true
+        snake_case_params: true,               # Default: true
         history: [],                           # Default: []
         static_paths: ["/css", "/js"],         # Default: []
         default_version: "1",                  # Default: "1"
@@ -147,6 +148,23 @@ defmodule NbInertia do
 
   **Note:** You should configure `:nb_inertia`, not `:inertia` directly.
   NbInertia handles forwarding the configuration to the underlying Inertia library
+
+  ## Automatic Param Conversion
+
+  When `camelize_props: true` (default), NbInertia automatically camelizes props sent to the frontend.
+  To handle the reverse direction (frontend → backend), enable `snake_case_params: true` (default) and
+  add `NbInertia.ParamsConverter` to your router pipeline:
+
+      pipeline :inertia_app do
+        plug :accepts, ["html"]
+        plug :fetch_session
+        plug NbInertia.ParamsConverter  # Converts camelCase params to snake_case
+        plug Inertia.Plug
+      end
+
+  This ensures seamless bidirectional conversion:
+  - Backend → Frontend: `primary_product_id` becomes `primaryProductId`
+  - Frontend → Backend: `primaryProductId` becomes `primary_product_id`
   """
 
   @doc """
