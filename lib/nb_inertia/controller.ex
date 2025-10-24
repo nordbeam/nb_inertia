@@ -755,27 +755,27 @@ defmodule NbInertia.Controller do
 
     ## Lazy Function Evaluation
 
-    You can pass a 0-arity function as the `data` parameter. The function will only be
-    executed when the prop is actually requested (e.g., on partial reloads when using
-    `optional: true` or `lazy: true`). This is useful for expensive operations that should
-    only run on demand.
+    You can pass a 0-arity function as the `data` parameter. Functions are automatically
+    treated as `optional: true` - they will only be executed when the prop is requested
+    (e.g., on partial reloads). This is useful for expensive operations that should only
+    run on demand.
 
     ## Examples
 
         # Eager evaluation - data computed immediately
         assign_serialized(conn, :user, UserSerializer, user)
 
-        # Lazy function with optional - only executes when prop is requested
+        # Lazy function - automatically optional, only executes when requested
         assign_serialized(conn, :themes, ThemeSerializer, fn ->
           Themes.expensive_fetch()
-        end, optional: true)
+        end)
 
-        # Lazy function with lazy option
+        # Explicit optional: false to force immediate execution (not recommended)
         assign_serialized(conn, :posts, PostSerializer, fn ->
           Posts.list_all()
-        end, lazy: true)
+        end, optional: false)
 
-        # Deferred loading
+        # Deferred loading with regular data
         assign_serialized(conn, :stats, StatsSerializer, stats, defer: true)
     """
     @spec assign_serialized(
@@ -786,8 +786,12 @@ defmodule NbInertia.Controller do
             keyword()
           ) :: Plug.Conn.t()
     def assign_serialized(conn, key, serializer, data, options \\ []) do
+      # If data is a function, automatically treat as optional (lazy evaluation)
+      # Functions should only execute when prop is requested
+      is_function_data? = is_function(data, 0)
+
       lazy? = Keyword.get(options, :lazy, false)
-      optional? = Keyword.get(options, :optional, false)
+      optional? = Keyword.get(options, :optional, is_function_data?)
       defer = Keyword.get(options, :defer, false)
       merge = Keyword.get(options, :merge, false)
       serialization_opts = Keyword.get(options, :opts, [])
