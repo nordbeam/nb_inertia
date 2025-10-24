@@ -360,10 +360,77 @@ defmodule NbInertia.Controller do
   defmacro render_inertia(conn, component_or_page, props \\ [])
 
   # 3-arity: All-in-one with props
-  defmacro render_inertia(conn, page_ref, props)
-           when is_atom(page_ref) and is_list(props) and props != [] do
-    quote bind_quoted: [conn: conn, page_ref: page_ref, props: props] do
+  # Note: At compile-time, atom literals ARE atoms, keyword lists ARE lists
+  defmacro render_inertia(conn, page_ref, props) when is_atom(page_ref) do
+    # Perform compile-time validation if in dev/test
+    # This runs during macro expansion, not at runtime
+    if Mix.env() in [:dev, :test] and is_list(props) and props != [] do
+      # Get the page config directly from module attributes
+      # (can't use inertia_page_config/1 because @before_compile hasn't run yet)
+      pages = Module.get_attribute(__CALLER__.module, :inertia_pages) || %{}
+      page_config = Map.get(pages, page_ref)
+
+      if page_config do
+        # Validate props at compile-time
+        declared_props = page_config.props
+        provided_prop_names = Keyword.keys(props) |> MapSet.new()
+        declared_prop_names = Enum.map(declared_props, & &1.name) |> MapSet.new()
+
+        # Find required props
+        required_props =
+          declared_props
+          |> Enum.reject(fn prop ->
+            Keyword.get(prop.opts, :optional, false) ||
+              Keyword.get(prop.opts, :lazy, false) ||
+              Keyword.get(prop.opts, :defer, false)
+          end)
+          |> Enum.map(& &1.name)
+          |> MapSet.new()
+
+        # Check for missing required props
+        missing_props = MapSet.difference(required_props, provided_prop_names)
+
+        if MapSet.size(missing_props) > 0 do
+          missing_list = MapSet.to_list(missing_props) |> Enum.map(&inspect/1) |> Enum.join(", ")
+
+          raise CompileError,
+            description: """
+            Missing required props for Inertia page :#{page_ref}
+
+            Missing props: #{missing_list}
+
+            Add the missing props to your render_inertia call or mark them as optional.
+            """,
+            file: __CALLER__.file,
+            line: __CALLER__.line
+        end
+
+        # Check for undeclared props
+        extra_props = MapSet.difference(provided_prop_names, declared_prop_names)
+
+        if MapSet.size(extra_props) > 0 do
+          extra_list = MapSet.to_list(extra_props) |> Enum.map(&inspect/1) |> Enum.join(", ")
+
+          raise CompileError,
+            description: """
+            Undeclared props provided for Inertia page :#{page_ref}
+
+            Undeclared props: #{extra_list}
+
+            Remove these props or declare them in your inertia_page block.
+            """,
+            file: __CALLER__.file,
+            line: __CALLER__.line
+        end
+      end
+    end
+
+    quote do
       import NbInertia.CoreController, only: [assign_prop: 3]
+
+      conn_value = unquote(conn)
+      page_ref = unquote(page_ref)
+      props = unquote(props)
 
       # Look up the component name
       component = page(page_ref)
@@ -374,27 +441,9 @@ defmodule NbInertia.Controller do
       # Build props from all shared modules
       shared_module_props =
         Enum.reduce(shared_modules, %{}, fn module, acc ->
-          module_props = module.build_props(conn, [])
+          module_props = module.build_props(conn_value, [])
           Map.merge(acc, module_props)
         end)
-
-      # Validate props in dev mode
-      if Application.get_env(:nb_inertia, :env, :prod) in [:dev, :test] do
-        NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props)
-
-        # Check for collisions between shared module props and page props
-        provided_prop_names = Keyword.keys(props) |> MapSet.new()
-        shared_module_prop_names = Map.keys(shared_module_props) |> MapSet.new()
-        collisions = MapSet.intersection(provided_prop_names, shared_module_prop_names)
-
-        if MapSet.size(collisions) > 0 do
-          collision_list = MapSet.to_list(collisions) |> Enum.map(&inspect/1) |> Enum.join(", ")
-
-          raise ArgumentError,
-                "Prop name collision detected between shared module props and page props: #{collision_list}. " <>
-                  "Shared modules and page props cannot define the same prop names."
-        end
-      end
 
       # Get inline shared props and pull them from assigns
       shared_props = inertia_shared_props()
@@ -403,7 +452,7 @@ defmodule NbInertia.Controller do
         Enum.map(shared_props, fn prop_config ->
           case prop_config do
             %{from: :assigns, name: name} ->
-              data = Map.get(conn.assigns, name)
+              data = Map.get(conn_value.assigns, name)
               {name, data}
 
             _ ->
@@ -422,35 +471,35 @@ defmodule NbInertia.Controller do
         end)
 
       # Assign serialized props if any (and if nb_serializer is available)
-      conn =
+      conn_value =
         if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
-          NbInertia.Controller.assign_serialized_props(conn, serialized_props)
+          NbInertia.Controller.assign_serialized_props(conn_value, serialized_props)
         else
-          conn
+          conn_value
         end
 
       # Assign raw props
-      conn =
-        Enum.reduce(raw_props, conn, fn {key, value}, acc ->
+      conn_value =
+        Enum.reduce(raw_props, conn_value, fn {key, value}, acc ->
           assign_prop(acc, key, value)
         end)
 
       # Assign shared module props
-      conn =
-        Enum.reduce(shared_module_props, conn, fn {key, value}, acc ->
+      conn_value =
+        Enum.reduce(shared_module_props, conn_value, fn {key, value}, acc ->
           assign_prop(acc, key, value)
         end)
 
       # Apply camelization if configured
-      conn =
+      conn_value =
         if NbInertia.Config.camelize_props?() do
-          NbInertia.CoreController.camelize_props(conn, true)
+          NbInertia.CoreController.camelize_props(conn_value, true)
         else
-          conn
+          conn_value
         end
 
       # Don't delegate to Inertia.Controller for final render - handle SSR ourselves
-      NbInertia.Controller.do_render_inertia(conn, component)
+      NbInertia.Controller.do_render_inertia(conn_value, component)
     end
   end
 
