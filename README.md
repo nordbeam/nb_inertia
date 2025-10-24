@@ -149,14 +149,22 @@ When `nb_serializer` is available, you get additional functions:
 # Lazy evaluation - only serialize on partial reloads
 assign_serialized(conn, :posts, PostSerializer, posts, lazy: true)
 
+# Optional props with lazy function - excluded on first visit
+# Function only executes on partial reloads requesting this prop
+assign_serialized(conn, :expensive_data, DataSerializer, fn ->
+  fetch_expensive_data()
+end, optional: true)
+
+# Lazy function evaluation - defers execution until prop is requested
+assign_serialized(conn, :themes, ThemeSerializer, fn ->
+  Themes.list_all_with_status()
+end, lazy: true)
+
 # Deferred loading - async load after initial render
 assign_serialized(conn, :stats, StatsSerializer, stats, defer: true)
 
 # Merge props - for infinite scroll/pagination
 assign_serialized(conn, :items, ItemSerializer, items, merge: true)
-
-# Optional props - excluded on first visit
-assign_serialized(conn, :expensive_data, DataSerializer, data, optional: true)
 ```
 
 ### Shared Props
@@ -286,9 +294,11 @@ Automatic serialization for performance:
 
 ```elixir
 def index(conn, _params) do
-  render_inertia_serialized(conn, :users_index,
+  render_inertia(conn, :users_index,
     users: {UserSerializer, list_users()},
     pagination: {PaginationSerializer, pagination_data()},
+    # Lazy function - only executes when requested
+    analytics: {AnalyticsSerializer, fn -> fetch_analytics() end, optional: true},
     total_count: count_users()
   )
 end

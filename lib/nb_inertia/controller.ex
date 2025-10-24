@@ -741,7 +741,7 @@ defmodule NbInertia.Controller do
       - `conn` - The connection struct
       - `key` - The prop name (atom or string)
       - `serializer` - The NbSerializer serializer module
-      - `data` - The data to serialize
+      - `data` - The data to serialize (or a 0-arity function that returns data)
       - `options` - Optional keyword list of options
 
     ## Options
@@ -753,10 +753,29 @@ defmodule NbInertia.Controller do
       - `:merge` - When `:deep`, marks for deep merging
       - `:opts` - Serialization options to pass to `NbSerializer.serialize/3` (default: `[]`)
 
+    ## Lazy Function Evaluation
+
+    You can pass a 0-arity function as the `data` parameter. The function will only be
+    executed when the prop is actually requested (e.g., on partial reloads when using
+    `optional: true` or `lazy: true`). This is useful for expensive operations that should
+    only run on demand.
+
     ## Examples
 
+        # Eager evaluation - data computed immediately
         assign_serialized(conn, :user, UserSerializer, user)
-        assign_serialized(conn, :posts, PostSerializer, posts, lazy: true)
+
+        # Lazy function with optional - only executes when prop is requested
+        assign_serialized(conn, :themes, ThemeSerializer, fn ->
+          Themes.expensive_fetch()
+        end, optional: true)
+
+        # Lazy function with lazy option
+        assign_serialized(conn, :posts, PostSerializer, fn ->
+          Posts.list_all()
+        end, lazy: true)
+
+        # Deferred loading
         assign_serialized(conn, :stats, StatsSerializer, stats, defer: true)
     """
     @spec assign_serialized(
@@ -775,7 +794,11 @@ defmodule NbInertia.Controller do
 
       # Build the serialization function
       serialize_fn = fn ->
-        case NbSerializer.serialize(serializer, data, serialization_opts) do
+        # If data is a 0-arity function, execute it first (lazy evaluation)
+        # This allows passing functions that are only executed when the prop is requested
+        actual_data = if is_function(data, 0), do: data.(), else: data
+
+        case NbSerializer.serialize(serializer, actual_data, serialization_opts) do
           {:ok, serialized} -> serialized
           {:error, error} -> raise error
         end
