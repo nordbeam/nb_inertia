@@ -155,6 +155,7 @@ defmodule NbInertia.SSR do
   """
 
   use GenServer
+
   require Logger
 
   @doc """
@@ -205,7 +206,7 @@ defmodule NbInertia.SSR do
     if ssr_enabled?() do
       GenServer.call(__MODULE__, {:render, page}, 30_000)
     else
-      {:error, :ssr_not_enabled}
+      {:error, "SSR is not enabled"}
     end
   end
 
@@ -257,8 +258,7 @@ defmodule NbInertia.SSR do
       script_path: script_path,
       dev_server_url: dev_server_url || default_dev_server_url,
       dev_mode: dev_mode,
-      raise_on_failure:
-        Keyword.get(opts, :raise_on_failure, Keyword.get(config, :raise_on_failure, true)),
+      raise_on_failure: Keyword.get(opts, :raise_on_failure, Keyword.get(config, :raise_on_failure, true)),
       script_loaded: false,
       deno_pid: nil,
       deno_available: deno_rider_available?()
@@ -297,9 +297,7 @@ defmodule NbInertia.SSR do
 
       # SSR enabled but DenoRider not available in production
       state.enabled and not state.deno_available and not state.dev_mode ->
-        Logger.warning(
-          "SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps."
-        )
+        Logger.warning("SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps.")
 
         {:ok, state}
 
@@ -326,7 +324,7 @@ defmodule NbInertia.SSR do
 
       {:reply, result, state}
     else
-      {:reply, {:error, :ssr_not_enabled}, state}
+      {:reply, {:error, "SSR is not enabled or not ready"}, state}
     end
   end
 
@@ -528,8 +526,7 @@ defmodule NbInertia.SSR do
   end
 
   # Two-argument version (backwards compatibility)
-  defp handle_render_error(error, state)
-       when is_map(state) and not is_map_key(state, "component") do
+  defp handle_render_error(error, state) when is_map(state) and not is_map_key(state, "component") do
     handle_render_error(error, nil, state)
   end
 
@@ -550,14 +547,12 @@ defmodule NbInertia.SSR do
   end
 
   defp format_ssr_error(message, component) do
-    cond do
-      # Module not found error
-      String.contains?(message, "Cannot find module") ->
-        parse_module_not_found_error(message, component)
-
+    # Module not found error
+    if String.contains?(message, "Cannot find module") do
+      parse_module_not_found_error(message, component)
+    else
       # Other errors - return as is
-      true ->
-        message
+      message
     end
   end
 
