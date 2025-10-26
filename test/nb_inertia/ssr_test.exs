@@ -78,7 +78,7 @@ defmodule NbInertia.SSRTest do
         version: "1"
       }
 
-      assert {:error, :ssr_not_enabled} = GenServer.call(pid, {:render, page})
+      assert {:error, "SSR is not enabled or not ready"} = GenServer.call(pid, {:render, page})
       Process.exit(pid, :normal)
     end
 

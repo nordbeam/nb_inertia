@@ -188,7 +188,7 @@ defmodule NbInertia.SSRIntegrationTest do
       }
 
       result = SSR.render(page)
-      assert {:error, :ssr_not_enabled} = result
+      assert {:error, "SSR is not enabled"} = result
     end
   end
 
