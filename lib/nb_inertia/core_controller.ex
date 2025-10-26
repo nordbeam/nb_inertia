@@ -572,8 +572,11 @@ defmodule NbInertia.CoreController do
           if raise_on_ssr_failure?() do
             raise RenderError, message: message
           else
-            # SSR is enabled but failed - this is an error worth logging
-            Logger.error("SSR failed, falling back to CSR\n\n#{message}")
+            # SSR is enabled but failed - log if configured (default: quiet in test mode)
+            if log_ssr_failures?() do
+              Logger.error("SSR failed, falling back to CSR\n\n#{message}")
+            end
+
             send_csr_response(conn)
           end
       end
@@ -678,5 +681,12 @@ defmodule NbInertia.CoreController do
 
   defp raise_on_ssr_failure? do
     Application.get_env(:inertia, :raise_on_ssr_failure, true)
+  end
+
+  # Checks if SSR failures should be logged
+  # Defaults to false in test environment, true otherwise
+  # Can be overridden via application config
+  defp log_ssr_failures? do
+    Application.get_env(:inertia, :log_ssr_failures, Mix.env() != :test)
   end
 end
