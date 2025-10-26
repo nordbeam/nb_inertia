@@ -3,14 +3,14 @@ defmodule NbInertia.CoreController do
   Controller functions for rendering Inertia.js responses.
   """
 
-  require Logger
-
-  alias Inertia.Errors
-  alias NbInertia.SSR.RenderError
-  alias NbInertia.SSR
-
   import Phoenix.Controller
   import Plug.Conn
+
+  alias Inertia.Errors
+  alias NbInertia.SSR
+  alias NbInertia.SSR.RenderError
+
+  require Logger
 
   @title_regex ~r/<title inertia>(.*?)<\/title>/
 
@@ -340,8 +340,7 @@ defmodule NbInertia.CoreController do
     build_inertia_response(conn, component, %{}, opts)
   end
 
-  def render_inertia(%Plug.Conn{} = conn, component, inline_props, opts)
-      when is_map(inline_props) and is_list(opts) do
+  def render_inertia(%Plug.Conn{} = conn, component, inline_props, opts) when is_map(inline_props) and is_list(opts) do
     build_inertia_response(conn, component, inline_props, opts)
   end
 
@@ -464,7 +463,7 @@ defmodule NbInertia.CoreController do
     end)
   end
 
-  defp apply_filters(props, only, _except, opts) when length(only) > 0 do
+  defp apply_filters(props, only, _except, opts) when is_list(only) and only != [] do
     props
     |> Enum.filter(fn {key, value} ->
       case value do
@@ -483,7 +482,7 @@ defmodule NbInertia.CoreController do
     |> Map.new()
   end
 
-  defp apply_filters(props, _only, except, opts) when length(except) > 0 do
+  defp apply_filters(props, _only, except, opts) when is_list(except) and except != [] do
     props
     |> Enum.filter(fn {key, value} ->
       case value do
@@ -563,7 +562,8 @@ defmodule NbInertia.CoreController do
   end
 
   defp send_response(conn) do
-    if conn.private[:inertia_ssr] do
+    # Only attempt SSR if it's both requested and globally enabled
+    if conn.private[:inertia_ssr] && ssr_enabled_globally?() do
       case SSR.call(inertia_assigns(conn)) do
         {:ok, %{"head" => head, "body" => body}} ->
           send_ssr_response(conn, head, body)
@@ -572,11 +572,13 @@ defmodule NbInertia.CoreController do
           if raise_on_ssr_failure?() do
             raise RenderError, message: message
           else
+            # SSR is enabled but failed - this is an error worth logging
             Logger.error("SSR failed, falling back to CSR\n\n#{message}")
             send_csr_response(conn)
           end
       end
     else
+      # Either SSR not requested or globally disabled - silently use CSR
       send_csr_response(conn)
     end
   end
