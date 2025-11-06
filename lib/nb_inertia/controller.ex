@@ -67,8 +67,14 @@ defmodule NbInertia.Controller do
       Module.register_attribute(__MODULE__, :current_page, accumulate: false)
       Module.register_attribute(__MODULE__, :current_props, accumulate: true)
 
+      # Form inputs tracking for TypeScript generation
+      Module.register_attribute(__MODULE__, :inertia_forms, accumulate: false)
+      Module.register_attribute(__MODULE__, :current_form_name, accumulate: false)
+      Module.register_attribute(__MODULE__, :current_form_fields, accumulate: true)
+
       Module.put_attribute(__MODULE__, :inertia_pages, %{})
       Module.put_attribute(__MODULE__, :inertia_shared, [])
+      Module.put_attribute(__MODULE__, :inertia_forms, %{})
 
       # Optional: Register compile hook for NbTs type generation
       # This enables real-time TypeScript type regeneration when controllers are recompiled
@@ -229,6 +235,94 @@ defmodule NbInertia.Controller do
     end
   end
 
+  @doc """
+  Defines form input fields for TypeScript type generation.
+
+  This macro does NOT perform any validation - it is purely for type generation.
+  All validation should be handled by changesets on the server.
+
+  ## Examples
+
+      inertia_page :users_new do
+        prop :user, :map, default: %{}
+
+        form_inputs :user do
+          field :name, :string
+          field :email, :string
+          field :age, :integer, optional: true
+        end
+      end
+
+  This generates:
+
+      export interface UsersNewFormInputs {
+        user: {
+          name: string;
+          email: string;
+          age?: number;
+        }
+      }
+  """
+  defmacro form_inputs(name, do: block) when is_atom(name) do
+    quote do
+      # Set current form context
+      Module.put_attribute(__MODULE__, :current_form_name, unquote(name))
+
+      # Execute block (collects field definitions)
+      unquote(block)
+
+      # Store accumulated fields
+      fields = Module.get_attribute(__MODULE__, :current_form_fields) || []
+      current_forms = Module.get_attribute(__MODULE__, :inertia_forms) || %{}
+
+      Module.put_attribute(
+        __MODULE__,
+        :inertia_forms,
+        Map.put(current_forms, unquote(name), Enum.reverse(fields))
+      )
+
+      # Reset context
+      Module.delete_attribute(__MODULE__, :current_form_name)
+      Module.delete_attribute(__MODULE__, :current_form_fields)
+    end
+  end
+
+  @doc """
+  Defines a form field with type information.
+
+  ## Options
+
+    * `:optional` - Field is optional (default: false)
+
+  ## Examples
+
+      field :name, :string
+      field :email, :string
+      field :age, :integer, optional: true
+      field :bio, :string, optional: true
+  """
+  defmacro field(name, type, opts \\ []) when is_atom(name) and is_atom(type) do
+    quote bind_quoted: [name: name, type: type, opts: opts] do
+      # Validate we're inside a form_inputs block
+      unless Module.get_attribute(__MODULE__, :current_form_name) do
+        raise CompileError,
+          file: __ENV__.file,
+          line: __ENV__.line,
+          description: """
+          field/3 must be used inside a form_inputs block.
+
+          Example:
+            form_inputs :user do
+              field :name, :string
+            end
+          """
+      end
+
+      # Store field definition as a tuple: {name, type, opts}
+      Module.put_attribute(__MODULE__, :current_form_fields, {name, type, opts})
+    end
+  end
+
   @doc false
   defmacro __before_compile__(env) do
     pages = Module.get_attribute(env.module, :inertia_pages)
@@ -318,6 +412,16 @@ defmodule NbInertia.Controller do
         end
       end
 
+    # Generate __inertia_forms__/0 function for introspection
+    forms = Module.get_attribute(env.module, :inertia_forms) || %{}
+
+    inertia_forms_clause =
+      quote do
+        def __inertia_forms__ do
+          unquote(Macro.escape(forms))
+        end
+      end
+
     quote do
       unquote(page_clauses)
       unquote(page_error_clause)
@@ -325,6 +429,7 @@ defmodule NbInertia.Controller do
       unquote(shared_props_clause)
       unquote(inertia_pages_clause)
       unquote(shared_modules_clause)
+      unquote(inertia_forms_clause)
     end
   end
 

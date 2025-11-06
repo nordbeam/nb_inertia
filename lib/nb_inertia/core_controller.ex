@@ -340,7 +340,8 @@ defmodule NbInertia.CoreController do
     build_inertia_response(conn, component, %{}, opts)
   end
 
-  def render_inertia(%Plug.Conn{} = conn, component, inline_props, opts) when is_map(inline_props) and is_list(opts) do
+  def render_inertia(%Plug.Conn{} = conn, component, inline_props, opts)
+      when is_map(inline_props) and is_list(opts) do
     build_inertia_response(conn, component, inline_props, opts)
   end
 

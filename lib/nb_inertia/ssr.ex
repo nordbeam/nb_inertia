@@ -258,7 +258,8 @@ defmodule NbInertia.SSR do
       script_path: script_path,
       dev_server_url: dev_server_url || default_dev_server_url,
       dev_mode: dev_mode,
-      raise_on_failure: Keyword.get(opts, :raise_on_failure, Keyword.get(config, :raise_on_failure, true)),
+      raise_on_failure:
+        Keyword.get(opts, :raise_on_failure, Keyword.get(config, :raise_on_failure, true)),
       script_loaded: false,
       deno_pid: nil,
       deno_available: deno_rider_available?()
@@ -297,7 +298,9 @@ defmodule NbInertia.SSR do
 
       # SSR enabled but DenoRider not available in production
       state.enabled and not state.deno_available and not state.dev_mode ->
-        Logger.warning("SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps.")
+        Logger.warning(
+          "SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps."
+        )
 
         {:ok, state}
 
@@ -526,7 +529,8 @@ defmodule NbInertia.SSR do
   end
 
   # Two-argument version (backwards compatibility)
-  defp handle_render_error(error, state) when is_map(state) and not is_map_key(state, "component") do
+  defp handle_render_error(error, state)
+       when is_map(state) and not is_map_key(state, "component") do
     handle_render_error(error, nil, state)
   end
 
