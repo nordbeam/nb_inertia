@@ -68,13 +68,13 @@ defmodule NbInertia.Controller do
       Module.register_attribute(__MODULE__, :current_props, accumulate: true)
 
       # Form inputs tracking for TypeScript generation
-      Module.register_attribute(__MODULE__, :inertia_forms, accumulate: false)
+      Module.register_attribute(__MODULE__, :current_page_forms, accumulate: false)
       Module.register_attribute(__MODULE__, :current_form_name, accumulate: false)
       Module.register_attribute(__MODULE__, :current_form_fields, accumulate: true)
 
       Module.put_attribute(__MODULE__, :inertia_pages, %{})
       Module.put_attribute(__MODULE__, :inertia_shared, [])
-      Module.put_attribute(__MODULE__, :inertia_forms, %{})
+      Module.put_attribute(__MODULE__, :current_page_forms, %{})
 
       # Optional: Register compile hook for NbTs type generation
       # This enables real-time TypeScript type regeneration when controllers are recompiled
@@ -105,10 +105,12 @@ defmodule NbInertia.Controller do
     quote do
       Module.put_attribute(__MODULE__, :current_page, unquote(page_name))
       Module.delete_attribute(__MODULE__, :current_props)
+      Module.put_attribute(__MODULE__, :current_page_forms, %{})
 
       unquote(block)
 
       props = Module.get_attribute(__MODULE__, :current_props) |> Enum.reverse()
+      forms = Module.get_attribute(__MODULE__, :current_page_forms) || %{}
       pages = Module.get_attribute(__MODULE__, :inertia_pages)
 
       component =
@@ -122,6 +124,14 @@ defmodule NbInertia.Controller do
         component: component,
         props: props
       }
+
+      # Add forms if any were defined
+      page_config =
+        if forms != %{} do
+          Map.put(page_config, :forms, forms)
+        else
+          page_config
+        end
 
       # Add index_signature if provided in opts
       page_config =
@@ -138,6 +148,7 @@ defmodule NbInertia.Controller do
 
       Module.delete_attribute(__MODULE__, :current_page)
       Module.delete_attribute(__MODULE__, :current_props)
+      Module.delete_attribute(__MODULE__, :current_page_forms)
     end
   end
 
@@ -271,14 +282,14 @@ defmodule NbInertia.Controller do
       # Execute block (collects field definitions)
       unquote(block)
 
-      # Store accumulated fields
+      # Store accumulated fields in current page forms
       fields = Module.get_attribute(__MODULE__, :current_form_fields) || []
-      current_forms = Module.get_attribute(__MODULE__, :inertia_forms) || %{}
+      current_page_forms = Module.get_attribute(__MODULE__, :current_page_forms) || %{}
 
       Module.put_attribute(
         __MODULE__,
-        :inertia_forms,
-        Map.put(current_forms, unquote(name), Enum.reverse(fields))
+        :current_page_forms,
+        Map.put(current_page_forms, unquote(name), Enum.reverse(fields))
       )
 
       # Reset context
@@ -413,12 +424,21 @@ defmodule NbInertia.Controller do
       end
 
     # Generate __inertia_forms__/0 function for introspection
-    forms = Module.get_attribute(env.module, :inertia_forms) || %{}
+    # Extract forms from all pages since forms are now stored per-page
+    pages = Module.get_attribute(env.module, :inertia_pages) || %{}
+
+    all_forms =
+      Enum.reduce(pages, %{}, fn {_page_name, page_config}, acc ->
+        case Map.get(page_config, :forms) do
+          nil -> acc
+          forms when is_map(forms) -> Map.merge(acc, forms)
+        end
+      end)
 
     inertia_forms_clause =
       quote do
         def __inertia_forms__ do
-          unquote(Macro.escape(forms))
+          unquote(Macro.escape(all_forms))
         end
       end
 
