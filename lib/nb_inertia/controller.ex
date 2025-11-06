@@ -155,10 +155,34 @@ defmodule NbInertia.Controller do
   @doc """
   Declares a prop within an inertia_page block.
 
-  ## Examples
+  ## Unified Syntax
 
-      prop :user, :map
-      prop :total_count, :integer
+  Props use a unified syntax matching NbSerializer's field syntax:
+
+      # Primitives
+      prop :id, :integer
+      prop :name, :string
+      prop :active, :boolean
+
+      # Lists of primitives
+      prop :tags, list: :string       # TypeScript: string[]
+      prop :scores, list: :number     # TypeScript: number[]
+
+      # Enums
+      prop :status, enum: ["active", "inactive"]
+      # TypeScript: "active" | "inactive"
+
+      # List of enums
+      prop :roles, list: [enum: ["admin", "user"]]
+      # TypeScript: ("admin" | "user")[]
+
+      # Serializers (with nb_serializer)
+      prop :user, UserSerializer      # Single serializer
+      prop :users, list: UserSerializer  # List of serializers
+
+      # Modifiers
+      prop :priority, enum: ["low", "high"], optional: true
+      prop :notes, list: :string, optional: true
       prop :posts, :list, lazy: true
       prop :stats, :map, defer: true, optional: true
       prop :flash, from: :assigns

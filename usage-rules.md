@@ -79,15 +79,55 @@ defmodule MyAppWeb.UserController do
 end
 ```
 
-### Prop Types
+### Unified Prop Syntax
 
-**Primitive types:**
-- `:string`, `:integer`, `:float`, `:boolean`, `:map`, `:list`, `:any`
+NbInertia uses a unified syntax matching NbSerializer's field syntax:
 
-**With NbSerializer:**
-- Use serializer modules: `prop :user, MyApp.UserSerializer`
+**Primitives:**
+```elixir
+prop :id, :integer
+prop :name, :string
+prop :active, :boolean
+prop :metadata, :map
+prop :data, :any
+```
 
-**With NbTs:**
+**Lists of primitives:**
+```elixir
+prop :tags, list: :string      # TypeScript: tags: string[]
+prop :scores, list: :number    # TypeScript: scores: number[]
+```
+
+**Enums (restricted values):**
+```elixir
+prop :status, enum: ["active", "inactive", "pending"]
+# TypeScript: status: "active" | "inactive" | "pending"
+```
+
+**List of enums:**
+```elixir
+prop :roles, list: [enum: ["admin", "user", "guest"]]
+# TypeScript: roles: ("admin" | "user" | "guest")[]
+```
+
+**With NbSerializer - Single serializer:**
+```elixir
+prop :user, UserSerializer      # TypeScript: user: User
+```
+
+**With NbSerializer - List of serializers:**
+```elixir
+prop :users, list: UserSerializer  # TypeScript: users: User[]
+```
+
+**Modifiers:**
+```elixir
+prop :priority, enum: ["low", "high"], optional: true
+prop :notes, list: :string, optional: true
+prop :metadata, :map, nullable: true
+```
+
+**Custom TypeScript types (with NbTs):**
 ```elixir
 import NbTs.Sigil
 

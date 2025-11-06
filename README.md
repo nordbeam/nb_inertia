@@ -107,6 +107,48 @@ inertia_page :custom_name, component: "CustomPath/Component" do
 end
 ```
 
+### 3. Unified Prop Syntax
+
+NbInertia supports a unified, consistent syntax for defining props (matching the NbSerializer field syntax):
+
+```elixir
+inertia_page :products_index do
+  # Primitives
+  prop :id, :integer
+  prop :name, :string
+  prop :active, :boolean
+
+  # Lists of primitives
+  prop :tags, list: :string           # TypeScript: tags: string[]
+  prop :scores, list: :number         # TypeScript: scores: number[]
+
+  # Enums (restricted values)
+  prop :status, enum: ["active", "inactive", "pending"]
+  # TypeScript: status: "active" | "inactive" | "pending"
+
+  # List of enums
+  prop :roles, list: [enum: ["admin", "user", "guest"]]
+  # TypeScript: roles: ("admin" | "user" | "guest")[]
+
+  # Single serializer (when nb_serializer is installed)
+  prop :user, UserSerializer          # TypeScript: user: User
+
+  # List of serializers
+  prop :users, list: UserSerializer   # TypeScript: users: User[]
+
+  # Modifiers
+  prop :priority, enum: ["low", "high"], optional: true
+  prop :notes, list: :string, optional: true
+  prop :metadata, :map, nullable: true
+end
+```
+
+**Benefits of unified syntax:**
+- Same syntax as `field` in NbSerializer
+- Automatic TypeScript generation (with `nb_ts`)
+- Type-safe props with compile-time validation
+- Clear, consistent API across the codebase
+
 ## Advanced Usage
 
 ### With NbSerializer (Optional)
