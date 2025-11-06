@@ -228,6 +228,144 @@ defmodule NbInertia.FormInputsTest do
     end
   end
 
+  describe "nested list fields" do
+    test "supports nested block syntax for list fields" do
+      defmodule TestController12 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :space do
+            field(:name, :string)
+
+            field :questions, :list do
+              field(:question_text, :string)
+              field(:required, :boolean)
+              field(:position, :integer)
+            end
+          end
+        end
+      end
+
+      forms = TestController12.__inertia_forms__()
+
+      assert forms[:space] == [
+               {:name, :string, []},
+               {:questions, :list, [],
+                [
+                  {:question_text, :string, []},
+                  {:required, :boolean, []},
+                  {:position, :integer, []}
+                ]}
+             ]
+    end
+
+    test "supports optional nested list fields" do
+      defmodule TestController13 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :space do
+            field(:name, :string)
+
+            field :questions, :list, optional: true do
+              field(:text, :string)
+            end
+          end
+        end
+      end
+
+      forms = TestController13.__inertia_forms__()
+
+      assert forms[:space] == [
+               {:name, :string, []},
+               {:questions, :list, [optional: true], [{:text, :string, []}]}
+             ]
+    end
+
+    test "supports multiple nested list fields" do
+      defmodule TestController14 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :space do
+            field :questions, :list do
+              field(:text, :string)
+            end
+
+            field :answers, :list do
+              field(:value, :string)
+            end
+          end
+        end
+      end
+
+      forms = TestController14.__inertia_forms__()
+
+      assert forms[:space] == [
+               {:questions, :list, [], [{:text, :string, []}]},
+               {:answers, :list, [], [{:value, :string, []}]}
+             ]
+    end
+
+    test "supports nested fields with mixed optional/required" do
+      defmodule TestController15 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :space do
+            field :questions, :list do
+              field(:text, :string)
+              field(:hint, :string, optional: true)
+              field(:required, :boolean)
+            end
+          end
+        end
+      end
+
+      forms = TestController15.__inertia_forms__()
+
+      assert forms[:space] == [
+               {:questions, :list, [],
+                [
+                  {:text, :string, []},
+                  {:hint, :string, [optional: true]},
+                  {:required, :boolean, []}
+                ]}
+             ]
+    end
+
+    test "raises error when using block with non-list type" do
+      assert_raise CompileError,
+                   ~r/field with nested block must have type :list/,
+                   fn ->
+                     defmodule BadController3 do
+                       use NbInertia.Controller
+
+                       inertia_page :test_page do
+                         form_inputs :data do
+                           field :name, :string do
+                             field(:nested, :string)
+                           end
+                         end
+                       end
+                     end
+                   end
+    end
+
+    test "raises error when nested field used outside parent field block" do
+      # This should already be caught by the existing validation
+      assert_raise CompileError, ~r/field\/3 must be used inside a form_inputs block/, fn ->
+        defmodule BadController4 do
+          use NbInertia.Controller
+
+          inertia_page :test_page do
+            field(:name, :string)
+          end
+        end
+      end
+    end
+  end
+
   describe "integration with inertia_page" do
     test "form_inputs works alongside prop definitions" do
       defmodule TestController10 do
@@ -271,6 +409,34 @@ defmodule NbInertia.FormInputsTest do
       # Both forms should exist
       assert forms[:form_a] == [{:field_a, :string, []}]
       assert forms[:form_b] == [{:field_b, :integer, []}]
+    end
+
+    test "form_inputs with nested list fields works alongside props" do
+      defmodule TestController16 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          prop(:space, :map)
+
+          form_inputs :space do
+            field(:name, :string)
+
+            field :questions, :list do
+              field(:text, :string)
+            end
+          end
+        end
+      end
+
+      pages = TestController16.__inertia_pages__()
+      assert pages[:test_page].props == [%{name: :space, type: :map, opts: []}]
+
+      forms = TestController16.__inertia_forms__()
+
+      assert forms[:space] == [
+               {:name, :string, []},
+               {:questions, :list, [], [{:text, :string, []}]}
+             ]
     end
   end
 end

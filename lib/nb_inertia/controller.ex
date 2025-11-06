@@ -311,9 +311,17 @@ defmodule NbInertia.Controller do
       field :email, :string
       field :age, :integer, optional: true
       field :bio, :string, optional: true
+
+  ## Nested List Fields
+
+      field :questions, :list do
+        field :text, :string
+        field :required, :boolean
+      end
   """
-  defmacro field(name, type, opts \\ []) when is_atom(name) and is_atom(type) do
-    quote bind_quoted: [name: name, type: type, opts: opts] do
+  # Handle field/4 when block is passed with explicit opts: field(:name, :list, [optional: true], do: block)
+  defmacro field(name, type, opts, do: block) when is_atom(name) and is_atom(type) do
+    quote do
       # Validate we're inside a form_inputs block
       unless Module.get_attribute(__MODULE__, :current_form_name) do
         raise CompileError,
@@ -329,8 +337,158 @@ defmodule NbInertia.Controller do
           """
       end
 
-      # Store field definition as a tuple: {name, type, opts}
-      Module.put_attribute(__MODULE__, :current_form_fields, {name, type, opts})
+      # Validate that blocks are only used with :list type
+      unless unquote(type) == :list do
+        raise CompileError,
+          file: __ENV__.file,
+          line: __ENV__.line,
+          description: """
+          field with nested block must have type :list.
+
+          You tried to use a nested block with type #{inspect(unquote(type))}.
+
+          Correct usage:
+            field :questions, :list do
+              field :text, :string
+            end
+
+          If you want a nested object (not a list), consider flattening your form structure.
+          """
+      end
+
+      # Track current field count before executing block
+      current_fields = Module.get_attribute(__MODULE__, :current_form_fields) || []
+      parent_field_count = length(current_fields)
+
+      # Execute block to collect nested fields
+      unquote(block)
+
+      # Get all fields (parent + nested)
+      # Note: accumulate: true attributes are in reverse order (most recent first)
+      # So all_fields = [nested_field3, nested_field2, nested_field1, parent_field2, parent_field1]
+      all_fields = Module.get_attribute(__MODULE__, :current_form_fields) || []
+
+      # Extract nested fields (from the beginning of the list)
+      nested_fields = Enum.take(all_fields, length(all_fields) - parent_field_count)
+
+      # Extract parent fields (from the end of the list)
+      parent_fields = Enum.take(all_fields, -parent_field_count)
+
+      # Reset to parent fields only
+      Module.delete_attribute(__MODULE__, :current_form_fields)
+
+      Enum.each(Enum.reverse(parent_fields), fn field ->
+        Module.put_attribute(__MODULE__, :current_form_fields, field)
+      end)
+
+      # Store field with nested fields: {name, type, opts, nested_fields}
+      Module.put_attribute(
+        __MODULE__,
+        :current_form_fields,
+        {unquote(name), unquote(type), unquote(opts), Enum.reverse(nested_fields)}
+      )
+    end
+  end
+
+  # Handle field/3 which may have :do in opts or be a regular field
+  defmacro field(name, type, opts \\ []) when is_atom(name) and is_atom(type) do
+    # Extract block at macro expansion time (before quote)
+    {block, clean_opts} =
+      case Keyword.pop(opts, :do) do
+        {nil, opts} -> {nil, opts}
+        {block, opts} -> {block, opts}
+      end
+
+    if block do
+      # Generate code for field with nested block (from field :name, :list do syntax)
+      quote do
+        # Validate we're inside a form_inputs block
+        unless Module.get_attribute(__MODULE__, :current_form_name) do
+          raise CompileError,
+            file: __ENV__.file,
+            line: __ENV__.line,
+            description: """
+            field/3 must be used inside a form_inputs block.
+
+            Example:
+              form_inputs :user do
+                field :name, :string
+              end
+            """
+        end
+
+        # Validate that blocks are only used with :list type
+        unless unquote(type) == :list do
+          raise CompileError,
+            file: __ENV__.file,
+            line: __ENV__.line,
+            description: """
+            field with nested block must have type :list.
+
+            You tried to use a nested block with type #{inspect(unquote(type))}.
+
+            Correct usage:
+              field :questions, :list do
+                field :text, :string
+              end
+
+            If you want a nested object (not a list), consider flattening your form structure.
+            """
+        end
+
+        # Track current field count before executing block
+        current_fields = Module.get_attribute(__MODULE__, :current_form_fields) || []
+        parent_field_count = length(current_fields)
+
+        # Execute block to collect nested fields
+        unquote(block)
+
+        # Get all fields (parent + nested)
+        # Note: accumulate: true attributes are in reverse order (most recent first)
+        # So all_fields = [nested_field3, nested_field2, nested_field1, parent_field2, parent_field1]
+        all_fields = Module.get_attribute(__MODULE__, :current_form_fields) || []
+
+        # Extract nested fields (from the beginning of the list)
+        nested_fields = Enum.take(all_fields, length(all_fields) - parent_field_count)
+
+        # Extract parent fields (from the end of the list)
+        parent_fields = Enum.take(all_fields, -parent_field_count)
+
+        # Reset to parent fields only
+        Module.delete_attribute(__MODULE__, :current_form_fields)
+
+        Enum.each(Enum.reverse(parent_fields), fn field ->
+          Module.put_attribute(__MODULE__, :current_form_fields, field)
+        end)
+
+        # Store field with nested fields: {name, type, opts, nested_fields}
+        Module.put_attribute(
+          __MODULE__,
+          :current_form_fields,
+          {unquote(name), unquote(type), unquote(clean_opts), Enum.reverse(nested_fields)}
+        )
+      end
+    else
+      # Generate code for regular field
+      quote bind_quoted: [name: name, type: type, opts: clean_opts] do
+        # Validate we're inside a form_inputs block
+        unless Module.get_attribute(__MODULE__, :current_form_name) do
+          raise CompileError,
+            file: __ENV__.file,
+            line: __ENV__.line,
+            description: """
+            field/3 must be used inside a form_inputs block.
+
+            Example:
+              form_inputs :user do
+                field :name, :string
+              end
+            """
+        end
+
+        # Store regular field definition as a tuple: {name, type, opts}
+        Module.put_attribute(__MODULE__, :current_form_fields, {name, type, opts})
+      end
     end
   end
 

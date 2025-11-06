@@ -183,6 +183,157 @@ defmodule NbInertia.FormInputsTsIntegrationTest do
     end
   end
 
+  describe "nested list fields integration" do
+    test "controller with nested list fields provides correct data structure" do
+      defmodule NestedListController do
+        use NbInertia.Controller
+
+        inertia_page :spaces_new do
+          form_inputs :space do
+            field(:name, :string)
+
+            field :questions, :list do
+              field(:question_text, :string)
+              field(:required, :boolean)
+              field(:position, :integer)
+            end
+          end
+        end
+      end
+
+      forms = NestedListController.__inertia_forms__()
+
+      # Verify space form exists
+      assert Map.has_key?(forms, :space)
+      space_form = forms[:space]
+
+      # Should have 2 fields: name and questions
+      assert length(space_form) == 2
+
+      # First field is regular string
+      assert {:name, :string, []} = Enum.at(space_form, 0)
+
+      # Second field is nested list (4-tuple format)
+      {field_name, field_type, field_opts, nested_fields} = Enum.at(space_form, 1)
+      assert field_name == :questions
+      assert field_type == :list
+      assert field_opts == []
+      assert is_list(nested_fields)
+      assert length(nested_fields) == 3
+
+      # Verify nested field structure
+      assert {:question_text, :string, []} in nested_fields
+      assert {:required, :boolean, []} in nested_fields
+      assert {:position, :integer, []} in nested_fields
+    end
+
+    test "nested list fields with optional outer field" do
+      defmodule OptionalNestedController do
+        use NbInertia.Controller
+
+        inertia_page :test do
+          form_inputs :data do
+            field(:name, :string)
+
+            field :items, :list, optional: true do
+              field(:label, :string)
+            end
+          end
+        end
+      end
+
+      forms = OptionalNestedController.__inertia_forms__()
+      data_form = forms[:data]
+
+      # Find the nested list field
+      {_name, :list, opts, nested} =
+        Enum.find(data_form, fn field ->
+          case field do
+            {_name, :list, _opts, _nested} -> true
+            _ -> false
+          end
+        end)
+
+      # Should be optional
+      assert Keyword.get(opts, :optional) == true
+
+      # Nested field should be present
+      assert [{:label, :string, []}] = nested
+    end
+
+    test "nested list fields with optional inner fields" do
+      defmodule OptionalInnerFieldsController do
+        use NbInertia.Controller
+
+        inertia_page :test do
+          form_inputs :data do
+            field :items, :list do
+              field(:name, :string)
+              field(:description, :string, optional: true)
+              field(:required, :boolean)
+            end
+          end
+        end
+      end
+
+      forms = OptionalInnerFieldsController.__inertia_forms__()
+      data_form = forms[:data]
+
+      # Get nested fields
+      {_name, :list, _opts, nested_fields} = Enum.at(data_form, 0)
+
+      # Verify optional metadata on inner fields
+      {_name, _type, name_opts} =
+        Enum.find(nested_fields, fn {name, _type, _opts} -> name == :name end)
+
+      assert Keyword.get(name_opts, :optional, false) == false
+
+      {_name, _type, desc_opts} =
+        Enum.find(nested_fields, fn {name, _type, _opts} -> name == :description end)
+
+      assert Keyword.get(desc_opts, :optional) == true
+    end
+
+    test "multiple nested list fields in same form" do
+      defmodule MultipleNestedListsController do
+        use NbInertia.Controller
+
+        inertia_page :test do
+          form_inputs :data do
+            field :questions, :list do
+              field(:text, :string)
+            end
+
+            field :answers, :list do
+              field(:value, :string)
+            end
+          end
+        end
+      end
+
+      forms = MultipleNestedListsController.__inertia_forms__()
+      data_form = forms[:data]
+
+      # Should have 2 nested list fields
+      nested_count =
+        Enum.count(data_form, fn field ->
+          case field do
+            {_name, :list, _opts, _nested} -> true
+            _ -> false
+          end
+        end)
+
+      assert nested_count == 2
+
+      # Verify both have their nested structures
+      {_name, :list, _opts, questions_nested} = Enum.at(data_form, 0)
+      assert [{:text, :string, []}] = questions_nested
+
+      {_name, :list, _opts, answers_nested} = Enum.at(data_form, 1)
+      assert [{:value, :string, []}] = answers_nested
+    end
+  end
+
   describe "data format for nb_ts consumption" do
     test "forms use consistent tuple format {name, type, opts}" do
       defmodule FormatTestController do
@@ -208,6 +359,37 @@ defmodule NbInertia.FormInputsTsIntegrationTest do
         assert is_atom(name)
         assert is_atom(type)
         assert is_list(opts)
+      end)
+    end
+
+    test "nested list fields use 4-tuple format {name, :list, opts, nested_fields}" do
+      defmodule NestedFormatController do
+        use NbInertia.Controller
+
+        inertia_page :test do
+          form_inputs :data do
+            field :items, :list do
+              field(:name, :string)
+            end
+          end
+        end
+      end
+
+      forms = NestedFormatController.__inertia_forms__()
+      fields = forms[:data]
+
+      # Nested list field should be a 4-tuple
+      assert [{name, type, opts, nested_fields}] = fields
+
+      assert name == :items
+      assert type == :list
+      assert is_list(opts)
+      assert is_list(nested_fields)
+
+      # Nested fields should be 3-tuples
+      Enum.each(nested_fields, fn field ->
+        assert is_tuple(field)
+        assert tuple_size(field) == 3
       end)
     end
 
