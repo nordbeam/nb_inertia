@@ -319,6 +319,47 @@ defmodule NbInertia.Controller do
         field :required, :boolean
       end
   """
+  # Handle field/4 when block is passed with enum or typed list
+  # This should error since enums and typed lists cannot have nested blocks
+  defmacro field(name, type, _opts, do: _block) when is_atom(name) and is_tuple(type) do
+    quote do
+      # Check what kind of tuple type this is for better error messages
+      type_description =
+        case unquote(type) do
+          {:enum, _values} -> "Enum types"
+          {:list, _inner_type} -> "Typed lists"
+          _ -> "Typed fields"
+        end
+
+      type_example =
+        case unquote(type) do
+          {:enum, _values} -> "field :status, {:enum, [\"active\", \"inactive\"]}"
+          {:list, _inner_type} -> "field :tags, {:list, :string}"
+          _ -> "field :field_name, #{inspect(unquote(type))}"
+        end
+
+      raise CompileError,
+        file: __ENV__.file,
+        line: __ENV__.line,
+        description: """
+        cannot use nested block with #{String.downcase(type_description)}.
+
+        #{type_description} define specific types and cannot have nested blocks.
+
+        You used: field #{inspect(unquote(name))}, #{inspect(unquote(type))} do
+
+        Either:
+        1. Use a regular :list with nested block:
+           field :questions, :list do
+             field :text, :string
+           end
+
+        2. Or use #{String.downcase(type_description)} without a block:
+           #{type_example}
+        """
+    end
+  end
+
   # Handle field/4 when block is passed with explicit opts: field(:name, :list, [optional: true], do: block)
   defmacro field(name, type, opts, do: block) when is_atom(name) and is_atom(type) do
     quote do
@@ -390,8 +431,109 @@ defmodule NbInertia.Controller do
     end
   end
 
+  # Handle field/2 when opts are provided directly (type inferred from options)
+  # Examples: field(:tags, list: :string), field(:status, enum: ["active", "inactive"])
+  defmacro field(name, opts) when is_atom(name) and is_list(opts) do
+    quote bind_quoted: [name: name, opts: opts] do
+      # Validate we're inside a form_inputs block
+      unless Module.get_attribute(__MODULE__, :current_form_name) do
+        raise CompileError,
+          file: __ENV__.file,
+          line: __ENV__.line,
+          description: """
+          field/2 must be used inside a form_inputs block.
+
+          Example:
+            form_inputs :user do
+              field :name, :string
+            end
+          """
+      end
+
+      # Type is :any when using list/enum options
+      type = :any
+
+      # Store field definition as a tuple: {name, type, opts}
+      Module.put_attribute(__MODULE__, :current_form_fields, {name, type, opts})
+    end
+  end
+
+  # Declare field/3 with default opts
+  defmacro field(name, type, opts \\ [])
+
+  # Handle field/3 with tuple type (typed lists): field(:name, {:list, :string}, [optional: true])
+  defmacro field(name, type, opts) when is_atom(name) and is_tuple(type) do
+    # Check if block is in opts (error case)
+    {block, clean_opts} =
+      case Keyword.pop(opts, :do) do
+        {nil, opts} -> {nil, opts}
+        {block, opts} -> {block, opts}
+      end
+
+    if block do
+      # Error: cannot use block with enum or typed list
+      quote do
+        # Check what kind of tuple type this is for better error messages
+        type_description =
+          case unquote(type) do
+            {:enum, _values} -> "Enum types"
+            {:list, _inner_type} -> "Typed lists"
+            _ -> "Typed fields"
+          end
+
+        type_example =
+          case unquote(type) do
+            {:enum, _values} -> "field :status, {:enum, [\"active\", \"inactive\"]}"
+            {:list, _inner_type} -> "field :tags, {:list, :string}"
+            _ -> "field :field_name, #{inspect(unquote(type))}"
+          end
+
+        raise CompileError,
+          file: __ENV__.file,
+          line: __ENV__.line,
+          description: """
+          cannot use nested block with #{String.downcase(type_description)}.
+
+          #{type_description} define specific types and cannot have nested blocks.
+
+          You used: field #{inspect(unquote(name))}, #{inspect(unquote(type))} do
+
+          Either:
+          1. Use a regular :list with nested block:
+             field :questions, :list do
+               field :text, :string
+             end
+
+          2. Or use #{String.downcase(type_description)} without a block:
+             #{type_example}
+          """
+      end
+    else
+      # Generate code for typed list field (no block)
+      quote bind_quoted: [name: name, type: type, opts: clean_opts] do
+        # Validate we're inside a form_inputs block
+        unless Module.get_attribute(__MODULE__, :current_form_name) do
+          raise CompileError,
+            file: __ENV__.file,
+            line: __ENV__.line,
+            description: """
+            field/3 must be used inside a form_inputs block.
+
+            Example:
+              form_inputs :user do
+                field :name, :string
+              end
+            """
+        end
+
+        # Store typed list field definition as a tuple: {name, type, opts}
+        Module.put_attribute(__MODULE__, :current_form_fields, {name, type, opts})
+      end
+    end
+  end
+
   # Handle field/3 which may have :do in opts or be a regular field
-  defmacro field(name, type, opts \\ []) when is_atom(name) and is_atom(type) do
+  defmacro field(name, type, opts) when is_atom(name) and is_atom(type) do
     # Extract block at macro expansion time (before quote)
     {block, clean_opts} =
       case Keyword.pop(opts, :do) do

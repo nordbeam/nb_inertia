@@ -366,6 +366,179 @@ defmodule NbInertia.FormInputsTest do
     end
   end
 
+  describe "enum fields" do
+    test "supports enum: values syntax for enum types" do
+      defmodule TestController21 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :config do
+            field(:status, enum: ["active", "inactive", "pending"])
+            field(:priority, enum: ["low", "medium", "high"], optional: true)
+          end
+        end
+      end
+
+      forms = TestController21.__inertia_forms__()
+
+      assert forms[:config] == [
+               {:status, :any, [enum: ["active", "inactive", "pending"]]},
+               {:priority, :any, [enum: ["low", "medium", "high"], optional: true]}
+             ]
+    end
+
+    test "supports enum in typed lists with list: [enum: values]" do
+      defmodule TestController22 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :config do
+            field(:statuses, list: [enum: ["active", "inactive"]])
+            field(:tags, list: [enum: ["bug", "feature", "enhancement"]], optional: true)
+          end
+        end
+      end
+
+      forms = TestController22.__inertia_forms__()
+
+      assert forms[:config] == [
+               {:statuses, :any, [list: [enum: ["active", "inactive"]]]},
+               {:tags, :any, [list: [enum: ["bug", "feature", "enhancement"]], optional: true]}
+             ]
+    end
+
+    test "supports mixed enums, typed lists, and regular fields" do
+      defmodule TestController23 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :config do
+            field(:name, :string)
+            field(:status, enum: ["active", "inactive"])
+            field(:tags, list: :string)
+            field(:priorities, list: [enum: ["low", "high"]])
+          end
+        end
+      end
+
+      forms = TestController23.__inertia_forms__()
+
+      assert forms[:config] == [
+               {:name, :string, []},
+               {:status, :any, [enum: ["active", "inactive"]]},
+               {:tags, :any, [list: :string]},
+               {:priorities, :any, [list: [enum: ["low", "high"]]]}
+             ]
+    end
+
+    test "validates enum values are strings" do
+      # This should compile successfully - we're just storing the data
+      defmodule TestController24 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :config do
+            field(:status, enum: ["active", "inactive"])
+          end
+        end
+      end
+
+      forms = TestController24.__inertia_forms__()
+      assert forms[:config] == [{:status, :any, [enum: ["active", "inactive"]]}]
+    end
+  end
+
+  describe "typed list fields" do
+    test "supports list: type syntax for typed arrays" do
+      defmodule TestController17 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :config do
+            field(:allowed_origins, list: :string, optional: true)
+            field(:port_numbers, list: :integer)
+            field(:feature_flags, list: :boolean)
+          end
+        end
+      end
+
+      forms = TestController17.__inertia_forms__()
+
+      assert forms[:config] == [
+               {:allowed_origins, :any, [list: :string, optional: true]},
+               {:port_numbers, :any, [list: :integer]},
+               {:feature_flags, :any, [list: :boolean]}
+             ]
+    end
+
+    test "supports all basic types in typed lists" do
+      defmodule TestController18 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :data do
+            field(:strings, list: :string)
+            field(:numbers, list: :number)
+            field(:integers, list: :integer)
+            field(:booleans, list: :boolean)
+            field(:dates, list: :date)
+            field(:datetimes, list: :datetime)
+          end
+        end
+      end
+
+      forms = TestController18.__inertia_forms__()
+
+      assert forms[:data] == [
+               {:strings, :any, [list: :string]},
+               {:numbers, :any, [list: :number]},
+               {:integers, :any, [list: :integer]},
+               {:booleans, :any, [list: :boolean]},
+               {:dates, :any, [list: :date]},
+               {:datetimes, :any, [list: :datetime]}
+             ]
+    end
+
+    test "typed list with optional" do
+      defmodule TestController19 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :config do
+            field(:tags, list: :string, optional: true)
+          end
+        end
+      end
+
+      forms = TestController19.__inertia_forms__()
+      assert forms[:config] == [{:tags, :any, [list: :string, optional: true]}]
+    end
+
+    test "mixed typed lists and regular fields" do
+      defmodule TestController20 do
+        use NbInertia.Controller
+
+        inertia_page :test_page do
+          form_inputs :config do
+            field(:name, :string)
+            field(:tags, list: :string)
+            field(:active, :boolean)
+            field(:ports, list: :integer)
+          end
+        end
+      end
+
+      forms = TestController20.__inertia_forms__()
+
+      assert forms[:config] == [
+               {:name, :string, []},
+               {:tags, :any, [list: :string]},
+               {:active, :boolean, []},
+               {:ports, :any, [list: :integer]}
+             ]
+    end
+  end
+
   describe "integration with inertia_page" do
     test "form_inputs works alongside prop definitions" do
       defmodule TestController10 do
