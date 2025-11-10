@@ -100,6 +100,11 @@ defmodule NbInertia.Controller do
       inertia_page :user_profile, component: "UserProfile" do
         prop :user, :map
       end
+
+      # Override TypeScript type name to avoid collisions
+      inertia_page :preview, component: "Public/WidgetShow", type_name: "WidgetPreviewProps" do
+        prop :widget, WidgetSerializer
+      end
   """
   defmacro inertia_page(page_name, opts \\ [], do: block) do
     quote do
@@ -127,10 +132,10 @@ defmodule NbInertia.Controller do
 
       # Add forms if any were defined
       page_config =
-        if forms != %{} do
-          Map.put(page_config, :forms, forms)
-        else
+        if forms == %{} do
           page_config
+        else
+          Map.put(page_config, :forms, forms)
         end
 
       # Add index_signature if provided in opts
@@ -138,6 +143,13 @@ defmodule NbInertia.Controller do
         case unquote(opts)[:index_signature] do
           nil -> page_config
           value -> Map.put(page_config, :index_signature, value)
+        end
+
+      # Add type_name if provided in opts
+      page_config =
+        case unquote(opts)[:type_name] do
+          nil -> page_config
+          value -> Map.put(page_config, :type_name, value)
         end
 
       Module.put_attribute(
@@ -388,7 +400,7 @@ defmodule NbInertia.Controller do
   defmacro field(name, type, opts, do: block) when is_atom(name) and is_atom(type) do
     quote do
       # Validate we're inside a form_inputs block
-      unless Module.get_attribute(__MODULE__, :current_form_name) do
+      if !Module.get_attribute(__MODULE__, :current_form_name) do
         raise CompileError,
           file: __ENV__.file,
           line: __ENV__.line,
@@ -403,7 +415,7 @@ defmodule NbInertia.Controller do
       end
 
       # Validate that blocks are only used with :list type
-      unless unquote(type) == :list do
+      if unquote(type) != :list do
         raise CompileError,
           file: __ENV__.file,
           line: __ENV__.line,
@@ -460,7 +472,7 @@ defmodule NbInertia.Controller do
   defmacro field(name, opts) when is_atom(name) and is_list(opts) do
     quote bind_quoted: [name: name, opts: opts] do
       # Validate we're inside a form_inputs block
-      unless Module.get_attribute(__MODULE__, :current_form_name) do
+      if !Module.get_attribute(__MODULE__, :current_form_name) do
         raise CompileError,
           file: __ENV__.file,
           line: __ENV__.line,
@@ -536,7 +548,7 @@ defmodule NbInertia.Controller do
       # Generate code for typed list field (no block)
       quote bind_quoted: [name: name, type: type, opts: clean_opts] do
         # Validate we're inside a form_inputs block
-        unless Module.get_attribute(__MODULE__, :current_form_name) do
+        if !Module.get_attribute(__MODULE__, :current_form_name) do
           raise CompileError,
             file: __ENV__.file,
             line: __ENV__.line,
@@ -569,7 +581,7 @@ defmodule NbInertia.Controller do
       # Generate code for field with nested block (from field :name, :list do syntax)
       quote do
         # Validate we're inside a form_inputs block
-        unless Module.get_attribute(__MODULE__, :current_form_name) do
+        if !Module.get_attribute(__MODULE__, :current_form_name) do
           raise CompileError,
             file: __ENV__.file,
             line: __ENV__.line,
@@ -584,7 +596,7 @@ defmodule NbInertia.Controller do
         end
 
         # Validate that blocks are only used with :list type
-        unless unquote(type) == :list do
+        if unquote(type) != :list do
           raise CompileError,
             file: __ENV__.file,
             line: __ENV__.line,
@@ -638,7 +650,7 @@ defmodule NbInertia.Controller do
       # Generate code for regular field
       quote bind_quoted: [name: name, type: type, opts: clean_opts] do
         # Validate we're inside a form_inputs block
-        unless Module.get_attribute(__MODULE__, :current_form_name) do
+        if !Module.get_attribute(__MODULE__, :current_form_name) do
           raise CompileError,
             file: __ENV__.file,
             line: __ENV__.line,
@@ -678,7 +690,7 @@ defmodule NbInertia.Controller do
     page_error_clause =
       quote do
         def page(name) do
-          available = unquote(available_pages) |> Enum.map(&inspect/1) |> Enum.join(", ")
+          available = unquote(available_pages) |> Enum.map_join(", ", &inspect/1)
 
           raise ArgumentError, """
           Inertia page not declared: #{inspect(name)}
@@ -833,14 +845,13 @@ defmodule NbInertia.Controller do
               Keyword.get(prop.opts, :lazy, false) ||
               Keyword.get(prop.opts, :defer, false)
           end)
-          |> Enum.map(& &1.name)
-          |> MapSet.new()
+          |> MapSet.new(& &1.name)
 
         # Check for missing required props
         missing_props = MapSet.difference(required_props, provided_prop_names)
 
         if MapSet.size(missing_props) > 0 do
-          missing_list = MapSet.to_list(missing_props) |> Enum.map(&inspect/1) |> Enum.join(", ")
+          missing_list = MapSet.to_list(missing_props) |> Enum.map_join(", ", &inspect/1)
 
           raise CompileError,
             description: """
@@ -858,7 +869,7 @@ defmodule NbInertia.Controller do
         extra_props = MapSet.difference(provided_prop_names, declared_prop_names)
 
         if MapSet.size(extra_props) > 0 do
-          extra_list = MapSet.to_list(extra_props) |> Enum.map(&inspect/1) |> Enum.join(", ")
+          extra_list = MapSet.to_list(extra_props) |> Enum.map_join(", ", &inspect/1)
 
           raise CompileError,
             description: """
@@ -1065,14 +1076,13 @@ defmodule NbInertia.Controller do
           Keyword.get(prop.opts, :lazy, false) ||
           Keyword.get(prop.opts, :defer, false)
       end)
-      |> Enum.map(& &1.name)
-      |> MapSet.new()
+      |> MapSet.new(& &1.name)
 
     # Check for missing required props
     missing_props = MapSet.difference(required_props, provided_prop_names)
 
     if MapSet.size(missing_props) > 0 do
-      missing_list = MapSet.to_list(missing_props) |> Enum.map(&inspect/1) |> Enum.join(", ")
+      missing_list = MapSet.to_list(missing_props) |> Enum.map_join(", ", &inspect/1)
 
       raise ArgumentError, """
       Missing required props for Inertia page
@@ -1107,7 +1117,7 @@ defmodule NbInertia.Controller do
     extra_props = MapSet.difference(provided_prop_names, declared_prop_names)
 
     if MapSet.size(extra_props) > 0 do
-      extra_list = MapSet.to_list(extra_props) |> Enum.map(&inspect/1) |> Enum.join(", ")
+      extra_list = MapSet.to_list(extra_props) |> Enum.map_join(", ", &inspect/1)
 
       raise ArgumentError, """
       Undeclared props provided for Inertia page
@@ -1127,7 +1137,7 @@ defmodule NbInertia.Controller do
 
       1. Remove the undeclared props from your render_inertia call:
          render_inertia(conn, #{inspect(page_name)}, [
-           #{format_provided_props(MapSet.difference(provided_prop_names, extra_props) |> MapSet.to_list())}
+           #{MapSet.difference(provided_prop_names, extra_props) |> MapSet.to_list() |> format_provided_props()}
          ])
 
       2. Or declare them in your inertia_page block:
@@ -1146,7 +1156,7 @@ defmodule NbInertia.Controller do
   # Helper functions for formatting error messages
   defp format_props_for_error(props) do
     props
-    |> Enum.map(fn prop ->
+    |> Enum.map_join("\n        ", fn prop ->
       type_info =
         case prop do
           %{serializer: serializer} when not is_nil(serializer) ->
@@ -1176,28 +1186,25 @@ defmodule NbInertia.Controller do
 
       "#{inspect(prop.name)}: #{type_info}#{opts_info}"
     end)
-    |> Enum.join("\n        ")
   end
 
   defp format_provided_props([]), do: ""
 
   defp format_provided_props(prop_names) do
     prop_names
-    |> Enum.map(&"#{&1}: value,")
-    |> Enum.join("\n          ")
+    |> Enum.map_join("\n          ", &"#{&1}: value,")
   end
 
   defp format_missing_props([]), do: ""
 
   defp format_missing_props(prop_names) do
     prop_names
-    |> Enum.map(&"#{&1}: value,")
-    |> Enum.join("\n          ")
+    |> Enum.map_join("\n          ", &"#{&1}: value,")
   end
 
   defp format_props_declaration(props) do
     props
-    |> Enum.map(fn prop ->
+    |> Enum.map_join("\n           ", fn prop ->
       type_or_serializer =
         case prop do
           %{serializer: serializer} when not is_nil(serializer) ->
@@ -1216,15 +1223,13 @@ defmodule NbInertia.Controller do
         "prop #{inspect(prop.name)}"
       end
     end)
-    |> Enum.join("\n           ")
   end
 
   defp format_missing_props_declaration([]), do: ""
 
   defp format_missing_props_declaration(prop_names) do
     prop_names
-    |> Enum.map(&"prop #{inspect(&1)}, :type")
-    |> Enum.join("\n           ")
+    |> Enum.map_join("\n           ", &"prop #{inspect(&1)}, :type")
   end
 
   # NbSerializer integration functions (only available when nb_serializer is loaded)
