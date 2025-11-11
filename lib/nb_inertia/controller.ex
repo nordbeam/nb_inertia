@@ -259,10 +259,49 @@ defmodule NbInertia.Controller do
   Register SharedProps module:
 
       inertia_shared(MyAppWeb.InertiaShared.Auth)
-  """
-  defmacro inertia_shared(module_or_block)
 
-  defmacro inertia_shared(do: block) do
+  Conditional sharing (matches Phoenix plug pattern):
+
+      # Only for specific actions
+      inertia_shared(MyAppWeb.InertiaShared.Auth, only: [:index, :show])
+
+      # Except for specific actions
+      inertia_shared(MyAppWeb.InertiaShared.Public, except: [:admin])
+
+      # Conditional based on guard function
+      inertia_shared(MyAppWeb.InertiaShared.Admin, when: :admin?)
+
+      # Multiple conditions
+      inertia_shared(MyAppWeb.InertiaShared.Features, only: [:index], when: :feature_enabled?)
+
+  ## Options
+
+    * `:only` - List of action names where this shared prop module should be applied
+    * `:except` - List of action names where this shared prop module should NOT be applied
+    * `:when` - Atom referencing a guard function that returns true/false
+
+  Guard functions receive the conn as the first argument:
+
+      defp admin?(conn) do
+        conn.assigns[:current_user]?.role == :admin
+      end
+  """
+  defmacro inertia_shared(module_or_block, opts \\ [])
+
+  defmacro inertia_shared(module, opts) when is_atom(module) or is_list(opts) do
+    quote do
+      config = %{
+        module: unquote(module),
+        only: unquote(opts)[:only],
+        except: unquote(opts)[:except],
+        when: unquote(opts)[:when]
+      }
+
+      Module.put_attribute(__MODULE__, :inertia_shared_modules, config)
+    end
+  end
+
+  defmacro inertia_shared(opts, do: block) when is_list(opts) do
     quote do
       Module.put_attribute(__MODULE__, :current_page, :__shared__)
       Module.delete_attribute(__MODULE__, :current_props)
@@ -273,12 +312,6 @@ defmodule NbInertia.Controller do
       Module.put_attribute(__MODULE__, :inertia_shared, shared_props)
       Module.delete_attribute(__MODULE__, :current_page)
       Module.delete_attribute(__MODULE__, :current_props)
-    end
-  end
-
-  defmacro inertia_shared(module) do
-    quote do
-      Module.put_attribute(__MODULE__, :inertia_shared_modules, unquote(module))
     end
   end
 
@@ -676,6 +709,9 @@ defmodule NbInertia.Controller do
     shared_props = Module.get_attribute(env.module, :inertia_shared)
     shared_modules = Module.get_attribute(env.module, :inertia_shared_modules) |> Enum.reverse()
 
+    # Validate no prop name collisions between shared props and page props
+    validate_prop_collisions!(env.module, pages, shared_props, shared_modules)
+
     # Generate page/1 function
     page_clauses =
       for {page_name, config} <- pages do
@@ -789,6 +825,63 @@ defmodule NbInertia.Controller do
     end
   end
 
+  @doc false
+  defp validate_prop_collisions!(module, pages, inline_shared_props, _shared_modules) do
+    # Get all shared prop names from inline shared props
+    inline_shared_prop_names =
+      inline_shared_props
+      |> Enum.map(& &1.name)
+      |> MapSet.new()
+
+    # Get all shared prop names from shared modules
+    # Note: At compile time, we can't easily introspect other modules
+    # So we'll document this limitation and only check inline shared props
+    # Users should ensure SharedProps modules don't collide manually
+
+    shared_prop_names = inline_shared_prop_names
+
+    # Check each page for collisions
+    for {page_name, page_config} <- pages do
+      page_prop_names = Enum.map(page_config.props, & &1.name) |> MapSet.new()
+      collisions = MapSet.intersection(shared_prop_names, page_prop_names)
+
+      if MapSet.size(collisions) > 0 do
+        collision_list = MapSet.to_list(collisions) |> Enum.map_join(", ", &inspect/1)
+
+        raise CompileError,
+          description: """
+          Prop name collision detected in #{inspect(module)}.#{page_name}
+
+          The following props are defined both as shared props and page props:
+          #{collision_list}
+
+          Shared props and page props must have unique names to avoid conflicts.
+
+          To fix this:
+          1. Rename the shared props to be more specific:
+             inertia_shared do
+               prop :auth_user, :map  # instead of :user
+               prop :global_flash, :map  # instead of :flash
+             end
+
+          2. Or rename the page props:
+             inertia_page #{inspect(page_name)} do
+               prop :page_user, UserSerializer  # instead of :user
+             end
+
+          3. Or use namespacing in your prop names:
+             Shared: :auth, :global
+             Page: :users, :posts, :comments
+
+          Note: If using SharedProps modules, ensure those don't collide either.
+          """,
+          file: "#{inspect(module)}.ex"
+      end
+    end
+
+    :ok
+  end
+
   @doc """
   Renders an Inertia response with support for atom-based page references.
 
@@ -797,7 +890,13 @@ defmodule NbInertia.Controller do
   - All-in-one pattern with props and validation (3-arity)
   - Pipe-friendly pattern (2-arity)
   - Automatic shared props injection
+  - Deep merge support for nested props
   - Backward compatibility with string component names
+
+  ## Options
+
+    * `:deep_merge` - When `true`, recursively merges nested maps in shared props with page props.
+      Overrides the global `deep_merge_shared_props` config setting.
 
   ## Examples
 
@@ -805,6 +904,12 @@ defmodule NbInertia.Controller do
       render_inertia(conn, :users_index,
         users: users,
         total_count: 42
+      )
+
+      # With deep merge (per-action override)
+      render_inertia(conn, :users_index,
+        [settings: %{theme: "light"}],
+        deep_merge: true
       )
 
       # Pipe-friendly pattern (flexible, no validation)
@@ -818,11 +923,10 @@ defmodule NbInertia.Controller do
       |> assign_prop(:data, "test")
       |> render_inertia("CustomComponent")
   """
-  defmacro render_inertia(conn, component_or_page, props \\ [])
+  defmacro render_inertia(conn, component_or_page, props \\ [], opts \\ [])
 
-  # 3-arity: All-in-one with props
-  # Note: At compile-time, atom literals ARE atoms, keyword lists ARE lists
-  defmacro render_inertia(conn, page_ref, props) when is_atom(page_ref) do
+  # 4-arity: All-in-one with props and options
+  defmacro render_inertia(conn, page_ref, props, opts) when is_atom(page_ref) and is_list(opts) do
     # Perform compile-time validation if in dev/test
     # This runs during macro expansion, not at runtime
     if Mix.env() in [:dev, :test] and is_list(props) and props != [] do
@@ -898,9 +1002,17 @@ defmodule NbInertia.Controller do
       # Get registered shared modules
       shared_modules = __inertia_shared_modules__()
 
-      # Build props from all shared modules
+      # Get current action name for conditional filtering
+      action = Phoenix.Controller.action_name(conn_value)
+
+      # Filter and build props from shared modules that match conditions
       shared_module_props =
-        Enum.reduce(shared_modules, %{}, fn module, acc ->
+        shared_modules
+        |> Enum.filter(
+          &NbInertia.Controller.should_apply_shared_module?(&1, conn_value, action, __MODULE__)
+        )
+        |> Enum.reduce(%{}, fn module_config, acc ->
+          module = if is_atom(module_config), do: module_config, else: module_config.module
           module_props = module.build_props(conn_value, [])
           Map.merge(acc, module_props)
         end)
@@ -921,10 +1033,32 @@ defmodule NbInertia.Controller do
         end)
         |> Enum.reject(&is_nil/1)
 
-      # Combine shared props with provided props
-      all_props = shared_prop_assignments ++ props
+      # Determine if we should use deep merge
+      deep_merge? =
+        Keyword.get(unquote(opts), :deep_merge, NbInertia.Config.deep_merge_shared_props())
 
-      # Split props into serialized (tuples) and raw values
+      # Combine shared props (module + inline) into a single map
+      all_shared_props =
+        if deep_merge? do
+          NbInertia.DeepMerge.deep_merge(
+            shared_module_props,
+            Enum.into(shared_prop_assignments, %{})
+          )
+        else
+          Map.merge(shared_module_props, Enum.into(shared_prop_assignments, %{}))
+        end
+
+      # Combine shared props with provided page props
+      all_props_map =
+        if deep_merge? do
+          NbInertia.DeepMerge.deep_merge(all_shared_props, Enum.into(props, %{}))
+        else
+          Map.merge(all_shared_props, Enum.into(props, %{}))
+        end
+
+      # Convert back to keyword list and split into serialized/raw
+      all_props = Map.to_list(all_props_map)
+
       {serialized_props, raw_props} =
         Enum.split_with(all_props, fn {_key, value} ->
           is_tuple(value) and tuple_size(value) >= 2 and is_atom(elem(value, 0))
@@ -944,12 +1078,6 @@ defmodule NbInertia.Controller do
           assign_prop(acc, key, value)
         end)
 
-      # Assign shared module props
-      conn_value =
-        Enum.reduce(shared_module_props, conn_value, fn {key, value}, acc ->
-          assign_prop(acc, key, value)
-        end)
-
       # Apply camelization if configured
       conn_value =
         if NbInertia.Config.camelize_props?() do
@@ -963,8 +1091,8 @@ defmodule NbInertia.Controller do
     end
   end
 
-  # 2-arity or 3-arity with empty props: Pipe-friendly pattern or string component
-  defmacro render_inertia(conn, component_or_page, _props) do
+  # 2-arity, 3-arity with empty props, or non-atom page: Pipe-friendly pattern or string component
+  defmacro render_inertia(conn, component_or_page, _props, _opts) do
     cond do
       # If it's a string literal, pass through directly
       is_binary(component_or_page) ->
@@ -993,9 +1121,22 @@ defmodule NbInertia.Controller do
           # Get registered shared modules
           shared_modules = __MODULE__.__inertia_shared_modules__()
 
-          # Build props from all shared modules
+          # Get current action name for conditional filtering
+          action = Phoenix.Controller.action_name(conn_value)
+
+          # Filter and build props from shared modules that match conditions
           shared_module_props =
-            Enum.reduce(shared_modules, %{}, fn module, acc ->
+            shared_modules
+            |> Enum.filter(
+              &NbInertia.Controller.should_apply_shared_module?(
+                &1,
+                conn_value,
+                action,
+                __MODULE__
+              )
+            )
+            |> Enum.reduce(%{}, fn module_config, acc ->
+              module = if is_atom(module_config), do: module_config, else: module_config.module
               module_props = module.build_props(conn_value, [])
               Map.merge(acc, module_props)
             end)
@@ -1230,6 +1371,87 @@ defmodule NbInertia.Controller do
   defp format_missing_props_declaration(prop_names) do
     prop_names
     |> Enum.map_join("\n           ", &"prop #{inspect(&1)}, :type")
+  end
+
+  @doc """
+  Determines if a shared module should be applied based on conditional options.
+
+  Handles filtering by:
+  - `:only` - Only apply for specific actions
+  - `:except` - Apply for all actions except specified ones
+  - `:when` - Apply when guard function returns true
+
+  ## Examples
+
+      should_apply_shared_module?(%{only: [:index]}, conn, :index, MyController)
+      # => true
+
+      should_apply_shared_module?(%{except: [:admin]}, conn, :admin, MyController)
+      # => false
+
+      should_apply_shared_module?(%{when: :admin?}, conn, :index, MyController)
+      # => calls MyController.admin?(conn)
+  """
+  def should_apply_shared_module?(module_config, conn, action, controller_module)
+
+  # Handle old-style atom modules (backward compatibility)
+  def should_apply_shared_module?(module, _conn, _action, _controller_module)
+      when is_atom(module) do
+    true
+  end
+
+  # Handle module config with :only option
+  def should_apply_shared_module?(%{only: only} = config, conn, action, controller_module)
+      when not is_nil(only) do
+    action_matches = action in List.wrap(only)
+
+    # Also check :when condition if present
+    if action_matches and not is_nil(config[:when]) do
+      check_when_condition(config[:when], conn, controller_module)
+    else
+      action_matches
+    end
+  end
+
+  # Handle module config with :except option
+  def should_apply_shared_module?(%{except: except} = config, conn, action, controller_module)
+      when not is_nil(except) do
+    action_does_not_match = action not in List.wrap(except)
+
+    # Also check :when condition if present
+    if action_does_not_match and not is_nil(config[:when]) do
+      check_when_condition(config[:when], conn, controller_module)
+    else
+      action_does_not_match
+    end
+  end
+
+  # Handle module config with only :when option
+  def should_apply_shared_module?(%{when: when_fn}, conn, _action, controller_module)
+      when not is_nil(when_fn) do
+    check_when_condition(when_fn, conn, controller_module)
+  end
+
+  # Handle module config with no conditions - always apply
+  def should_apply_shared_module?(_config, _conn, _action, _controller_module) do
+    true
+  end
+
+  # Helper to check :when condition
+  defp check_when_condition(when_fn, conn, controller_module) do
+    if function_exported?(controller_module, when_fn, 1) do
+      apply(controller_module, when_fn, [conn])
+    else
+      raise ArgumentError, """
+      Guard function #{inspect(when_fn)}/1 not found in #{inspect(controller_module)}
+
+      When using `when:` option with inertia_shared, you must define the guard function:
+
+          defp #{when_fn}(conn) do
+            # Return true or false
+          end
+      """
+    end
   end
 
   # NbSerializer integration functions (only available when nb_serializer is loaded)

@@ -285,6 +285,112 @@ defmodule NbInertia.TestHelpers do
     true
   end
 
+  @doc """
+  Asserts that specific shared props are present in the Inertia response.
+
+  Shared props are those defined via `inertia_shared` in controllers or SharedProps modules.
+  This is useful for testing that shared props are correctly injected across all pages.
+
+  ## Examples
+
+      conn = inertia_get(conn, ~p"/dashboard")
+      assert_shared_props(conn, [:current_user, :flash])
+  """
+  @spec assert_shared_props(Plug.Conn.t(), list(atom() | String.t())) :: true
+  def assert_shared_props(conn, expected_prop_keys) when is_list(expected_prop_keys) do
+    # Shared props are part of the regular props, so we reuse assert_inertia_props
+    assert_inertia_props(conn, expected_prop_keys)
+  end
+
+  @doc """
+  Asserts that a specific shared prop has the expected value.
+
+  ## Examples
+
+      conn = inertia_get(conn, ~p"/users")
+      assert_shared_prop(conn, :app_name, "MyApp")
+      assert_shared_prop(conn, :current_user, %{id: 1, name: "Alice"})
+  """
+  @spec assert_shared_prop(Plug.Conn.t(), atom() | String.t(), any()) :: true
+  def assert_shared_prop(conn, prop_key, expected_value) do
+    # Shared props are part of the regular props, so we reuse assert_inertia_prop
+    assert_inertia_prop(conn, prop_key, expected_value)
+  end
+
+  @doc """
+  Asserts that a specific shared prop is NOT present in the Inertia response.
+
+  Useful for testing conditional shared props (e.g., admin-only data).
+
+  ## Examples
+
+      conn =
+        conn
+        |> assign(:current_user, regular_user)
+        |> inertia_get(~p"/dashboard")
+
+      # Admin data should not be present for regular users
+      refute_shared_prop(conn, :admin_settings)
+  """
+  @spec refute_shared_prop(Plug.Conn.t(), atom() | String.t()) :: true
+  def refute_shared_prop(conn, prop_key) do
+    # Shared props are part of the regular props, so we reuse refute_inertia_prop
+    refute_inertia_prop(conn, prop_key)
+  end
+
+  @doc """
+  Asserts that shared props from a specific SharedProps module are present.
+
+  This extracts the expected prop names from the module's `inertia_shared` definition
+  and verifies they are all present in the response.
+
+  ## Examples
+
+      assert_shared_module_props(conn, MyAppWeb.InertiaShared.Auth)
+      # Checks that all props defined in Auth module are present
+  """
+  @spec assert_shared_module_props(Plug.Conn.t(), module()) :: true
+  def assert_shared_module_props(conn, shared_module) do
+    if function_exported?(shared_module, :__inertia_shared_props__, 0) do
+      expected_props =
+        shared_module.__inertia_shared_props__()
+        |> Enum.map(& &1.name)
+
+      assert_shared_props(conn, expected_props)
+    else
+      flunk("""
+      Module #{inspect(shared_module)} does not appear to be a SharedProps module.
+
+      Expected it to define __inertia_shared_props__/0.
+
+      Make sure you have:
+        use NbInertia.SharedProps
+        inertia_shared do
+          prop :my_prop, :type
+        end
+      """)
+    end
+  end
+
+  @doc """
+  Extracts shared props that were applied to the current request.
+
+  Returns a map of shared prop keys and their values.
+  Note: There's no way to distinguish shared props from page props at runtime,
+  so this returns all props (which includes shared props).
+
+  ## Examples
+
+      shared_props = get_shared_props(conn)
+      assert Map.has_key?(shared_props, :current_user)
+  """
+  @spec get_shared_props(Plug.Conn.t()) :: map()
+  def get_shared_props(conn) do
+    # Since shared props are merged into the regular props,
+    # we return all props (shared + page props)
+    get_inertia_props(conn)
+  end
+
   # Private helpers
 
   defp get_inertia_component(conn) do

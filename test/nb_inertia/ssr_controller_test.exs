@@ -2,8 +2,6 @@ defmodule NbInertia.SSRControllerTest do
   use ExUnit.Case, async: true
 
   import Plug.Test
-  import Plug.Conn
-
   import NbInertia.Controller
 
   describe "enable_ssr/1" do

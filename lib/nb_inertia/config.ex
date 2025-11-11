@@ -12,6 +12,7 @@ defmodule NbInertia.Config do
   - `:history` - History configuration for preserving scroll positions (default: `[]`)
   - `:static_paths` - List of static paths for asset versioning (default: `[]`)
   - `:default_version` - Default asset version (default: `"1"`)
+  - `:deep_merge_shared_props` - Deep merge shared props with page props (default: `false`)
   - `:ssr` - Enable Server-Side Rendering (default: `false`)
   - `:raise_on_ssr_failure` - Raise on SSR failures (default: `true`)
 
@@ -144,6 +145,30 @@ defmodule NbInertia.Config do
   """
   def ssr_module do
     get(:ssr_module, NbInertia.SSR)
+  end
+
+  @doc """
+  Returns whether shared props should be deep merged with page props.
+
+  When `true`, nested maps in shared props and page props are recursively merged.
+  When `false`, page props simply override shared props (shallow merge).
+
+  Defaults to `false`.
+
+  ## Examples
+
+      # With deep_merge_shared_props: false (default - shallow merge)
+      # Shared: %{user: %{name: "Alice", email: "alice@example.com"}}
+      # Page:   %{user: %{name: "Bob"}}
+      # Result: %{user: %{name: "Bob"}}
+
+      # With deep_merge_shared_props: true (deep merge)
+      # Shared: %{user: %{name: "Alice", email: "alice@example.com"}}
+      # Page:   %{user: %{name: "Bob"}}
+      # Result: %{user: %{name: "Bob", email: "alice@example.com"}}
+  """
+  def deep_merge_shared_props do
+    get(:deep_merge_shared_props, false)
   end
 
   @doc """
