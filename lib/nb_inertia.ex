@@ -167,6 +167,20 @@ defmodule NbInertia do
   - Frontend → Backend: `primaryProductId` becomes `primary_product_id`
   """
 
+  # Delegate common controller operations to CoreController
+  defdelegate assign_prop(conn, key, value), to: NbInertia.CoreController
+  defdelegate inertia_optional(fun), to: NbInertia.CoreController
+  defdelegate inertia_merge(value), to: NbInertia.CoreController
+  defdelegate inertia_deep_merge(value), to: NbInertia.CoreController
+  defdelegate inertia_defer(fun), to: NbInertia.CoreController
+  defdelegate inertia_defer(fun, group), to: NbInertia.CoreController
+  defdelegate inertia_always(value), to: NbInertia.CoreController
+  defdelegate preserve_case(key), to: NbInertia.CoreController
+  defdelegate encrypt_history(conn), to: NbInertia.CoreController
+  defdelegate encrypt_history(conn, true_or_false), to: NbInertia.CoreController
+  defdelegate clear_history(conn), to: NbInertia.CoreController
+  defdelegate clear_history(conn, true_or_false), to: NbInertia.CoreController
+
   @doc """
   Returns the version of NbInertia.
   """

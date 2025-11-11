@@ -55,6 +55,9 @@ defmodule NbInertia.Application do
       Application.put_env(:nb_inertia, :env, env)
     end
 
+    # Validate configuration at startup
+    NbInertia.Config.validate!()
+
     # Forward configuration from :nb_inertia to :inertia
     forward_config()
 

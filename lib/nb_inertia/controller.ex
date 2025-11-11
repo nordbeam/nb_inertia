@@ -1762,18 +1762,67 @@ defmodule NbInertia.Controller do
 
   @doc false
   def do_render_inertia(conn, component) do
-    # Call NbInertia.CoreController.render_inertia but intercept SSR rendering
-    # We do this by ensuring the conn doesn't have :inertia_ssr set,
-    # then handling SSR ourselves based on :nb_inertia_ssr_enabled
+    # Emit telemetry for render start
+    action = Phoenix.Controller.action_name(conn)
+    controller = Phoenix.Controller.controller_module(conn)
 
-    conn = Plug.Conn.put_private(conn, :inertia_ssr, false)
+    metadata = %{
+      component: component,
+      action: action,
+      controller: controller
+    }
 
-    if ssr_enabled?(conn) do
-      # Handle SSR ourselves with NbInertia.SSR
-      do_render_with_ssr(conn, component)
-    else
-      # Let Inertia.Controller handle CSR
-      NbInertia.CoreController.render_inertia(conn, component)
+    start_time = System.monotonic_time()
+    NbInertia.Telemetry.render_start(metadata)
+
+    try do
+      # Call NbInertia.CoreController.render_inertia but intercept SSR rendering
+      # We do this by ensuring the conn doesn't have :inertia_ssr set,
+      # then handling SSR ourselves based on :nb_inertia_ssr_enabled
+
+      conn = Plug.Conn.put_private(conn, :inertia_ssr, false)
+
+      result =
+        if ssr_enabled?(conn) do
+          # Handle SSR ourselves with NbInertia.SSR
+          do_render_with_ssr(conn, component)
+        else
+          # Let Inertia.Controller handle CSR
+          NbInertia.CoreController.render_inertia(conn, component)
+        end
+
+      # Emit telemetry for successful render
+      duration = System.monotonic_time() - start_time
+      NbInertia.Telemetry.render_stop(duration, metadata)
+
+      result
+    rescue
+      e ->
+        # Emit telemetry for render exception
+        duration = System.monotonic_time() - start_time
+
+        NbInertia.Telemetry.render_exception(
+          duration,
+          :error,
+          e,
+          __STACKTRACE__,
+          metadata
+        )
+
+        reraise e, __STACKTRACE__
+    catch
+      kind, reason ->
+        duration = System.monotonic_time() - start_time
+
+        NbInertia.Telemetry.render_exception(
+          duration,
+          kind,
+          reason,
+          __STACKTRACE__,
+          metadata
+        )
+
+        :erlang.raise(kind, reason, __STACKTRACE__)
     end
   end
 

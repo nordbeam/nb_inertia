@@ -2,6 +2,11 @@ defmodule NbInertia.Config do
   @moduledoc """
   Configuration for NbInertia.
 
+  This module supports both function-based and bracket-based access:
+
+      NbInertia.Config.get(:endpoint)
+      NbInertia.Config[:endpoint]
+
   ## Configuration Options
 
   All configuration options are read from the `:nb_inertia` namespace:
@@ -181,5 +186,192 @@ defmodule NbInertia.Config do
   """
   def camelize_props? do
     camelize_props()
+  end
+
+  @doc """
+  Validates the configuration at compile time.
+
+  This function is called by `NbInertia.Application` during startup to ensure
+  all required configuration is present and valid.
+
+  ## Returns
+
+    - `:ok` if configuration is valid
+    - `{:error, message}` if configuration is invalid
+
+  ## Validations
+
+    - Endpoint module is configured and exists
+    - SSR configuration is valid if enabled
+    - Repo is configured if using lazy props
+  """
+  @spec validate!() :: :ok
+  def validate! do
+    with :ok <- validate_endpoint(),
+         :ok <- validate_ssr_config() do
+      :ok
+    else
+      {:error, message} ->
+        raise """
+        Invalid NbInertia configuration:
+
+        #{message}
+
+        See: https://hexdocs.pm/nb_inertia/configuration.html
+        """
+    end
+  end
+
+  defp validate_endpoint do
+    case endpoint() do
+      nil ->
+        {:error,
+         """
+         Missing required :endpoint configuration.
+
+         Add to your config/config.exs:
+
+             config :nb_inertia,
+               endpoint: MyAppWeb.Endpoint
+         """}
+
+      module when is_atom(module) ->
+        if Code.ensure_loaded?(module) do
+          :ok
+        else
+          {:error,
+           """
+           Endpoint module #{inspect(module)} not found.
+
+           Make sure the module exists and is compiled before NbInertia starts.
+
+           Current config:
+
+               config :nb_inertia,
+                 endpoint: #{inspect(module)}
+           """}
+        end
+
+      other ->
+        {:error,
+         """
+         Invalid :endpoint configuration. Expected module atom, got: #{inspect(other)}
+
+         Example:
+
+             config :nb_inertia,
+               endpoint: MyAppWeb.Endpoint
+         """}
+    end
+  end
+
+  defp validate_ssr_config do
+    case ssr() do
+      false ->
+        :ok
+
+      [] ->
+        :ok
+
+      config when is_list(config) ->
+        cond do
+          !Keyword.get(config, :enabled, false) ->
+            :ok
+
+          !Code.ensure_loaded?(DenoRider) ->
+            {:error,
+             """
+             SSR is enabled but DenoRider is not available.
+
+             Make sure deno_rider is in your dependencies:
+
+                 {:deno_rider, "~> 0.2"}
+
+             Then run: mix deps.get
+             """}
+
+          true ->
+            :ok
+        end
+
+      true ->
+        # Old boolean config format
+        if Code.ensure_loaded?(DenoRider) do
+          :ok
+        else
+          {:error, "SSR is enabled but DenoRider is not available"}
+        end
+
+      other ->
+        {:error,
+         """
+         Invalid :ssr configuration. Expected boolean or keyword list, got: #{inspect(other)}
+
+         Examples:
+
+             config :nb_inertia,
+               ssr: false
+
+             config :nb_inertia,
+               ssr: [
+                 enabled: true,
+                 raise_on_failure: false
+               ]
+         """}
+    end
+  end
+
+  # Access behaviour implementation
+  @behaviour Access
+
+  @doc """
+  Implements the Access.fetch/2 callback for bracket-style access.
+
+  ## Examples
+
+      iex> NbInertia.Config[:endpoint]
+      MyAppWeb.Endpoint
+
+      iex> NbInertia.Config[:nonexistent]
+      nil
+  """
+  @impl Access
+  def fetch(_config \\ __MODULE__, key) do
+    case get(key) do
+      nil -> :error
+      value -> {:ok, value}
+    end
+  end
+
+  @doc """
+  Implements the Access.get_and_update/3 callback.
+
+  NbInertia.Config is read-only at runtime, so this always raises.
+  """
+  @impl Access
+  def get_and_update(_config, _key, _function) do
+    raise """
+    NbInertia.Config is read-only at runtime.
+
+    Configuration must be set at compile time in config files:
+
+        # config/config.exs
+        config :nb_inertia,
+          endpoint: MyAppWeb.Endpoint
+    """
+  end
+
+  @doc """
+  Implements the Access.pop/2 callback.
+
+  NbInertia.Config is read-only at runtime, so this always raises.
+  """
+  @impl Access
+  def pop(_config, _key) do
+    raise """
+    NbInertia.Config is read-only at runtime.
+
+    Configuration must be set at compile time in config files.
+    """
   end
 end

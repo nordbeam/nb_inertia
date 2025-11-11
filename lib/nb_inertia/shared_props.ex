@@ -61,6 +61,8 @@ defmodule NbInertia.SharedProps do
   @doc false
   defmacro __using__(_opts) do
     quote do
+      @behaviour NbInertia.SharedProps.Behaviour
+
       import NbInertia.SharedProps
       import NbInertia.Controller, only: [prop: 2, prop: 3]
 
@@ -68,13 +70,6 @@ defmodule NbInertia.SharedProps do
       Module.register_attribute(__MODULE__, :current_props, accumulate: true)
 
       @before_compile NbInertia.SharedProps
-
-      @doc """
-      Callback to build the props map from the connection and options.
-
-      This function must return a map with keys matching the declared props.
-      """
-      @callback build_props(conn :: Plug.Conn.t(), opts :: keyword()) :: map()
     end
   end
 

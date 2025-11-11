@@ -9,6 +9,7 @@ defmodule NbInertia.MixProject do
       app: :nb_inertia,
       version: @version,
       elixir: "~> 1.15",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: description(),
@@ -20,6 +21,9 @@ defmodule NbInertia.MixProject do
       test_coverage: [tool: ExCoveralls]
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   def cli do
     [
@@ -47,6 +51,7 @@ defmodule NbInertia.MixProject do
       {:phoenix, "~> 1.7"},
       {:plug, "~> 1.14"},
       {:deno_rider, "~> 0.2"},
+      {:poolboy, "~> 1.5"},
 
       # Optional dependencies
       {:nb_serializer, path: "/Users/assim/Projects/nb_serializer", optional: true},
@@ -86,7 +91,43 @@ defmodule NbInertia.MixProject do
         "README.md"
       ],
       source_ref: "v#{@version}",
-      formatters: ["html"]
+      formatters: ["html"],
+      groups_for_modules: [
+        Core: [
+          NbInertia,
+          NbInertia.Controller,
+          NbInertia.CoreController
+        ],
+        Configuration: [
+          NbInertia.Config,
+          NbInertia.Application
+        ],
+        "Shared Props": [
+          NbInertia.SharedProps
+        ],
+        "Server-Side Rendering": [
+          NbInertia.SSR,
+          NbInertia.SSR.RenderError
+        ],
+        Testing: [
+          NbInertia.TestHelpers
+        ],
+        Utilities: [
+          NbInertia.ComponentNaming,
+          NbInertia.DeepMerge,
+          NbInertia.ParamsConverter,
+          NbInertia.HTML
+        ],
+        Telemetry: [
+          NbInertia.Telemetry
+        ],
+        Protocols: [
+          NbInertia.PropSerializer
+        ],
+        "Lazy Evaluation": [
+          NbInertia.LazyProps
+        ]
+      ]
     ]
   end
 end
