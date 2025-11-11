@@ -99,6 +99,7 @@ if Code.ensure_loaded?(Igniter) do
     @impl Igniter.Mix.Task
     def info(_argv, _parent) do
       %Igniter.Mix.Task.Info{
+        group: :nb,
         schema: [
           client_framework: :string,
           camelize_props: :boolean,
@@ -117,6 +118,7 @@ if Code.ensure_loaded?(Igniter) do
     @impl Igniter.Mix.Task
     def igniter(igniter) do
       igniter
+      |> Igniter.Project.Formatter.import_dep(:nb_inertia)
       |> add_dependencies()
       |> setup_controller_helpers()
       |> setup_html_helpers()
