@@ -497,13 +497,31 @@ defmodule NbInertia.SSR do
   defp do_render_prod(page, state) do
     page_json = Jason.encode!(page)
 
-    # Call the globalThis.render function exposed by the SSR bundle
+    # Call the globalThis.render function with try/catch wrapper for better error handling
     js_code = """
-    globalThis.render(#{page_json});
+    (async function() {
+      try {
+        return await globalThis.render(#{page_json});
+      } catch (error) {
+        return {
+          __error: true,
+          message: error.message || String(error),
+          stack: error.stack
+        };
+      }
+    })();
     """
 
     result =
       case DenoRider.eval(js_code, pid: state.deno_pid) do
+        # Check for error object first
+        {:ok, %{"__error" => true, "message" => message, "stack" => stack}} ->
+          handle_render_error(%{"message" => message, "stack" => stack}, page, state)
+
+        {:ok, %{"__error" => true, "message" => message}} ->
+          handle_render_error(%{"message" => message}, page, state)
+
+        # Success cases
         {:ok, %{"head" => head, "body" => body}} ->
           {:ok, %{"head" => head, "body" => body}}
 
@@ -513,8 +531,9 @@ defmodule NbInertia.SSR do
         {:ok, html} when is_binary(html) ->
           {:ok, %{"head" => [], "body" => html}}
 
+        # DenoRider evaluation error
         {:error, reason} ->
-          handle_render_error(%{"message" => inspect(reason)}, state)
+          handle_render_error(%{"message" => inspect(reason)}, page, state)
       end
 
     result
@@ -528,25 +547,33 @@ defmodule NbInertia.SSR do
       end
   end
 
-  # Two-argument version (backwards compatibility)
-  defp handle_render_error(error, state)
-       when is_map(state) and not is_map_key(state, "component") do
-    handle_render_error(error, nil, state)
-  end
-
   # Three-argument version with page context
   defp handle_render_error(error, page, state) do
     raw_message = Map.get(error, "message", "Unknown error")
+    raw_stack = Map.get(error, "stack")
     component = page && Map.get(page, "component")
 
     # Parse and enhance the error message
     message = format_ssr_error(raw_message, component)
 
+    # Include stack trace if available
+    full_error =
+      if raw_stack do
+        """
+        #{message}
+
+        JavaScript Stack Trace:
+        #{raw_stack}
+        """
+      else
+        message
+      end
+
     if state.raise_on_failure do
-      raise "SSR rendering failed: #{message}"
+      raise "SSR rendering failed: #{full_error}"
     else
-      Logger.error("SSR rendering failed: #{message}")
-      {:error, message}
+      Logger.error("SSR rendering failed: #{full_error}")
+      {:error, full_error}
     end
   end
 

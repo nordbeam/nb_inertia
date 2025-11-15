@@ -111,6 +111,66 @@ defmodule NbInertia.SSRTest do
         end
       end
     end
+
+    test "includes JavaScript stack trace in error messages (production mode)" do
+      # Create a script that throws an error with a stack trace
+      script_path = Path.join([System.tmp_dir(), "test_ssr_error_#{:rand.uniform(1000)}.js"])
+
+      script_content = """
+      globalThis.render = function(page) {
+        // This will throw an error with a stack trace
+        throw new Error("Test error: window is not defined");
+      }
+      """
+
+      File.write!(script_path, script_content)
+
+      # Start DenoRider if needed
+      deno_pid =
+        case Process.whereis(DenoRider) do
+          nil ->
+            {:ok, pid} = DenoRider.start_link([])
+            pid
+
+          pid ->
+            pid
+        end
+
+      try do
+        {:ok, ssr_pid} =
+          SSR.start_link(enabled: true, script_path: script_path, raise_on_failure: false)
+
+        # Wait for script to load
+        Process.sleep(100)
+
+        page = %{
+          component: "TestPage",
+          props: %{},
+          url: "/test",
+          version: "1"
+        }
+
+        # Render should fail with error
+        {:error, error_message} = GenServer.call(ssr_pid, {:render, page})
+
+        # Verify error message contains the original error
+        assert error_message =~ "Test error: window is not defined"
+
+        # Verify it contains "JavaScript Stack Trace" section
+        assert error_message =~ "JavaScript Stack Trace:"
+
+        # Verify it contains stack information (at least "Error:" from JS)
+        assert error_message =~ "Error:"
+
+        Process.exit(ssr_pid, :normal)
+      after
+        if deno_pid && Process.alive?(deno_pid) && Process.whereis(DenoRider) == deno_pid do
+          Process.exit(deno_pid, :normal)
+        end
+
+        File.rm(script_path)
+      end
+    end
   end
 
   describe "configuration" do

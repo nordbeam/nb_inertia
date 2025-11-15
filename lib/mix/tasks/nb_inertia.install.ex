@@ -1219,7 +1219,7 @@ if Code.ensure_loaded?(Igniter) do
 
           TypeScript Integration (nb_ts):
           - Added {:nb_ts, "~> 0.1"} for TypeScript type generation
-          - Created types output directory at #{get_nb_ts_output_dir(igniter)}
+          - Created types output directory at assets/js/types
           - Added mix alias: mix ts.gen (run after modifying props or serializers)
           - Will generate TypeScript interfaces for:
             • NbSerializer serializers
