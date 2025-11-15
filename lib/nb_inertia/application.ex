@@ -62,11 +62,14 @@ defmodule NbInertia.Application do
     forward_config()
 
     # Only start DenoRider if SSR is enabled
-    children =
-      case Application.get_env(:nb_inertia, :ssr, [])[:enabled] do
-        true -> [DenoRider]
-        _ -> []
+    ssr_enabled =
+      case Application.get_env(:nb_inertia, :ssr, false) do
+        config when is_list(config) -> Keyword.get(config, :enabled, false)
+        config when is_boolean(config) -> config
+        _ -> false
       end
+
+    children = if ssr_enabled, do: [DenoRider], else: []
 
     opts = [strategy: :one_for_one, name: NbInertia.Supervisor]
     Supervisor.start_link(children, opts)
