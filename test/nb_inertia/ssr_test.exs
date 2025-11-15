@@ -171,6 +171,68 @@ defmodule NbInertia.SSRTest do
         File.rm(script_path)
       end
     end
+
+    test "does not show empty JavaScript stack trace header" do
+      # Create a script that returns an error with empty stack
+      script_path =
+        Path.join([System.tmp_dir(), "test_ssr_empty_stack_#{:rand.uniform(1000)}.js"])
+
+      # This script simulates an error with no stack trace
+      # (like some XML parsing errors or custom error objects)
+      script_content = """
+      globalThis.render = function(page) {
+        // Create an error-like object with empty stack
+        const err = new Error("Parse error: Unexpected character");
+        err.stack = ""; // Empty stack trace
+        throw err;
+      }
+      """
+
+      File.write!(script_path, script_content)
+
+      # Start DenoRider if needed
+      deno_pid =
+        case Process.whereis(DenoRider) do
+          nil ->
+            {:ok, pid} = DenoRider.start_link([])
+            pid
+
+          pid ->
+            pid
+        end
+
+      try do
+        {:ok, ssr_pid} =
+          SSR.start_link(enabled: true, script_path: script_path, raise_on_failure: false)
+
+        # Wait for script to load
+        Process.sleep(100)
+
+        page = %{
+          component: "TestPage",
+          props: %{},
+          url: "/test",
+          version: "1"
+        }
+
+        # Render should fail with error
+        {:error, error_message} = GenServer.call(ssr_pid, {:render, page})
+
+        # Should contain the error message
+        assert error_message =~ "Parse error"
+
+        # Should NOT contain the "JavaScript Stack Trace:" header when stack is empty
+        refute error_message =~ "JavaScript Stack Trace:"
+
+        Process.exit(ssr_pid, :normal)
+      after
+        if deno_pid && Process.alive?(deno_pid) && Process.whereis(DenoRider) == deno_pid do
+          Process.exit(deno_pid, :normal)
+        end
+
+        File.rm(script_path)
+      end
+    end
   end
 
   describe "configuration" do

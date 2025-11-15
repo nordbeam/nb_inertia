@@ -41,7 +41,7 @@ defmodule NbInertia.Application do
   def start(_type, _args) do
     # Set the environment at startup if not already set
     # This ensures Mix.env is captured at compile time and available at runtime
-    unless Application.get_env(:nb_inertia, :env) do
+    if !Application.get_env(:nb_inertia, :env) do
       # In production releases, Mix is not available, so we detect the environment
       # by checking if Mix module is loaded
       env =
@@ -91,13 +91,14 @@ defmodule NbInertia.Application do
   - `:raise_on_ssr_failure`
   """
   def forward_config do
+    # Note: :ssr is handled specially below, so we exclude it here to avoid
+    # forwarding the keyword list [enabled: false] which is truthy
     config_keys = [
       :endpoint,
       :camelize_props,
       :history,
       :static_paths,
       :default_version,
-      :ssr,
       :raise_on_ssr_failure
     ]
 

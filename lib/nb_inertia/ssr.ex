@@ -558,7 +558,7 @@ defmodule NbInertia.SSR do
 
     # Include stack trace if available
     full_error =
-      if raw_stack do
+      if raw_stack && String.trim(raw_stack) != "" do
         """
         #{message}
 
