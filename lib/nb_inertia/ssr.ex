@@ -228,15 +228,25 @@ defmodule NbInertia.SSR do
   @impl true
   def init(opts) do
     config = Application.get_env(:nb_inertia, :ssr, [])
-    enabled = Keyword.get(opts, :enabled, Keyword.get(config, :enabled, false))
+
+    # Handle both boolean and keyword list formats for :enabled
+    config_enabled =
+      case config do
+        config when is_list(config) -> Keyword.get(config, :enabled, false)
+        config when is_boolean(config) -> config
+        _ -> false
+      end
+
+    enabled = Keyword.get(opts, :enabled, config_enabled)
 
     # Use configured script_path or fall back to default based on app's priv_dir
     script_path =
       Keyword.get(opts, :script_path) ||
-        Keyword.get(config, :script_path) ||
+        (is_list(config) && Keyword.get(config, :script_path)) ||
         default_script_path()
 
-    dev_server_url = Keyword.get(opts, :dev_server_url, Keyword.get(config, :dev_server_url))
+    dev_server_url =
+      Keyword.get(opts, :dev_server_url, is_list(config) && Keyword.get(config, :dev_server_url))
 
     # Detect if we're in development mode
     dev_mode = dev_mode?()
@@ -253,13 +263,15 @@ defmodule NbInertia.SSR do
           url
       end
 
+    config_raise_on_failure =
+      if is_list(config), do: Keyword.get(config, :raise_on_failure, true), else: true
+
     state = %{
       enabled: enabled,
       script_path: script_path,
       dev_server_url: dev_server_url || default_dev_server_url,
       dev_mode: dev_mode,
-      raise_on_failure:
-        Keyword.get(opts, :raise_on_failure, Keyword.get(config, :raise_on_failure, true)),
+      raise_on_failure: Keyword.get(opts, :raise_on_failure, config_raise_on_failure),
       script_loaded: false,
       deno_pid: nil,
       deno_available: deno_rider_available?()
@@ -298,9 +310,7 @@ defmodule NbInertia.SSR do
 
       # SSR enabled but DenoRider not available in production
       state.enabled and not state.deno_available and not state.dev_mode ->
-        Logger.warning(
-          "SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps."
-        )
+        Logger.warning("SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps.")
 
         {:ok, state}
 
