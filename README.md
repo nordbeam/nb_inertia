@@ -983,6 +983,569 @@ export default defineConfig({
 
 See **[nb_routes documentation](https://github.com/nordbeam/nb/tree/main/nb_routes)** for more details.
 
+## Wayfinder-Style Integration (React)
+
+When using nb_routes in rich mode with nb_inertia, you get a **Wayfinder-style** type-safe routing experience where route helpers return `{ url, method }` objects. NbInertia provides enhanced React components that seamlessly work with these RouteResult objects while maintaining full backward compatibility with standard Inertia.js usage.
+
+### Overview
+
+The integration provides three enhanced components:
+- **Enhanced `router`** - Accepts RouteResult objects with automatic method detection
+- **Enhanced `Link`** - Link component that works with RouteResult objects
+- **Enhanced `useForm`** - Form hook with optional route binding
+
+All components maintain **100% backward compatibility** with standard Inertia.js - you can mix and match RouteResult objects and plain strings freely.
+
+### Enhanced Router
+
+The enhanced router accepts both string URLs and RouteResult objects, automatically extracting the URL and HTTP method.
+
+**Import:**
+```typescript
+// Import from nb_inertia instead of @inertiajs/react
+import { router } from '@/nb_inertia/router';
+import { user_path, update_user_path, delete_user_path } from './routes';
+```
+
+**Basic Usage:**
+```typescript
+// With RouteResult - method is automatic
+router.visit(user_path(1));                    // GET /users/1
+router.visit(update_user_path.patch(1));       // PATCH /users/1
+router.visit(delete_user_path.delete(1));      // DELETE /users/1
+
+// Still works with plain strings (backward compatible)
+router.visit('/users/1');
+router.visit('/users/1', { method: 'post' });
+```
+
+**With Data:**
+```typescript
+// POST with data
+router.post(create_user_path(), {
+  name: 'John Doe',
+  email: 'john@example.com'
+});
+
+// PATCH with data
+router.patch(update_user_path.patch(1), {
+  name: 'Jane Doe'
+});
+
+// With RouteResult
+const route = update_user_path.patch(1);
+router.visit(route.url, {
+  method: route.method,
+  data: { name: 'Jane Doe' }
+});
+```
+
+**With Options:**
+```typescript
+// With Inertia options
+router.visit(user_path(1), {
+  preserveState: true,
+  preserveScroll: true,
+  only: ['user'],
+  onSuccess: () => console.log('Success!'),
+  onError: () => console.log('Error!')
+});
+
+// Method variants
+router.get(user_path(1));
+router.post(create_user_path(), { name: 'John' });
+router.patch(update_user_path.patch(1), { name: 'Jane' });
+router.put(update_user_path.put(1), { name: 'Jane' });
+router.delete(delete_user_path.delete(1));
+```
+
+**Real-World Example:**
+```typescript
+import { router } from '@/nb_inertia/router';
+import { update_user_path, delete_user_path } from './routes';
+
+function UserActions({ user }) {
+  const handleUpdate = () => {
+    router.visit(update_user_path.patch(user.id), {
+      data: { name: 'Updated Name' },
+      preserveScroll: true,
+      onSuccess: () => {
+        // Show success message
+      }
+    });
+  };
+
+  const handleDelete = () => {
+    if (confirm('Are you sure?')) {
+      router.delete(delete_user_path.delete(user.id));
+    }
+  };
+
+  return (
+    <>
+      <button onClick={handleUpdate}>Update</button>
+      <button onClick={handleDelete}>Delete</button>
+    </>
+  );
+}
+```
+
+### Enhanced Link Component
+
+The enhanced Link component accepts RouteResult objects in the `href` prop, automatically extracting the URL and method.
+
+**Import:**
+```typescript
+// Import from nb_inertia instead of @inertiajs/react
+import { Link } from '@/nb_inertia/Link';
+import { user_path, edit_user_path, delete_user_path } from './routes';
+```
+
+**Basic Usage:**
+```typescript
+// With RouteResult - method is automatic
+<Link href={user_path(1)}>View User</Link>
+<Link href={edit_user_path(1)}>Edit User</Link>
+<Link href={delete_user_path.delete(1)} as="button">Delete User</Link>
+
+// Still works with plain strings (backward compatible)
+<Link href="/users/1">View User</Link>
+<Link href="/users/1" method="patch">Edit User</Link>
+```
+
+**With Inertia Options:**
+```typescript
+// All standard Inertia Link props work
+<Link
+  href={user_path(1)}
+  preserveState
+  preserveScroll
+  only={['user']}
+  onSuccess={() => console.log('Success!')}
+>
+  View User
+</Link>
+
+// With data for mutations
+<Link
+  href={update_user_path.patch(1)}
+  data={{ name: 'Updated Name' }}
+  preserveScroll
+  as="button"
+>
+  Update Name
+</Link>
+```
+
+**Real-World Example:**
+```typescript
+import { Link } from '@/nb_inertia/Link';
+import { user_path, edit_user_path } from './routes';
+import type { User } from './types';
+
+interface UserCardProps {
+  user: User;
+}
+
+export default function UserCard({ user }: UserCardProps) {
+  return (
+    <div className="user-card">
+      <h3>{user.name}</h3>
+      <p>{user.email}</p>
+
+      <div className="actions">
+        <Link
+          href={user_path(user.id)}
+          className="btn btn-primary"
+        >
+          View Profile
+        </Link>
+
+        <Link
+          href={edit_user_path(user.id)}
+          className="btn btn-secondary"
+          preserveScroll
+        >
+          Edit
+        </Link>
+      </div>
+    </div>
+  );
+}
+```
+
+### Enhanced useForm Hook
+
+The enhanced useForm hook supports optional route binding. When bound to a RouteResult, the `submit()` method automatically uses the route's URL and method without needing to pass them explicitly.
+
+**Import:**
+```typescript
+// Import from nb_inertia instead of @inertiajs/react
+import { useForm } from '@/nb_inertia/useForm';
+import { update_user_path, create_user_path } from './routes';
+```
+
+**Basic Usage (Bound):**
+```typescript
+// Bound to a route - submit() is simplified
+const form = useForm(
+  { name: 'John', email: 'john@example.com' },
+  update_user_path.patch(1)  // Route binding
+);
+
+// Submit automatically uses PATCH /users/1
+const handleSubmit = (e) => {
+  e.preventDefault();
+  form.submit({
+    preserveScroll: true,
+    onSuccess: () => console.log('Saved!')
+  });
+};
+```
+
+**Basic Usage (Unbound):**
+```typescript
+// Not bound - works like standard Inertia useForm
+const form = useForm({ name: 'John', email: 'john@example.com' });
+
+// Must specify method and URL
+const handleSubmit = (e) => {
+  e.preventDefault();
+  form.submit('patch', `/users/${userId}`, {
+    preserveScroll: true,
+    onSuccess: () => console.log('Saved!')
+  });
+};
+```
+
+**Form State and Methods:**
+```typescript
+const form = useForm({ name: '', email: '' }, update_user_path.patch(1));
+
+// All standard useForm features work
+form.setData('name', 'John');
+form.setData({ name: 'Jane', email: 'jane@example.com' });
+form.transform((data) => ({ ...data, timestamp: Date.now() }));
+form.reset();
+form.reset('name');
+form.clearErrors();
+form.clearErrors('name');
+
+// Check form state
+console.log(form.data);           // Current form data
+console.log(form.errors);         // Validation errors
+console.log(form.processing);     // Is form submitting?
+console.log(form.progress);       // Upload progress
+console.log(form.wasSuccessful);  // Was last submit successful?
+console.log(form.recentlySuccessful); // Recently successful?
+console.log(form.isDirty);        // Has form been modified?
+```
+
+**Real-World Example:**
+```typescript
+import { useForm } from '@/nb_inertia/useForm';
+import { update_user_path } from './routes';
+import type { User } from './types';
+
+interface EditUserFormProps {
+  user: User;
+}
+
+export default function EditUserForm({ user }: EditUserFormProps) {
+  // Bound to update route
+  const form = useForm(
+    {
+      name: user.name,
+      email: user.email,
+      bio: user.bio || ''
+    },
+    update_user_path.patch(user.id)
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Transform data before sending
+    form.transform((data) => ({
+      ...data,
+      updated_at: new Date().toISOString()
+    }));
+
+    // Submit with options
+    form.submit({
+      preserveScroll: true,
+      onSuccess: () => {
+        // Show success message
+        form.reset();
+      },
+      onError: (errors) => {
+        // Handle errors
+        console.error('Validation errors:', errors);
+      }
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div>
+        <label htmlFor="name">Name</label>
+        <input
+          id="name"
+          type="text"
+          value={form.data.name}
+          onChange={(e) => form.setData('name', e.target.value)}
+        />
+        {form.errors.name && <span className="error">{form.errors.name}</span>}
+      </div>
+
+      <div>
+        <label htmlFor="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          value={form.data.email}
+          onChange={(e) => form.setData('email', e.target.value)}
+        />
+        {form.errors.email && <span className="error">{form.errors.email}</span>}
+      </div>
+
+      <div>
+        <label htmlFor="bio">Bio</label>
+        <textarea
+          id="bio"
+          value={form.data.bio}
+          onChange={(e) => form.setData('bio', e.target.value)}
+        />
+        {form.errors.bio && <span className="error">{form.errors.bio}</span>}
+      </div>
+
+      <div className="actions">
+        <button type="submit" disabled={form.processing || !form.isDirty}>
+          {form.processing ? 'Saving...' : 'Save Changes'}
+        </button>
+
+        <button type="button" onClick={() => form.reset()} disabled={!form.isDirty}>
+          Reset
+        </button>
+      </div>
+
+      {form.recentlySuccessful && (
+        <div className="success">Saved successfully!</div>
+      )}
+    </form>
+  );
+}
+```
+
+### TypeScript Support
+
+All enhanced components have full TypeScript support with proper type inference:
+
+**RouteResult Type:**
+```typescript
+import type { RouteResult } from '@/nb_inertia/router';
+
+const route: RouteResult = user_path(1);
+route.url;      // string
+route.method;   // 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head'
+```
+
+**Link Props Type:**
+```typescript
+import type { EnhancedLinkProps } from '@/nb_inertia/Link';
+
+const linkProps: EnhancedLinkProps = {
+  href: user_path(1),  // RouteResult or string
+  preserveState: true,
+  className: 'btn'
+};
+```
+
+**Form Types:**
+```typescript
+import { useForm } from '@/nb_inertia/useForm';
+import type { BoundFormType, UnboundFormType } from '@/nb_inertia/useForm';
+
+// Bound form (simplified submit signature)
+type UserFormData = { name: string; email: string };
+const boundForm: BoundFormType<UserFormData> = useForm(
+  { name: '', email: '' },
+  update_user_path.patch(1)
+);
+boundForm.submit({ preserveScroll: true });  // No method/URL needed
+
+// Unbound form (standard Inertia signature)
+const unboundForm: UnboundFormType<UserFormData> = useForm({
+  name: '',
+  email: ''
+});
+unboundForm.submit('patch', '/users/1', { preserveScroll: true });
+```
+
+### Comparison with Standard Inertia.js
+
+**Before (Standard Inertia.js):**
+```typescript
+import { router, Link, useForm } from '@inertiajs/react';
+
+// Manual URL construction
+router.visit(`/users/${userId}`);
+router.visit(`/users/${userId}`, { method: 'patch' });
+
+// Link with manual URL
+<Link href={`/users/${userId}`}>View</Link>
+<Link href={`/users/${userId}`} method="patch">Edit</Link>
+
+// Form with manual method/URL
+const form = useForm({ name: '', email: '' });
+form.submit('patch', `/users/${userId}`, options);
+```
+
+**After (NbInertia + nb_routes Rich Mode):**
+```typescript
+import { router, Link, useForm } from '@/nb_inertia';
+import { user_path, update_user_path } from './routes';
+
+// Type-safe route helpers
+router.visit(user_path(userId));
+router.visit(update_user_path.patch(userId));
+
+// Link with RouteResult
+<Link href={user_path(userId)}>View</Link>
+<Link href={update_user_path.patch(userId)}>Edit</Link>
+
+// Form with route binding
+const form = useForm({ name: '', email: '' }, update_user_path.patch(userId));
+form.submit(options);  // Method and URL from route
+```
+
+**Benefits:**
+- ✅ **Type Safety** - Routes are validated at compile time
+- ✅ **Refactor Safety** - Changing routes in router.ex updates all usages
+- ✅ **Auto-completion** - IDE suggests available routes and parameters
+- ✅ **Method Binding** - No need to manually specify HTTP methods
+- ✅ **Reduced Boilerplate** - Less code to write and maintain
+- ✅ **Backward Compatible** - Can still use plain strings when needed
+
+### Vue Support
+
+Vue components for the Wayfinder-style integration are coming soon. The same pattern will be available for Vue:
+
+```vue
+<!-- Coming in a future release -->
+<script setup lang="ts">
+import { useForm } from '@/nb_inertia/useForm';
+import { update_user_path } from './routes';
+
+const form = useForm(
+  { name: '', email: '' },
+  update_user_path.patch(props.user.id)
+);
+</script>
+
+<template>
+  <form @submit.prevent="form.submit({ preserveScroll: true })">
+    <!-- Form fields -->
+  </form>
+</template>
+```
+
+For now, Vue users can still use nb_routes route helpers with standard Inertia.js components:
+
+```vue
+<script setup lang="ts">
+import { router } from '@inertiajs/vue3';
+import { user_path, update_user_path } from './routes';
+
+const visitUser = (id: number) => {
+  const route = user_path(id);
+  router.visit(route.url);
+};
+
+const updateUser = (id: number) => {
+  const route = update_user_path.patch(id);
+  router.visit(route.url, {
+    method: route.method,
+    data: { name: 'Updated' }
+  });
+};
+</script>
+```
+
+### Best Practices
+
+**1. Use Route Binding for Forms**
+
+When the form is always submitting to the same route, use route binding:
+
+```typescript
+// ✅ Good - Bound to route
+const form = useForm(initialData, update_user_path.patch(user.id));
+form.submit(options);
+
+// ❌ Less ideal - Repeating route info
+const form = useForm(initialData);
+const route = update_user_path.patch(user.id);
+form.submit(route.method, route.url, options);
+```
+
+**2. Extract Routes to Constants for Complex Logic**
+
+For complex navigation logic, extract the route to a constant:
+
+```typescript
+// ✅ Good - Clear and reusable
+const editRoute = edit_user_path(user.id);
+const deleteRoute = delete_user_path.delete(user.id);
+
+const handleEdit = () => router.visit(editRoute);
+const handleDelete = () => {
+  if (confirm('Are you sure?')) {
+    router.visit(deleteRoute);
+  }
+};
+```
+
+**3. Use Method Variants for Clarity**
+
+Use method variants to make the HTTP method explicit:
+
+```typescript
+// ✅ Good - Method is clear
+<Link href={update_user_path.patch(user.id)}>Edit</Link>
+<Link href={delete_user_path.delete(user.id)}>Delete</Link>
+
+// ⚠️ Works but less clear
+<Link href={update_user_path(user.id)}>Edit</Link>
+<Link href={delete_user_path(user.id)}>Delete</Link>
+```
+
+**4. Leverage TypeScript for Route Parameters**
+
+Let TypeScript catch parameter errors:
+
+```typescript
+// ✅ TypeScript validates parameters
+user_path(123);        // OK
+user_path();           // Error: Missing required parameter
+
+// ✅ Optional parameters are type-safe
+users_path({ query: { filter: 'active' } });
+```
+
+**5. Mix with Standard Inertia for Flexibility**
+
+Don't feel locked in - use plain strings when appropriate:
+
+```typescript
+// RouteResult for most cases
+<Link href={user_path(user.id)}>View</Link>
+
+// Plain string for dynamic or external URLs
+<Link href={dynamicUrl}>View</Link>
+<Link href="/external-page">External</Link>
+```
+
 ## Related Projects
 
 - **[NbRoutes](https://github.com/nordbeam/nb_routes)** - Type-safe route helpers with form integration

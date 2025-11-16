@@ -28,9 +28,11 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     8. Updates root layout template (with nb_vite support if detected)
     9. Configures asset bundler (esbuild by default, or skips if nb_vite is present)
     10. Detects and uses appropriate package manager (npm, yarn, pnpm, or bun)
-    11. Sets up TypeScript type generation (when --typescript is used)
-    12. Creates sample Inertia page component
-    13. Prints helpful next steps
+    11. Installs npm packages including @nordbeam/nb-inertia for enhanced components
+    12. Creates assets/js/lib/inertia.ts with enhanced router, Link, and useForm
+    13. Sets up TypeScript type generation (when --typescript is used)
+    14. Creates sample Inertia page component
+    15. Prints helpful next steps
 
     ## Usage
 
@@ -130,6 +132,7 @@ if Code.ensure_loaded?(Igniter) do
       |> maybe_setup_ssr()
       |> maybe_setup_nb_ts()
       |> create_sample_page()
+      |> create_lib_inertia()
       |> print_next_steps()
     end
 
@@ -607,16 +610,16 @@ if Code.ensure_loaded?(Igniter) do
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "bun add --cwd #{assets_dir} @inertiajs/react react react-dom axios#{react_plugin}"
+            "bun add --cwd #{assets_dir} @inertiajs/react @nordbeam/nb-inertia react react-dom axios#{react_plugin}"
 
           "pnpm" ->
-            "pnpm add --dir #{assets_dir} @inertiajs/react react react-dom axios#{react_plugin}"
+            "pnpm add --dir #{assets_dir} @inertiajs/react @nordbeam/nb-inertia react react-dom axios#{react_plugin}"
 
           "yarn" ->
-            "yarn --cwd #{assets_dir} add @inertiajs/react react react-dom axios#{react_plugin}"
+            "yarn --cwd #{assets_dir} add @inertiajs/react @nordbeam/nb-inertia react react-dom axios#{react_plugin}"
 
           _ ->
-            "npm install --prefix #{assets_dir} @inertiajs/react react react-dom axios#{react_plugin}"
+            "npm install --prefix #{assets_dir} @inertiajs/react @nordbeam/nb-inertia react react-dom axios#{react_plugin}"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -1107,6 +1110,81 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
+    @doc false
+    def create_lib_inertia(igniter) do
+      client_framework = igniter.args.options[:client_framework]
+      typescript = igniter.args.options[:typescript] || false
+
+      case client_framework do
+        "react" ->
+          extension = if typescript, do: "ts", else: "js"
+          content = lib_inertia_react_content()
+
+          Igniter.create_new_file(igniter, "assets/js/lib/inertia.#{extension}", content,
+            on_exists: :skip
+          )
+
+        "vue" ->
+          extension = if typescript, do: "ts", else: "js"
+          content = lib_inertia_vue_content()
+
+          Igniter.create_new_file(igniter, "assets/js/lib/inertia.#{extension}", content,
+            on_exists: :skip
+          )
+
+        _ ->
+          igniter
+      end
+    end
+
+    defp lib_inertia_react_content() do
+      """
+      // Enhanced Inertia.js integration with nb_routes support (React)
+      //
+      // This file re-exports enhanced components from nb_inertia that provide
+      // automatic integration with nb_routes rich mode. Import from this file
+      // instead of @inertiajs/react to get the enhanced functionality.
+      //
+      // Example:
+      //   import { router, Link, useForm } from '@/lib/inertia';
+      //   import { user_path } from '@/routes';
+      //
+      //   router.visit(user_path(1));           // Works with RouteResult objects
+      //   <Link href={user_path(1)}>User</Link> // Works with RouteResult objects
+
+      export { router } from '@nordbeam/nb-inertia/react/router';
+      export { Link } from '@nordbeam/nb-inertia/react/Link';
+      export { useForm } from '@nordbeam/nb-inertia/react/useForm';
+
+      // Re-export everything else from Inertia
+      export * from '@inertiajs/react';
+      """
+    end
+
+    defp lib_inertia_vue_content() do
+      """
+      // Enhanced Inertia.js integration with nb_routes support (Vue)
+      //
+      // This file re-exports enhanced components from nb_inertia that provide
+      // automatic integration with nb_routes rich mode. Import from this file
+      // instead of @inertiajs/vue3 to get the enhanced functionality.
+      //
+      // Example:
+      //   import { router, Link, useForm } from '@/lib/inertia';
+      //   import { user_path } from '@/routes';
+      //
+      //   router.visit(user_path(1));              // Works with RouteResult objects
+      //   <Link :href="user_path(1)">User</Link>   // Works with RouteResult objects
+
+      export { router } from '@nordbeam/nb-inertia/vue/router';
+      export { default as Link } from '@nordbeam/nb-inertia/vue/Link.vue';
+      export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
+
+      // Re-export everything else from Inertia
+      export * from '@inertiajs/vue3';
+      """
+    end
+
     defp print_next_steps(igniter) do
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
@@ -1232,6 +1310,59 @@ if Code.ensure_loaded?(Igniter) do
           ""
         end
 
+      lib_inertia_info =
+        if client_framework == "react" do
+          extension = if typescript, do: "ts", else: "js"
+
+          """
+
+          Enhanced Inertia Components (React):
+          - Created assets/js/lib/inertia.#{extension} with enhanced components
+          - Re-exports router, Link, and useForm from @nordbeam/nb-inertia
+          - Provides automatic integration with nb_routes rich mode
+          - Also re-exports all standard Inertia.js exports for convenience
+
+          IMPORTANT: Import from @/lib/inertia instead of @inertiajs/react:
+
+            import { router, Link, useForm } from '@/lib/inertia';
+            import { user_path } from '@/routes';
+
+            // Works seamlessly with nb_routes RouteResult objects
+            router.visit(user_path(1));
+            <Link href={user_path(1)}>View User</Link>
+
+          This gives you enhanced functionality while maintaining full backward
+          compatibility with standard Inertia.js usage.
+          """
+        else
+          if client_framework == "vue" do
+            extension = if typescript, do: "ts", else: "js"
+
+            """
+
+            Enhanced Inertia Components (Vue):
+            - Created assets/js/lib/inertia.#{extension} with enhanced components
+            - Re-exports router, Link, and useForm from @nordbeam/nb-inertia
+            - Provides automatic integration with nb_routes rich mode
+            - Also re-exports all standard Inertia.js exports for convenience
+
+            IMPORTANT: Import from @/lib/inertia instead of @inertiajs/vue3:
+
+              import { router, Link, useForm } from '@/lib/inertia';
+              import { user_path } from '@/routes';
+
+              // Works seamlessly with nb_routes RouteResult objects
+              router.visit(user_path(1));
+              <Link :href="user_path(1)">View User</Link>
+
+            This gives you enhanced functionality while maintaining full backward
+            compatibility with standard Inertia.js usage.
+            """
+          else
+            ""
+          end
+        end
+
       next_steps = """
       NbInertia has been successfully installed!
 
@@ -1244,7 +1375,7 @@ if Code.ensure_loaded?(Igniter) do
       #{bundler_info}
       - Package manager: #{pkg_manager}#{config_info}
       - Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}
-      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{typescript_info}#{ssr_info}
+      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{typescript_info}#{lib_inertia_info}#{ssr_info}
 
       Next steps:
       1. Create an Inertia-enabled controller action:

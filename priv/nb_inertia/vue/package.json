@@ -1,0 +1,29 @@
+{
+  "name": "@nb_inertia/vue",
+  "version": "0.2.0",
+  "description": "Enhanced Vue components for NbInertia with nb_routes integration",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
+  },
+  "devDependencies": {
+    "@inertiajs/vue3": "^1.0.0",
+    "@vue/test-utils": "^2.4.3",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "@vitest/coverage-v8": "^1.0.4",
+    "@vitest/ui": "^1.0.4",
+    "jsdom": "^23.0.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vitest": "^1.0.4",
+    "vue": "^3.4.0"
+  },
+  "peerDependencies": {
+    "@inertiajs/vue3": "^1.0.0",
+    "vue": "^3.0.0"
+  }
+}
