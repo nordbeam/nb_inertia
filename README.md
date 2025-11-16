@@ -773,8 +773,219 @@ def create(conn, %{"user" => user_params}) do
 end
 ```
 
+## Integration with nb_routes
+
+**nb_routes** generates type-safe route helpers from Phoenix routes. When used with nb_inertia, it provides enhanced form helpers for seamless HTML form integration.
+
+### Route Helpers with Inertia
+
+Use route helpers to navigate in your Inertia apps:
+
+```typescript
+import { router } from '@inertiajs/react';
+import { users_path, user_path, edit_user_path } from './routes';
+
+function UserCard({ user }) {
+  return (
+    <div>
+      <a href={user_path(user.id)}>View</a>
+      <button onClick={() => router.visit(edit_user_path(user.id))}>
+        Edit
+      </button>
+    </div>
+  );
+}
+```
+
+### Form Helpers for Inertia
+
+When nb_routes is configured with rich mode and form helpers, you get automatic method spoofing for HTML forms:
+
+**Backend Configuration:**
+
+```elixir
+# config/config.exs
+config :nb_routes,
+  variant: :rich,
+  with_methods: true,
+  with_forms: true  # Enable form helpers
+```
+
+**Frontend Usage with Inertia:**
+
+```typescript
+import { router } from '@inertiajs/react';
+import { update_user_path, delete_user_path } from './routes';
+
+// Update form with PATCH
+function EditUserForm({ user }) {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const route = update_user_path.patch(user.id);
+
+    router.visit(route.url, {
+      method: route.method,
+      data: Object.fromEntries(formData)
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="text" name="name" defaultValue={user.name} />
+      <input type="email" name="email" defaultValue={user.email} />
+      <button type="submit">Update User</button>
+    </form>
+  );
+}
+
+// Delete with confirmation
+function DeleteUserButton({ user }) {
+  const handleDelete = () => {
+    if (confirm('Are you sure?')) {
+      const route = delete_user_path.delete(user.id);
+      router.visit(route.url, {
+        method: route.method
+      });
+    }
+  };
+
+  return <button onClick={handleDelete}>Delete</button>;
+}
+```
+
+### HTML Form Integration
+
+For standard HTML forms (without JavaScript), form helpers automatically handle method spoofing:
+
+```typescript
+import { update_user_path, delete_user_path } from './routes';
+
+function EditUserForm({ user }) {
+  const formAttrs = update_user_path.form.patch(user.id);
+  // formAttrs = { action: "/users/1?_method=PATCH", method: "post" }
+
+  return (
+    <form {...formAttrs}>
+      <input type="text" name="user[name]" defaultValue={user.name} />
+      <button type="submit">Update</button>
+    </form>
+  );
+}
+
+function DeleteUserForm({ user }) {
+  const formAttrs = delete_user_path.form.delete(user.id);
+  // formAttrs = { action: "/users/1?_method=DELETE", method: "post" }
+
+  return (
+    <form {...formAttrs}>
+      <button type="submit">Delete User</button>
+    </form>
+  );
+}
+```
+
+### Available Method Variants
+
+When form helpers are enabled, you get these variants:
+
+```typescript
+// Standard route (returns { url, method })
+update_user_path(1)              // => { url: "/users/1", method: "patch" }
+update_user_path.patch(1)        // => { url: "/users/1", method: "patch" }
+update_user_path.put(1)          // => { url: "/users/1", method: "put" }
+
+// Form variants (returns { action, method })
+update_user_path.form(1)         // => { action: "/users/1?_method=PATCH", method: "post" }
+update_user_path.form.patch(1)   // => { action: "/users/1?_method=PATCH", method: "post" }
+update_user_path.form.put(1)     // => { action: "/users/1?_method=PUT", method: "post" }
+
+delete_user_path.form.delete(1)  // => { action: "/users/1?_method=DELETE", method: "post" }
+```
+
+### Query Parameters with Forms
+
+Form helpers support query parameters:
+
+```typescript
+// Add query parameters
+const route = update_user_path.patch(user.id, {
+  query: { redirect_to: '/dashboard' }
+});
+// => { url: "/users/1?redirect_to=/dashboard", method: "patch" }
+
+// Form with query parameters
+const formAttrs = update_user_path.form.patch(user.id, {
+  query: { step: '2' }
+});
+// => { action: "/users/1?_method=PATCH&step=2", method: "post" }
+```
+
+### TypeScript Types
+
+Form helpers include full TypeScript support:
+
+```typescript
+import type { RouteResult, FormAttributes } from './routes';
+import { update_user_path } from './routes';
+
+// Route result
+const route: RouteResult = update_user_path.patch(123);
+route.url;     // string
+route.method;  // 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head' | 'options'
+
+// Form attributes
+const formAttrs: FormAttributes = update_user_path.form.patch(123);
+formAttrs.action;  // string (URL with _method param)
+formAttrs.method;  // 'get' | 'post'
+```
+
+### Setup
+
+1. **Install nb_routes:**
+
+```bash
+mix deps.get
+# Add {:nb_routes, "~> 0.1.0"} to mix.exs
+```
+
+2. **Configure rich mode with form helpers:**
+
+```elixir
+# config/config.exs
+config :nb_routes,
+  variant: :rich,
+  with_methods: true,
+  with_forms: true
+```
+
+3. **Generate route helpers:**
+
+```bash
+mix nb_routes.gen
+```
+
+4. **Optional: Auto-regeneration with nb_vite:**
+
+```typescript
+// assets/vite.config.ts
+import { defineConfig } from 'vite';
+import phoenix from '@nordbeam/nb-vite';
+import { nbRoutes } from '@nordbeam/nb-vite/nb-routes';
+
+export default defineConfig({
+  plugins: [
+    phoenix({ input: ['js/app.ts'] }),
+    nbRoutes({ enabled: true })  // Auto-regenerate on router changes
+  ]
+});
+```
+
+See **[nb_routes documentation](https://github.com/nordbeam/nb/tree/main/nb_routes)** for more details.
+
 ## Related Projects
 
+- **[NbRoutes](https://github.com/nordbeam/nb_routes)** - Type-safe route helpers with form integration
 - **[NbSerializer](https://github.com/nordbeam/nb_serializer)** - High-performance JSON serialization
 - **[NbTs](https://github.com/nordbeam/nb_ts)** - TypeScript type generation and validation
 - **[NbVite](https://github.com/nordbeam/nb_vite)** - Vite integration for Phoenix
