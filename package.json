@@ -1,0 +1,59 @@
+{
+  "name": "nb_inertia",
+  "version": "0.1.0",
+  "description": "Enhanced Inertia.js integration for Phoenix with nb_routes support",
+  "type": "module",
+  "exports": {
+    "./react/router": {
+      "import": "./priv/nb_inertia/react/router.tsx",
+      "types": "./priv/nb_inertia/react/router.tsx"
+    },
+    "./react/Link": {
+      "import": "./priv/nb_inertia/react/Link.tsx",
+      "types": "./priv/nb_inertia/react/Link.tsx"
+    },
+    "./react/useForm": {
+      "import": "./priv/nb_inertia/react/useForm.tsx",
+      "types": "./priv/nb_inertia/react/useForm.tsx"
+    },
+    "./vue/router": {
+      "import": "./priv/nb_inertia/vue/router.ts",
+      "types": "./priv/nb_inertia/vue/router.ts"
+    },
+    "./vue/Link": {
+      "import": "./priv/nb_inertia/vue/Link.vue"
+    },
+    "./vue/useForm": {
+      "import": "./priv/nb_inertia/vue/useForm.ts",
+      "types": "./priv/nb_inertia/vue/useForm.ts"
+    }
+  },
+  "files": [
+    "priv/nb_inertia/react",
+    "priv/nb_inertia/vue",
+    "lib",
+    "mix.exs",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@inertiajs/react": "^1.0.0 || ^2.0.0",
+    "@inertiajs/vue3": "^1.0.0 || ^2.0.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "vue": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@inertiajs/react": {
+      "optional": true
+    },
+    "@inertiajs/vue3": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  }
+}

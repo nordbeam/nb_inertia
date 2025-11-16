@@ -1152,9 +1152,9 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));           // Works with RouteResult objects
       //   <Link href={user_path(1)}>User</Link> // Works with RouteResult objects
 
-      export { router } from '@nordbeam/nb-inertia/react/router';
-      export { Link } from '@nordbeam/nb-inertia/react/Link';
-      export { useForm } from '@nordbeam/nb-inertia/react/useForm';
+      export { router } from 'nb_inertia/react/router';
+      export { Link } from 'nb_inertia/react/Link';
+      export { useForm } from 'nb_inertia/react/useForm';
 
       // Re-export everything else from Inertia
       export * from '@inertiajs/react';
@@ -1176,9 +1176,9 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));              // Works with RouteResult objects
       //   <Link :href="user_path(1)">User</Link>   // Works with RouteResult objects
 
-      export { router } from '@nordbeam/nb-inertia/vue/router';
-      export { default as Link } from '@nordbeam/nb-inertia/vue/Link.vue';
-      export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
+      export { router } from 'nb_inertia/vue/router';
+      export { default as Link } from 'nb_inertia/vue/Link';
+      export { useForm } from 'nb_inertia/vue/useForm';
 
       // Re-export everything else from Inertia
       export * from '@inertiajs/vue3';
