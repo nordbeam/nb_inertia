@@ -282,7 +282,7 @@ defmodule NbInertia.SSR do
       state.enabled and state.dev_mode ->
         case check_dev_server_health(state.dev_server_url) do
           :ok ->
-            Logger.info("SSR: Using development server at #{state.dev_server_url}")
+            Logger.info("NbInertia.SSR: Using development server at #{state.dev_server_url}")
             {:ok, %{state | script_loaded: true}}
 
           :error ->
@@ -300,17 +300,19 @@ defmodule NbInertia.SSR do
       state.enabled and state.deno_available and script_path ->
         case start_deno_with_module(script_path) do
           {:ok, pid} ->
-            Logger.info("SSR: Using production bundle at #{script_path}")
+            Logger.info("NbInertia.SSR: Using production bundle at #{script_path}")
             {:ok, %{state | script_loaded: true, deno_pid: pid}}
 
           {:error, reason} ->
-            Logger.warning("Failed to start DenoRider with SSR script: #{inspect(reason)}")
+            Logger.warning("NbInertia.SSR: Failed to start DenoRider with SSR script: #{inspect(reason)}")
             {:ok, %{state | enabled: false}}
         end
 
       # SSR enabled but DenoRider not available in production
       state.enabled and not state.deno_available and not state.dev_mode ->
-        Logger.warning("SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps.")
+        Logger.warning(
+          "SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps."
+        )
 
         {:ok, state}
 
@@ -346,7 +348,7 @@ defmodule NbInertia.SSR do
     if state.dev_mode and state.enabled and not state.script_loaded do
       case check_dev_server_health(state.dev_server_url) do
         :ok ->
-          Logger.info("SSR: Development server is now ready at #{state.dev_server_url}")
+          Logger.info("NbInertia.SSR: Development server is now ready at #{state.dev_server_url}")
           {:noreply, %{state | script_loaded: true}}
 
         :error ->
@@ -499,7 +501,7 @@ defmodule NbInertia.SSR do
       if state.raise_on_failure do
         reraise e, __STACKTRACE__
       else
-        Logger.error("SSR dev rendering error: #{Exception.format(:error, e, __STACKTRACE__)}")
+        Logger.error("NbInertia.SSR: dev rendering error: #{Exception.format(:error, e, __STACKTRACE__)}")
         {:error, :render_exception}
       end
   end
@@ -552,7 +554,7 @@ defmodule NbInertia.SSR do
       if state.raise_on_failure do
         reraise e, __STACKTRACE__
       else
-        Logger.error("SSR rendering error: #{Exception.format(:error, e, __STACKTRACE__)}")
+        Logger.error("NbInertia.SSR: rendering error: #{Exception.format(:error, e, __STACKTRACE__)}")
         {:error, :render_exception}
       end
   end
@@ -582,7 +584,7 @@ defmodule NbInertia.SSR do
     if state.raise_on_failure do
       raise "SSR rendering failed: #{full_error}"
     else
-      Logger.error("SSR rendering failed: #{full_error}")
+      Logger.error("NbInertia.SSR: rendering failed: #{full_error}")
       {:error, full_error}
     end
   end
