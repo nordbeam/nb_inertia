@@ -80,8 +80,10 @@ function extractMethod(
  * Wraps the standard Inertia.js router with enhanced methods that can accept
  * RouteResult objects from nb_routes rich mode, while maintaining full backward
  * compatibility with string URLs.
+ *
+ * Uses Object.create to properly inherit prototype methods like .on()
  */
-export const router = {
+export const router = Object.assign(Object.create(inertiaRouter), {
   ...inertiaRouter,
 
   /**
@@ -203,6 +205,6 @@ export const router = {
     const url = normalizeUrl(urlOrRoute);
     return inertiaRouter.delete(url, options);
   },
-};
+});
 
 export default router;
