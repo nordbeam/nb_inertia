@@ -730,6 +730,625 @@ export default function Show({ user }: UsersShowProps) {
 }
 ```
 
+## Modal and Slideover Support
+
+### Overview
+
+nb_inertia provides a complete modal and slideover system that allows rendering Inertia pages as overlays without full page navigation. This creates a smoother user experience while maintaining the full power of Inertia.js page components.
+
+**Key Components:**
+- **Backend**: `NbInertia.Modal` module and `render_inertia_modal/4` macro
+- **Frontend**: React and Vue modal components with RouteResult integration
+- **Communication**: Custom HTTP headers for modal state
+- **Routing**: Integration with nb_routes for type-safe modal links
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      Backend (Phoenix)                        │
+│                                                                │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Controller                                           │    │
+│  │   render_inertia_modal(conn, :users_show,          │    │
+│  │     [user: user],                                   │    │
+│  │     base_url: "/users",                             │    │
+│  │     size: :lg)                                      │    │
+│  └──────────────────────┬──────────────────────────────┘    │
+│                         │                                     │
+│                         ▼                                     │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ NbInertia.Modal.BaseRenderer                        │    │
+│  │   - Builds Modal struct                             │    │
+│  │   - Serializes props                                │    │
+│  │   - Adds custom headers                             │    │
+│  └──────────────────────┬──────────────────────────────┘    │
+│                         │                                     │
+│                         ▼                                     │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ NbInertia.Plugs.ModalHeaders                        │    │
+│  │   - Sets X-Inertia-Modal: true                      │    │
+│  │   - Sets X-Inertia-Modal-Base-Url                   │    │
+│  │   - Sets X-Inertia-Modal-Config (JSON)              │    │
+│  └──────────────────────┬──────────────────────────────┘    │
+│                         │                                     │
+└─────────────────────────┼─────────────────────────────────────┘
+                          │ HTTP Response with Headers
+                          ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    Frontend (React/Vue)                       │
+│                                                                │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ ModalLink Component                                  │    │
+│  │   - Intercepts click                                │    │
+│  │   - Fetches page via Inertia                        │    │
+│  │   - Reads modal headers                             │    │
+│  └──────────────────────┬──────────────────────────────┘    │
+│                         │                                     │
+│                         ▼                                     │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ modalStack.ts                                        │    │
+│  │   - Manages modal stack                             │    │
+│  │   - Z-index calculation                             │    │
+│  │   - History integration                             │    │
+│  └──────────────────────┬──────────────────────────────┘    │
+│                         │                                     │
+│                         ▼                                     │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Modal/HeadlessModal Components                      │    │
+│  │   - Renders modal UI                                │    │
+│  │   - Handles close events                            │    │
+│  │   - Applies configuration                           │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                                │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Backend Implementation
+
+#### Core Module: `NbInertia.Modal`
+
+**Location**: `lib/nb_inertia/modal.ex`
+
+Provides the Modal data structure and configuration functions:
+
+```elixir
+defmodule NbInertia.Modal do
+  @type t :: %__MODULE__{
+    component: String.t(),
+    props: map(),
+    base_url: String.t() | nil,
+    config: config()
+  }
+
+  @type config :: %{
+    optional(:size) => :sm | :md | :lg | :xl | :full,
+    optional(:position) => :center | :top | :bottom | :left | :right,
+    optional(:slideover) => boolean(),
+    optional(:closeButton) => boolean(),
+    optional(:closeExplicitly) => boolean(),
+    optional(:maxWidth) => String.t(),
+    optional(:paddingClasses) => String.t(),
+    optional(:panelClasses) => String.t(),
+    optional(:backdropClasses) => String.t()
+  }
+end
+```
+
+**Key Functions:**
+- `new/2` - Create a new Modal struct
+- `base_url/2` - Set the base URL for the modal
+- `base_route/3` - Set base URL from nb_routes RouteResult
+- `size/2`, `position/2`, `slideover/2` - Configure appearance
+- `close_button/2`, `close_explicitly/2` - Control close behavior
+- CSS customization functions for advanced styling
+
+#### BaseRenderer: `NbInertia.Modal.BaseRenderer`
+
+**Location**: `lib/nb_inertia/modal/base_renderer.ex`
+
+Handles rendering Modal structs to Inertia responses:
+
+```elixir
+defmodule NbInertia.Modal.BaseRenderer do
+  def render(conn, modal) do
+    conn
+    |> prepare_props(modal.props)
+    |> add_modal_headers(modal)
+    |> render_inertia_response(modal.component, modal.props)
+  end
+
+  defp add_modal_headers(conn, modal) do
+    conn
+    |> put_resp_header("x-inertia-modal", "true")
+    |> put_resp_header("x-inertia-modal-base-url", modal.base_url || "/")
+    |> put_resp_header("x-inertia-modal-config", Jason.encode!(modal.config))
+  end
+end
+```
+
+#### Redirector: `NbInertia.Modal.Redirector`
+
+**Location**: `lib/nb_inertia/modal/redirector.ex`
+
+Provides `redirect_modal/2` for redirecting from within modal workflows:
+
+```elixir
+defmodule NbInertia.Modal.Redirector do
+  def redirect_modal(conn, opts) do
+    url = Keyword.fetch!(opts, :to)
+
+    conn
+    |> put_resp_header("x-inertia-modal-redirect", url)
+    |> redirect(to: url)
+  end
+end
+```
+
+#### Modal Headers Plug: `NbInertia.Plugs.ModalHeaders`
+
+**Location**: `lib/nb_inertia/plugs/modal_headers.ex`
+
+Detects modal requests and sets up the response pipeline:
+
+```elixir
+defmodule NbInertia.Plugs.ModalHeaders do
+  def modal_headers(conn, _opts) do
+    if get_req_header(conn, "x-inertia-modal-request") == ["true"] do
+      register_before_send(conn, &add_modal_response_headers/1)
+    else
+      conn
+    end
+  end
+
+  defp add_modal_response_headers(conn) do
+    # Ensure modal headers are preserved in response
+    conn
+  end
+end
+```
+
+#### Controller Integration
+
+**Location**: `lib/nb_inertia/controller.ex`
+
+The `render_inertia_modal/4` macro is defined in `NbInertia.Controller`:
+
+```elixir
+defmacro render_inertia_modal(conn, page_name, props, opts \\ []) do
+  quote do
+    modal =
+      NbInertia.Modal.new(
+        infer_component_name(unquote(page_name)),
+        unquote(props)
+      )
+      |> apply_modal_opts(unquote(opts))
+
+    NbInertia.Modal.BaseRenderer.render(unquote(conn), modal)
+  end
+end
+
+defp apply_modal_opts(modal, opts) do
+  Enum.reduce(opts, modal, fn
+    {:base_url, url}, acc -> NbInertia.Modal.base_url(acc, url)
+    {:size, size}, acc -> NbInertia.Modal.size(acc, size)
+    {:position, pos}, acc -> NbInertia.Modal.position(acc, pos)
+    {:slideover, val}, acc -> NbInertia.Modal.slideover(acc, val)
+    # ... other options
+  end)
+end
+```
+
+### Frontend Implementation
+
+#### React Components
+
+##### HeadlessModal.tsx
+
+**Location**: `priv/nb_inertia/react/modals/HeadlessModal.tsx`
+
+Headless modal component that manages modal state and stack:
+
+**Key Features:**
+- Manages modal stack via `modalStack.ts`
+- Handles browser history integration
+- Provides modal context (index, base URL, config)
+- Renders children with `(modal, close)` signature
+
+**Props:**
+```typescript
+export interface HeadlessModalProps {
+  component: React.ComponentType<any>;
+  componentProps?: Record<string, any>;
+  baseUrl: string;
+  config?: ModalConfig;
+  open?: boolean;
+  onClose?: () => void;
+  children?: (modal: ModalContext, close: () => void) => React.ReactNode;
+}
+```
+
+##### Modal.tsx
+
+**Location**: `priv/nb_inertia/react/modals/Modal.tsx`
+
+Styled modal component using Radix UI Dialog:
+
+**Features:**
+- Wraps HeadlessModal with UI layer
+- Uses Radix UI Dialog primitives
+- Supports both modal and slideover variants
+- Automatic z-index management based on stack position
+- Optional close button
+- Configurable backdrop, panel, and content styling
+
+**Components:**
+- `ModalContent.tsx` - Centered modal content wrapper
+- `SlideoverContent.tsx` - Slideover content wrapper
+- `CloseButton.tsx` - Styled close button
+
+##### ModalLink.tsx
+
+**Location**: `priv/nb_inertia/react/modals/ModalLink.tsx`
+
+Link component that opens pages as modals:
+
+**Features:**
+- Accepts string URLs or nb_routes RouteResult objects
+- Intercepts clicks to prevent navigation
+- Fetches target page via Inertia router
+- Reads modal headers from response
+- Pushes modal to stack
+- Shows loading state during fetch
+- Respects modifier keys (Ctrl/Cmd for new tab)
+
+**Usage Pattern:**
+```typescript
+<ModalLink
+  href={user_path(user.id)}  // RouteResult from nb_routes
+  modalConfig={{ size: 'lg', position: 'center' }}
+>
+  View User
+</ModalLink>
+```
+
+##### modalStack.ts
+
+**Location**: `priv/nb_inertia/react/modals/modalStack.ts`
+
+Manages the modal stack with React context:
+
+**Key Responsibilities:**
+- Track active modals in a stack (array)
+- Calculate z-index for each modal
+- Integrate with browser history API
+- Provide `pushModal`, `popModal`, `closeModal` functions
+- Handle modal navigation and redirects
+
+**Context Structure:**
+```typescript
+interface ModalStackContext {
+  modals: Modal[];
+  pushModal: (modal: ModalData) => void;
+  popModal: () => void;
+  closeModal: (index: number) => void;
+  clearModals: () => void;
+}
+```
+
+#### Vue Components
+
+##### HeadlessModal.vue
+
+**Location**: `priv/nb_inertia/vue/modals/HeadlessModal.vue`
+
+Vue 3 composition API modal manager:
+
+**Features:**
+- Uses Vue 3 `<script setup>` syntax
+- Manages modal stack with composables
+- Provides scoped slots for rendering
+- History integration with Vue Router
+
+##### Modal.vue
+
+**Location**: `priv/nb_inertia/vue/modals/Modal.vue`
+
+Styled modal using Headless UI:
+
+**Features:**
+- Uses `@headlessui/vue` Dialog component
+- Supports Teleport for portal rendering
+- Reactive modal configuration
+- Scoped slot for content with `close` function
+
+##### ModalLink.vue
+
+**Location**: `priv/nb_inertia/vue/modals/ModalLink.vue`
+
+Vue modal link component:
+
+**Features:**
+- Template ref for link element
+- Event handling with Vue event modifiers
+- Reactive loading state
+- Integration with Vue Inertia router
+
+##### modalStack.ts (Vue)
+
+**Location**: `priv/nb_inertia/vue/modals/modalStack.ts`
+
+Vue composable for modal stack management:
+
+```typescript
+export function useModalStack() {
+  const modals = ref<Modal[]>([]);
+
+  const pushModal = (data: ModalData) => {
+    modals.value.push({
+      ...data,
+      index: modals.value.length
+    });
+  };
+
+  const popModal = () => {
+    modals.value.pop();
+  };
+
+  return { modals, pushModal, popModal, closeModal };
+}
+```
+
+### HTTP Headers
+
+The modal system uses custom HTTP headers for communication:
+
+#### Request Headers
+
+- `X-Inertia-Modal-Request: true` - Indicates request is for a modal
+
+#### Response Headers
+
+- `X-Inertia-Modal: true` - Indicates response is a modal
+- `X-Inertia-Modal-Base-Url: /users` - Base URL for modal backdrop
+- `X-Inertia-Modal-Config: {...}` - JSON configuration object
+- `X-Inertia-Modal-Redirect: /users` - Redirect URL (when redirecting from modal)
+
+**Example Response:**
+```http
+HTTP/1.1 200 OK
+X-Inertia: true
+X-Inertia-Modal: true
+X-Inertia-Modal-Base-Url: /users
+X-Inertia-Modal-Config: {"size":"lg","position":"center","closeButton":true}
+Content-Type: application/json
+
+{
+  "component": "Users/Show",
+  "props": { "user": { "id": 1, "name": "Alice" } },
+  "url": "/users/1",
+  "version": "..."
+}
+```
+
+### Integration with nb_routes
+
+The modal system integrates seamlessly with nb_routes rich mode:
+
+#### Backend Integration
+
+```elixir
+# Using RouteResult for base_url
+alias NbRoutes.Helpers, as: Routes
+
+modal =
+  Modal.new("Users/Show", %{user: user})
+  |> Modal.base_route(Routes.users_path())  # Uses RouteResult
+```
+
+#### Frontend Integration
+
+```typescript
+import { ModalLink } from '@/modals/ModalLink';
+import { user_path } from '@/routes';
+
+// RouteResult object automatically handled
+<ModalLink href={user_path(user.id)}>View User</ModalLink>
+```
+
+### Modal Stack and Z-Index Management
+
+**Z-Index Calculation:**
+```typescript
+const baseZIndex = 50;
+const getZIndex = (index: number) => baseZIndex + index;
+
+// Modal 0: z-index 50 (backdrop) and 51 (content)
+// Modal 1: z-index 51 (backdrop) and 52 (content)
+// Modal 2: z-index 52 (backdrop) and 53 (content)
+```
+
+This ensures proper layering of nested modals.
+
+### History Integration
+
+Modals integrate with browser history to allow back/forward navigation:
+
+1. When modal opens: Push state to history
+2. When user clicks back: Close modal
+3. When modal closes: Replace current state with base URL
+4. Multiple modals: Each has its own history entry
+
+**Implementation (React):**
+```typescript
+useEffect(() => {
+  const handlePopState = () => {
+    if (modals.length > 0) {
+      popModal();
+    }
+  };
+
+  window.addEventListener('popstate', handlePopState);
+  return () => window.removeEventListener('popstate', handlePopState);
+}, [modals]);
+```
+
+### Configuration System
+
+#### Default Configuration
+
+**Location**: `priv/templates/nb_inertia_modal.exs`
+
+Template for modal configuration file that installer generates:
+
+```elixir
+config :nb_inertia, :modal,
+  default_size: :md,
+  default_position: :center,
+  default_close_button: true,
+  default_close_explicitly: false,
+  default_padding_classes: "p-6",
+  default_panel_classes: "bg-white rounded-lg shadow-xl",
+  default_backdrop_classes: "bg-black/50"
+
+config :nb_inertia, :slideover,
+  default_position: :right,
+  default_size: :md
+```
+
+#### Configuration Hierarchy
+
+1. **Global defaults** (from config file)
+2. **Per-modal config** (passed to `render_inertia_modal/4`)
+3. **Frontend overrides** (via `config` prop in components)
+
+### Testing Modal Features
+
+#### Backend Tests
+
+Test modal rendering:
+
+```elixir
+test "renders modal with configuration", %{conn: conn} do
+  conn = inertia_get(conn, ~p"/users/1?modal=true")
+
+  assert_inertia_page(conn, "Users/Show")
+  assert get_resp_header(conn, "x-inertia-modal") == ["true"]
+  assert get_resp_header(conn, "x-inertia-modal-base-url") == ["/users"]
+
+  config = conn
+    |> get_resp_header("x-inertia-modal-config")
+    |> List.first()
+    |> Jason.decode!()
+
+  assert config["size"] == "lg"
+  assert config["position"] == "center"
+end
+```
+
+#### Frontend Tests
+
+Test modal components:
+
+```typescript
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Modal } from '@/modals/Modal';
+
+test('renders modal with close button', () => {
+  const handleClose = jest.fn();
+
+  render(
+    <Modal
+      baseUrl="/users"
+      config={{ size: 'lg', closeButton: true }}
+      onClose={handleClose}
+    >
+      {(close) => (
+        <div>
+          <h2>Modal Content</h2>
+          <button onClick={close}>Close</button>
+        </div>
+      )}
+    </Modal>
+  );
+
+  expect(screen.getByText('Modal Content')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByText('Close'));
+  expect(handleClose).toHaveBeenCalled();
+});
+```
+
+### Performance Considerations
+
+1. **Lazy Loading**: Modal components should be lazy loaded:
+   ```typescript
+   const UserModal = lazy(() => import('./modals/UserModal'));
+   ```
+
+2. **Stack Cleanup**: Always clean up modal stack on navigation:
+   ```typescript
+   router.on('navigate', () => {
+     clearModals();
+   });
+   ```
+
+3. **Props Serialization**: Use nb_serializer for efficient modal prop serialization
+
+4. **Z-Index Limits**: Stack supports up to 100 nested modals (z-index 50-150)
+
+### Common Patterns
+
+#### Confirmation Modal
+
+```elixir
+def delete(conn, %{"id" => id}) do
+  user = Accounts.get_user!(id)
+
+  render_inertia_modal(conn, :confirm_delete,
+    [user: user, action: delete_user_path(conn, :destroy, id)],
+    base_url: users_path(conn, :index),
+    size: :sm,
+    close_explicitly: true
+  )
+end
+```
+
+#### Form Modal with Validation
+
+```elixir
+def create(conn, %{"user" => params}) do
+  case Accounts.create_user(params) do
+    {:ok, user} ->
+      conn
+      |> put_flash(:info, "User created")
+      |> redirect_modal(to: user_path(conn, :show, user))
+
+    {:error, changeset} ->
+      render_inertia_modal(conn, :new_user,
+        [changeset: changeset],
+        base_url: users_path(conn, :index),
+        size: :lg
+      )
+  end
+end
+```
+
+#### Multi-Step Modal
+
+```elixir
+def edit(conn, %{"id" => id, "step" => step}) do
+  user = Accounts.get_user!(id)
+
+  render_inertia_modal(conn, :edit_user,
+    [user: user, step: step, total_steps: 3],
+    base_url: user_path(conn, :show, id),
+    size: :xl,
+    close_explicitly: true
+  )
+end
+```
+
 ## Related Resources
 
 - **Source**: https://github.com/nordbeam/nb/tree/main/nb_inertia

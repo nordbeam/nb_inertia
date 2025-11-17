@@ -1546,6 +1546,521 @@ Don't feel locked in - use plain strings when appropriate:
 <Link href="/external-page">External</Link>
 ```
 
+## Modals and Slideovers
+
+NbInertia provides built-in support for rendering pages as modals and slideovers without full page navigation, creating a smoother user experience. This feature integrates seamlessly with both the backend (Elixir) and frontend (React/Vue).
+
+### Features
+
+- **Backend Modal DSL**: Build modals using a fluent API in your controllers
+- **Frontend Components**: Pre-built Modal and ModalLink components for React and Vue
+- **Stacked Modals**: Support for nested modals with proper z-indexing
+- **Configurable Appearance**: Control size, position, styling, and behavior
+- **nb_routes Integration**: Works seamlessly with RouteResult objects
+- **Custom Headers**: Communicates modal state via HTTP headers
+- **Redirect Support**: Special redirect handling for modal workflows
+
+### Backend Usage
+
+#### Rendering a Modal
+
+Use `render_inertia_modal/4` in your controller to render an Inertia page as a modal:
+
+```elixir
+defmodule MyAppWeb.UserController do
+  use MyAppWeb, :controller
+  use NbInertia.Controller
+
+  def show(conn, %{"id" => id}) do
+    user = Accounts.get_user!(id)
+
+    render_inertia_modal(conn, :users_show,
+      [user: user],
+      base_url: "/users",
+      size: :lg,
+      position: :center
+    )
+  end
+end
+```
+
+#### Modal Configuration Options
+
+```elixir
+render_inertia_modal(conn, :page_name,
+  [props],
+  # Required: Base URL for modal backdrop
+  base_url: "/users",
+
+  # Optional: Modal size
+  # Options: :sm, :md, :lg, :xl, :full, or custom CSS class
+  size: :lg,
+
+  # Optional: Modal position
+  # Options: :center, :top, :bottom, :left, :right
+  position: :center,
+
+  # Optional: Render as slideover instead of modal
+  slideover: false,
+
+  # Optional: Show close button (default: true)
+  close_button: true,
+
+  # Optional: Require explicit close (disable ESC/backdrop click)
+  close_explicitly: false,
+
+  # Optional: Custom max-width (e.g., "800px", "50rem")
+  max_width: nil,
+
+  # Optional: Custom CSS classes
+  padding_classes: "p-6",
+  panel_classes: "bg-white rounded-lg shadow-xl",
+  backdrop_classes: "bg-black/50"
+)
+```
+
+#### Rendering a Slideover
+
+```elixir
+def edit(conn, %{"id" => id}) do
+  user = Accounts.get_user!(id)
+
+  render_inertia_modal(conn, :users_edit,
+    [user: user, changeset: Accounts.change_user(user)],
+    base_url: "/users/#{id}",
+    slideover: true,
+    position: :right,
+    size: :lg
+  )
+end
+```
+
+#### Using the Modal DSL
+
+For more complex modal configuration, use the Modal DSL:
+
+```elixir
+alias NbInertia.Modal
+
+def show(conn, %{"id" => id}) do
+  user = Accounts.get_user!(id)
+
+  modal =
+    Modal.new("Users/Show", %{user: user})
+    |> Modal.base_url("/users")
+    |> Modal.size(:lg)
+    |> Modal.position(:center)
+    |> Modal.close_button(true)
+
+  render(conn, modal)
+end
+```
+
+#### Redirecting from Modals
+
+Use `redirect_modal/2` to redirect after modal operations:
+
+```elixir
+def create(conn, %{"user" => user_params}) do
+  case Accounts.create_user(user_params) do
+    {:ok, user} ->
+      conn
+      |> put_flash(:info, "User created successfully")
+      |> redirect_modal(to: "/users")
+
+    {:error, changeset} ->
+      render_inertia_modal(conn, :users_new,
+        [form: changeset],
+        base_url: "/users"
+      )
+  end
+end
+```
+
+### Frontend Usage (React)
+
+#### Using the Modal Component
+
+Import and use the Modal component with nb_routes integration:
+
+```typescript
+import { Modal } from '@/modals/Modal';
+import { user_path } from '@/routes';
+import type { User } from '@/types';
+
+interface UserShowProps {
+  user: User;
+}
+
+export default function UserShow({ user }: UserShowProps) {
+  return (
+    <Modal
+      baseUrl={user_path(user.id).url}
+      config={{
+        size: 'lg',
+        position: 'center',
+        closeButton: true
+      }}
+    >
+      {(close) => (
+        <div>
+          <h2>{user.name}</h2>
+          <p>{user.email}</p>
+          <button onClick={close}>Close</button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+```
+
+#### Using ModalLink
+
+ModalLink opens pages as modals when clicked:
+
+```typescript
+import { ModalLink } from '@/modals/ModalLink';
+import { user_path, edit_user_path } from '@/routes';
+
+function UserList({ users }) {
+  return (
+    <div>
+      {users.map(user => (
+        <div key={user.id}>
+          <h3>{user.name}</h3>
+
+          {/* Basic modal link */}
+          <ModalLink href={user_path(user.id)}>
+            View Details
+          </ModalLink>
+
+          {/* With custom modal config */}
+          <ModalLink
+            href={edit_user_path(user.id)}
+            modalConfig={{
+              slideover: true,
+              position: 'right',
+              size: 'lg'
+            }}
+          >
+            Edit User
+          </ModalLink>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+#### Slideover Example
+
+```typescript
+export default function UserEdit({ user, changeset }: UserEditProps) {
+  const form = useForm(
+    { name: user.name, email: user.email },
+    update_user_path.patch(user.id)
+  );
+
+  return (
+    <Modal
+      baseUrl={user_path(user.id).url}
+      config={{
+        slideover: true,
+        position: 'right',
+        size: 'lg',
+        closeButton: true
+      }}
+    >
+      {(close) => (
+        <div>
+          <h2>Edit User</h2>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            form.submit({
+              onSuccess: () => close()
+            });
+          }}>
+            <input
+              type="text"
+              value={form.data.name}
+              onChange={e => form.setData('name', e.target.value)}
+            />
+            {form.errors.name && <div className="error">{form.errors.name}</div>}
+
+            <button type="submit" disabled={form.processing}>
+              Save
+            </button>
+            <button type="button" onClick={close}>
+              Cancel
+            </button>
+          </form>
+        </div>
+      )}
+    </Modal>
+  );
+}
+```
+
+### Frontend Usage (Vue)
+
+#### Using the Modal Component
+
+```vue
+<script setup lang="ts">
+import { Modal } from '@/modals/Modal.vue';
+import { user_path } from '@/routes';
+import type { User } from '@/types';
+
+interface Props {
+  user: User;
+}
+
+const props = defineProps<Props>();
+</script>
+
+<template>
+  <Modal
+    :base-url="user_path(user.id).url"
+    :config="{
+      size: 'lg',
+      position: 'center',
+      closeButton: true
+    }"
+    v-slot="{ close }"
+  >
+    <div>
+      <h2>{{ user.name }}</h2>
+      <p>{{ user.email }}</p>
+      <button @click="close">Close</button>
+    </div>
+  </Modal>
+</template>
+```
+
+#### Using ModalLink (Vue)
+
+```vue
+<script setup lang="ts">
+import { ModalLink } from '@/modals/ModalLink.vue';
+import { user_path, edit_user_path } from '@/routes';
+import type { User } from '@/types';
+
+interface Props {
+  users: User[];
+}
+
+const props = defineProps<Props>();
+</script>
+
+<template>
+  <div>
+    <div v-for="user in users" :key="user.id">
+      <h3>{{ user.name }}</h3>
+
+      <!-- Basic modal link -->
+      <ModalLink :href="user_path(user.id)">
+        View Details
+      </ModalLink>
+
+      <!-- With custom modal config -->
+      <ModalLink
+        :href="edit_user_path(user.id)"
+        :modal-config="{
+          slideover: true,
+          position: 'right',
+          size: 'lg'
+        }"
+      >
+        Edit User
+      </ModalLink>
+    </div>
+  </div>
+</template>
+```
+
+### Configuration Reference
+
+#### Size Options
+
+- `:sm` - Small modal (max-width: 400px)
+- `:md` - Medium modal (max-width: 600px) - **default**
+- `:lg` - Large modal (max-width: 800px)
+- `:xl` - Extra large modal (max-width: 1024px)
+- `:full` - Full screen modal
+- Custom CSS class string (e.g., "max-w-4xl")
+
+#### Position Options
+
+- `:center` - Centered modal - **default**
+- `:top` - Top-aligned modal
+- `:bottom` - Bottom-aligned modal
+- `:left` - Left-aligned (for slideovers)
+- `:right` - Right-aligned (for slideovers)
+- Custom CSS class string
+
+#### Global Configuration
+
+Create `config/nb_inertia_modal.exs` to set application-wide defaults:
+
+```elixir
+import Config
+
+config :nb_inertia, :modal,
+  default_size: :md,
+  default_position: :center,
+  default_close_button: true,
+  default_close_explicitly: false,
+  default_padding_classes: "p-6",
+  default_panel_classes: "bg-white rounded-lg shadow-xl",
+  default_backdrop_classes: "bg-black/50"
+
+config :nb_inertia, :slideover,
+  default_position: :right,
+  default_size: :md
+```
+
+### Advanced Usage
+
+#### Nested Modals
+
+Modals automatically support nesting with proper z-index management:
+
+```typescript
+<Modal baseUrl="/users" config={{ size: 'lg' }}>
+  {(closeOuter) => (
+    <div>
+      <h2>User Details</h2>
+      <ModalLink
+        href={edit_user_path(user.id)}
+        modalConfig={{ size: 'md' }}
+      >
+        Edit (opens nested modal)
+      </ModalLink>
+      <button onClick={closeOuter}>Close</button>
+    </div>
+  )}
+</Modal>
+```
+
+#### Form in Modal
+
+```typescript
+import { useForm } from '@/lib/inertia';
+import { create_user_path } from '@/routes';
+
+export default function CreateUser() {
+  const form = useForm(
+    { name: '', email: '' },
+    create_user_path.post()
+  );
+
+  return (
+    <Modal
+      baseUrl="/users"
+      config={{
+        size: 'lg',
+        closeExplicitly: true
+      }}
+    >
+      {(close) => (
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          form.submit({
+            onSuccess: () => close()
+          });
+        }}>
+          <h2>Create User</h2>
+
+          <div>
+            <label>Name</label>
+            <input
+              type="text"
+              value={form.data.name}
+              onChange={e => form.setData('name', e.target.value)}
+            />
+            {form.errors.name && <span className="error">{form.errors.name}</span>}
+          </div>
+
+          <div>
+            <label>Email</label>
+            <input
+              type="email"
+              value={form.data.email}
+              onChange={e => form.setData('email', e.target.value)}
+            />
+            {form.errors.email && <span className="error">{form.errors.email}</span>}
+          </div>
+
+          <div>
+            <button type="submit" disabled={form.processing}>
+              {form.processing ? 'Creating...' : 'Create User'}
+            </button>
+            <button type="button" onClick={close}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+}
+```
+
+### Setup
+
+#### 1. Add Modal Plug
+
+Add the modal headers plug to your router pipeline:
+
+```elixir
+# lib/my_app_web/router.ex
+defmodule MyAppWeb.Router do
+  use MyAppWeb, :router
+  import NbInertia.Plugs.ModalHeaders
+
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {MyAppWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+    plug Inertia.Plug
+    plug :modal_headers  # Add this line
+  end
+end
+```
+
+#### 2. Install Dependencies
+
+The modal components use Radix UI for React:
+
+```bash
+cd assets
+npm install @radix-ui/react-dialog
+```
+
+For Vue, the components use Headless UI:
+
+```bash
+cd assets
+npm install @headlessui/vue@latest
+```
+
+#### 3. Import Modal Components
+
+In your Inertia pages, import modal components from the nb_inertia package:
+
+```typescript
+// React
+import { Modal } from '@/modals/Modal';
+import { ModalLink } from '@/modals/ModalLink';
+
+// Vue
+import { Modal } from '@/modals/Modal.vue';
+import { ModalLink } from '@/modals/ModalLink.vue';
+```
+
 ## Related Projects
 
 - **[NbRoutes](https://github.com/nordbeam/nb_routes)** - Type-safe route helpers with form integration
