@@ -126,6 +126,7 @@ if Code.ensure_loaded?(Igniter) do
       |> setup_html_helpers()
       |> setup_router()
       |> add_inertia_config()
+      |> create_modal_config()
       |> update_root_layout()
       |> maybe_update_asset_bundler_config()
       |> setup_client()
@@ -248,7 +249,9 @@ if Code.ensure_loaded?(Igniter) do
 
     @doc false
     def setup_router(igniter) do
-      Igniter.Libs.Phoenix.append_to_pipeline(igniter, :browser, "plug Inertia.Plug")
+      igniter
+      |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug Inertia.Plug")
+      |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug NbInertia.Plugs.ModalHeaders")
     end
 
     @doc false
@@ -290,6 +293,34 @@ if Code.ensure_loaded?(Igniter) do
           value
         )
       end)
+    end
+
+    @doc false
+    def create_modal_config(igniter) do
+      # Path to the template file
+      template_path =
+        Path.join([:code.priv_dir(:nb_inertia), "templates", "nb_inertia_modal.exs"])
+
+      # Destination path
+      dest_path = "config/nb_inertia_modal.exs"
+
+      # Only create if template exists and file doesn't exist
+      if File.exists?(template_path) do
+        case Igniter.include_existing_file(igniter, dest_path) do
+          {:ok, _igniter} ->
+            # File already exists, don't overwrite
+            igniter
+
+          {:error, _} ->
+            # File doesn't exist, copy template
+            content = File.read!(template_path)
+
+            # Just create the file, user can manually import it
+            Igniter.create_new_file(igniter, dest_path, content)
+        end
+      else
+        igniter
+      end
     end
 
     @doc false
@@ -1152,9 +1183,22 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));           // Works with RouteResult objects
       //   <Link href={user_path(1)}>User</Link> // Works with RouteResult objects
 
-      export { router } from 'nb_inertia/react/router';
-      export { Link } from 'nb_inertia/react/Link';
-      export { useForm } from 'nb_inertia/react/useForm';
+      export { router } from '@nordbeam/nb-inertia/react/router';
+      export { Link } from '@nordbeam/nb-inertia/react/Link';
+      export { useForm } from '@nordbeam/nb-inertia/react/useForm';
+
+      // Modal components
+      export {
+        Modal,
+        HeadlessModal,
+        ModalLink,
+        ModalContent,
+        SlideoverContent,
+        CloseButton,
+        ModalStackProvider,
+        useModalStack,
+        useModal
+      } from '@nordbeam/nb-inertia/react/modals';
 
       // Re-export everything else from Inertia
       export * from '@inertiajs/react';
@@ -1176,9 +1220,23 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));              // Works with RouteResult objects
       //   <Link :href="user_path(1)">User</Link>   // Works with RouteResult objects
 
-      export { router } from 'nb_inertia/vue/router';
-      export { default as Link } from 'nb_inertia/vue/Link';
-      export { useForm } from 'nb_inertia/vue/useForm';
+      export { router } from '@nordbeam/nb-inertia/vue/router';
+      export { default as Link } from '@nordbeam/nb-inertia/vue/Link';
+      export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
+
+      // Modal components
+      export {
+        Modal,
+        HeadlessModal,
+        ModalLink,
+        ModalContent,
+        SlideoverContent,
+        CloseButton,
+        createModalStack,
+        useModalStack,
+        useModal,
+        MODAL_STACK_KEY
+      } from '@nordbeam/nb-inertia/vue/modals';
 
       // Re-export everything else from Inertia
       export * from '@inertiajs/vue3';

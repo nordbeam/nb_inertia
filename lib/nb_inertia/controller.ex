@@ -1760,6 +1760,215 @@ defmodule NbInertia.Controller do
     end
   end
 
+  @doc """
+  Renders an Inertia modal response.
+
+  This macro renders a modal that overlays the current page without full navigation.
+  It supports the same prop patterns as `render_inertia/3`, plus modal-specific options.
+
+  ## Modal-Specific Options
+
+    - `:base_url` - The URL of the page "behind" the modal (required). Can be a string
+      or a RouteResult from nb_routes rich mode.
+    - `:size` - Modal size (`:sm`, `:md`, `:lg`, `:xl`, `:full`, or custom string)
+    - `:position` - Modal position (`:center`, `:top`, `:bottom`, `:left`, `:right`)
+    - `:slideover` - Boolean, render as slideover instead of centered modal
+    - `:close_button` - Boolean, show close button (default: true)
+    - `:close_explicitly` - Boolean, require explicit close (disable backdrop/ESC)
+    - `:max_width` - Custom max-width CSS value
+    - `:padding_classes` - Custom padding CSS classes
+    - `:panel_classes` - Custom panel CSS classes
+    - `:backdrop_classes` - Custom backdrop CSS classes
+
+  ## Examples
+
+      # Basic modal with base URL
+      render_inertia_modal(conn, :user_details,
+        [user: user],
+        base_url: "/users"
+      )
+
+      # Modal with nb_routes RouteResult
+      render_inertia_modal(conn, :user_details,
+        [user: user],
+        base_url: users_path()
+      )
+
+      # Slideover with custom size
+      render_inertia_modal(conn, :edit_user,
+        [user: user, form: form],
+        base_url: user_path(user.id),
+        slideover: true,
+        position: :right,
+        size: :lg
+      )
+
+      # Modal with explicit close only
+      render_inertia_modal(conn, :confirm_delete,
+        [item: item],
+        base_url: items_path(),
+        close_explicitly: true,
+        close_button: false
+      )
+
+      # Pipe-friendly pattern
+      conn
+      |> assign_prop(:user, user)
+      |> assign_prop(:comments, comments)
+      |> render_inertia_modal(:user_details, base_url: "/users")
+  """
+  # 4-arity: All-in-one with props and options
+  defmacro render_inertia_modal(conn, page_ref, props, opts)
+           when is_atom(page_ref) and is_list(props) and is_list(opts) do
+    quote do
+      import NbInertia.CoreController, only: [assign_prop: 3]
+
+      conn_value = unquote(conn)
+      page_ref = unquote(page_ref)
+      props = unquote(props)
+      opts = unquote(opts)
+
+      # Look up the component name
+      component = __MODULE__.page(page_ref)
+
+      # Assign props using the same logic as render_inertia
+      {serialized_props, raw_props} =
+        Enum.split_with(props, fn {_key, value} ->
+          is_tuple(value) and tuple_size(value) >= 2 and is_atom(elem(value, 0))
+        end)
+
+      # Assign serialized props if any
+      conn_value =
+        if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
+          NbInertia.Controller.assign_serialized_props(conn_value, serialized_props)
+        else
+          conn_value
+        end
+
+      # Assign raw props
+      conn_value =
+        Enum.reduce(raw_props, conn_value, fn {key, value}, acc ->
+          assign_prop(acc, key, value)
+        end)
+
+      # Build and render modal
+      NbInertia.Controller.do_render_inertia_modal(conn_value, component, opts)
+    end
+  end
+
+  # 3-arity: Either props-only or opts-only
+  defmacro render_inertia_modal(conn, page_ref, props_or_opts) when is_atom(page_ref) do
+    quote do
+      conn_value = unquote(conn)
+      page_ref = unquote(page_ref)
+      props_or_opts = unquote(props_or_opts)
+
+      # Determine if this is props or opts
+      {props, opts} =
+        if Keyword.keyword?(props_or_opts) and Keyword.has_key?(props_or_opts, :base_url) do
+          # It's opts only
+          {[], props_or_opts}
+        else
+          # It's props only
+          {props_or_opts, []}
+        end
+
+      # Delegate to 4-arity version
+      NbInertia.Controller.render_inertia_modal(conn_value, page_ref, props, opts)
+    end
+  end
+
+  # String component version
+  defmacro render_inertia_modal(conn, component, props_or_opts) when is_binary(component) do
+    quote do
+      conn_value = unquote(conn)
+      component = unquote(component)
+      props_or_opts = unquote(props_or_opts)
+
+      # Determine if this is props or opts
+      {_props, opts} =
+        if Keyword.keyword?(props_or_opts) and Keyword.has_key?(props_or_opts, :base_url) do
+          {[], props_or_opts}
+        else
+          {props_or_opts, []}
+        end
+
+      # For string components, props should already be assigned via assign_prop
+      NbInertia.Controller.do_render_inertia_modal(conn_value, component, opts)
+    end
+  end
+
+  @doc false
+  def do_render_inertia_modal(conn, component, opts) do
+    # Extract modal options
+    base_url_opt = Keyword.get(opts, :base_url)
+
+    if is_nil(base_url_opt) do
+      raise ArgumentError, """
+      render_inertia_modal requires a :base_url option
+
+      Example:
+          render_inertia_modal(conn, :user_details,
+            [user: user],
+            base_url: "/users"
+          )
+
+      Or with nb_routes:
+          render_inertia_modal(conn, :user_details,
+            [user: user],
+            base_url: users_path()
+          )
+      """
+    end
+
+    # Extract base URL from RouteResult or string
+    base_url =
+      case base_url_opt do
+        %{url: url} when is_binary(url) -> url
+        url when is_binary(url) -> url
+        _ -> raise ArgumentError, ":base_url must be a string or RouteResult struct"
+      end
+
+    # Build modal configuration
+    modal =
+      NbInertia.Modal.new(component, %{})
+      |> NbInertia.Modal.base_url(base_url)
+      |> apply_modal_config_options(opts)
+
+    # First, assign modal props normally
+    shared_props = conn.private[:inertia_shared] || %{}
+
+    modal_with_props = %{modal | props: shared_props}
+
+    # Use BaseRenderer to render the modal
+    case NbInertia.Modal.BaseRenderer.render(conn, modal_with_props) do
+      {:ok, conn} ->
+        # Now render the actual Inertia response with the modal data
+        # The BaseRenderer has already injected modal data into conn.assigns
+        NbInertia.Controller.do_render_inertia(conn, component)
+
+      {:error, reason} ->
+        raise RuntimeError, "Failed to render modal: #{inspect(reason)}"
+    end
+  end
+
+  defp apply_modal_config_options(modal, opts) do
+    Enum.reduce(opts, modal, fn
+      {:size, size}, acc -> NbInertia.Modal.size(acc, size)
+      {:position, position}, acc -> NbInertia.Modal.position(acc, position)
+      {:slideover, enabled}, acc -> NbInertia.Modal.slideover(acc, enabled)
+      {:close_button, enabled}, acc -> NbInertia.Modal.close_button(acc, enabled)
+      {:close_explicitly, enabled}, acc -> NbInertia.Modal.close_explicitly(acc, enabled)
+      {:max_width, max_width}, acc -> NbInertia.Modal.max_width(acc, max_width)
+      {:padding_classes, classes}, acc -> NbInertia.Modal.padding_classes(acc, classes)
+      {:panel_classes, classes}, acc -> NbInertia.Modal.panel_classes(acc, classes)
+      {:backdrop_classes, classes}, acc -> NbInertia.Modal.backdrop_classes(acc, classes)
+      {:base_url, _}, acc -> acc
+      # Ignore unknown options
+      _, acc -> acc
+    end)
+  end
+
   @doc false
   def do_render_inertia(conn, component) do
     # Emit telemetry for render start

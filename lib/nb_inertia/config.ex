@@ -21,6 +21,16 @@ defmodule NbInertia.Config do
   - `:ssr` - Enable Server-Side Rendering (default: `false`)
   - `:raise_on_ssr_failure` - Raise on SSR failures (default: `true`)
 
+  ### Modal Configuration
+
+  - `:modal_default_size` - Default modal size (`:sm`, `:md`, `:lg`, `:xl`, `:full`, default: `:md`)
+  - `:modal_default_position` - Default modal position (`:center`, `:top`, `:bottom`, `:left`, `:right`, default: `:center`)
+  - `:modal_close_button` - Show close button by default (default: `true`)
+  - `:modal_close_explicitly` - Require explicit close (disable backdrop/ESC) (default: `false`)
+  - `:modal_backdrop_classes` - Custom CSS classes for modal backdrop (default: `nil`)
+  - `:modal_panel_classes` - Custom CSS classes for modal panel (default: `nil`)
+  - `:modal_padding_classes` - Custom CSS classes for modal padding (default: `nil`)
+
   ## Example
 
       # config/config.exs
@@ -34,7 +44,11 @@ defmodule NbInertia.Config do
         static_paths: ["/css", "/js", "/images"],
         default_version: "1",
         ssr: false,
-        raise_on_ssr_failure: true
+        raise_on_ssr_failure: true,
+        # Modal defaults
+        modal_default_size: :lg,
+        modal_default_position: :center,
+        modal_close_button: true
   """
 
   @doc """
@@ -174,6 +188,110 @@ defmodule NbInertia.Config do
   """
   def deep_merge_shared_props do
     get(:deep_merge_shared_props, false)
+  end
+
+  @doc """
+  Returns the default modal size.
+
+  Valid values: `:sm`, `:md`, `:lg`, `:xl`, `:full`, or a custom string.
+
+  Defaults to `:md`.
+
+  ## Examples
+
+      config :nb_inertia,
+        modal_default_size: :lg
+  """
+  def modal_default_size do
+    get(:modal_default_size, :md)
+  end
+
+  @doc """
+  Returns the default modal position.
+
+  Valid values: `:center`, `:top`, `:bottom`, `:left`, `:right`
+
+  Defaults to `:center`.
+
+  ## Examples
+
+      config :nb_inertia,
+        modal_default_position: :center
+  """
+  def modal_default_position do
+    get(:modal_default_position, :center)
+  end
+
+  @doc """
+  Returns whether modals show a close button by default.
+
+  Defaults to `true`.
+
+  ## Examples
+
+      config :nb_inertia,
+        modal_close_button: false
+  """
+  def modal_close_button do
+    get(:modal_close_button, true)
+  end
+
+  @doc """
+  Returns whether modals require explicit closure by default.
+
+  When `true`, clicking the backdrop or pressing ESC won't close the modal.
+
+  Defaults to `false`.
+
+  ## Examples
+
+      config :nb_inertia,
+        modal_close_explicitly: true
+  """
+  def modal_close_explicitly do
+    get(:modal_close_explicitly, false)
+  end
+
+  @doc """
+  Returns custom CSS classes for modal backdrops.
+
+  Defaults to `nil`.
+
+  ## Examples
+
+      config :nb_inertia,
+        modal_backdrop_classes: "bg-black/75"
+  """
+  def modal_backdrop_classes do
+    get(:modal_backdrop_classes)
+  end
+
+  @doc """
+  Returns custom CSS classes for modal panels.
+
+  Defaults to `nil`.
+
+  ## Examples
+
+      config :nb_inertia,
+        modal_panel_classes: "bg-white dark:bg-gray-900"
+  """
+  def modal_panel_classes do
+    get(:modal_panel_classes)
+  end
+
+  @doc """
+  Returns custom CSS classes for modal content padding.
+
+  Defaults to `nil`.
+
+  ## Examples
+
+      config :nb_inertia,
+        modal_padding_classes: "p-6 sm:p-8"
+  """
+  def modal_padding_classes do
+    get(:modal_padding_classes)
   end
 
   @doc """
