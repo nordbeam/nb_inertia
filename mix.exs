@@ -1,7 +1,7 @@
 defmodule NbInertia.MixProject do
   use Mix.Project
 
-  @version "0.1.1"
+  @version "0.3.0"
   @source_url "https://github.com/nordbeam/nb_inertia"
 
   def project do

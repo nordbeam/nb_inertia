@@ -1,8 +1,29 @@
 {
-  "name": "nb_inertia",
-  "version": "0.1.0",
-  "description": "Enhanced Inertia.js integration for Phoenix with nb_routes support",
+  "name": "@nordbeam/nb-inertia",
+  "version": "0.3.0",
+  "description": "Enhanced Inertia.js integration for Phoenix with nb_routes support and modal components",
   "type": "module",
+  "author": "Nordbeam",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nordbeam/nb.git",
+    "directory": "nb_inertia"
+  },
+  "bugs": {
+    "url": "https://github.com/nordbeam/nb/issues"
+  },
+  "homepage": "https://github.com/nordbeam/nb/tree/main/nb_inertia#readme",
+  "keywords": [
+    "inertia",
+    "inertiajs",
+    "phoenix",
+    "elixir",
+    "react",
+    "vue",
+    "modal",
+    "nb_routes"
+  ],
   "exports": {
     "./react/router": {
       "import": "./priv/nb_inertia/react/router.tsx",
@@ -16,6 +37,10 @@
       "import": "./priv/nb_inertia/react/useForm.tsx",
       "types": "./priv/nb_inertia/react/useForm.tsx"
     },
+    "./react/modals": {
+      "import": "./priv/nb_inertia/react/modals/index.ts",
+      "types": "./priv/nb_inertia/react/modals/index.ts"
+    },
     "./vue/router": {
       "import": "./priv/nb_inertia/vue/router.ts",
       "types": "./priv/nb_inertia/vue/router.ts"
@@ -26,6 +51,10 @@
     "./vue/useForm": {
       "import": "./priv/nb_inertia/vue/useForm.ts",
       "types": "./priv/nb_inertia/vue/useForm.ts"
+    },
+    "./vue/modals": {
+      "import": "./priv/nb_inertia/vue/modals/index.ts",
+      "types": "./priv/nb_inertia/vue/modals/index.ts"
     }
   },
   "files": [
@@ -39,6 +68,8 @@
   "peerDependencies": {
     "@inertiajs/react": "^1.0.0 || ^2.0.0",
     "@inertiajs/vue3": "^1.0.0 || ^2.0.0",
+    "@radix-ui/react-dialog": "^1.1.0",
+    "radix-vue": "^1.9.0",
     "react": "^18.0.0 || ^19.0.0",
     "vue": "^3.0.0"
   },
@@ -47,6 +78,12 @@
       "optional": true
     },
     "@inertiajs/vue3": {
+      "optional": true
+    },
+    "@radix-ui/react-dialog": {
+      "optional": true
+    },
+    "radix-vue": {
       "optional": true
     },
     "react": {
