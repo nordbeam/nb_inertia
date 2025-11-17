@@ -1232,8 +1232,8 @@ if Code.ensure_loaded?(Igniter) do
 
           MANUAL SETUP REQUIRED:
 
-          Note: If using Vite 7, ensure nb_vite has vite-node@^3.2.4 or later.
-          Earlier versions are not compatible with Vite 7.
+          Note: Vite 6+ is required for SSR support.
+          nb_vite uses Vite's built-in Module Runner API (no vite-node needed).
 
           1. Update your assets/vite.config.js to wrap the config in a function:
 
