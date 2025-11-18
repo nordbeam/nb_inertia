@@ -1,6 +1,6 @@
 {
   "name": "@nordbeam/nb-inertia",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Enhanced Inertia.js integration for Phoenix with nb_routes support and modal components",
   "type": "module",
   "author": "Nordbeam",
@@ -36,6 +36,10 @@
     "./react/useForm": {
       "import": "./priv/nb_inertia/react/useForm.tsx",
       "types": "./priv/nb_inertia/react/useForm.tsx"
+    },
+    "./react/useRoutes": {
+      "import": "./priv/nb_inertia/react/useRoutes.tsx",
+      "types": "./priv/nb_inertia/react/useRoutes.tsx"
     },
     "./react/modals": {
       "import": "./priv/nb_inertia/react/modals/index.ts",

@@ -116,7 +116,7 @@ function isRouteResult(value: unknown): value is RouteResult {
  *   Update Title
  * </Link>
  */
-export const Link: React.FC<EnhancedLinkProps> = ({ href, method, ...props }) => {
+export function Link({ href, method, ...props }: EnhancedLinkProps) {
   // Extract URL and method from RouteResult if provided
   const finalHref = isRouteResult(href) ? href.url : href;
   const finalMethod = isRouteResult(href) && !method ? href.method : method;
@@ -128,6 +128,6 @@ export const Link: React.FC<EnhancedLinkProps> = ({ href, method, ...props }) =>
       {...props}
     />
   );
-};
+}
 
 export default Link;
