@@ -1,0 +1,25 @@
+# Test dependencies and artifacts
+**/node_modules/
+**/__tests__/
+**/vitest.config.ts
+**/vitest.setup.ts
+**/package-lock.json
+priv/nb_inertia/IMPLEMENTATION_COMPARISON.md
+
+# Development files
+.git/
+.gitignore
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Build artifacts
+_build/
+deps/
+.elixir_ls/
+erl_crash.dump
+
+# Documentation
+doc/
+docs/

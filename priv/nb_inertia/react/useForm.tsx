@@ -44,8 +44,9 @@ export type UnboundSubmitOptions = {
  * Enhanced form type when bound to a route
  *
  * The submit method only needs options since URL and method come from the bound route.
+ * The transform method is properly typed to preserve TForm generic.
  */
-export type BoundFormType<TForm> = Omit<ReturnType<typeof useInertiaForm<TForm>>, 'submit'> & {
+export type BoundFormType<TForm> = Omit<ReturnType<typeof useInertiaForm<TForm>>, 'submit' | 'transform'> & {
   /**
    * Submit the form using the bound route's URL and method
    *
@@ -56,14 +57,41 @@ export type BoundFormType<TForm> = Omit<ReturnType<typeof useInertiaForm<TForm>>
    * form.submit({ preserveScroll: true });
    */
   submit(options?: BoundSubmitOptions): void;
+
+  /**
+   * Transform form data before submission
+   *
+   * Callback receives the form data with proper typing and can return transformed data.
+   *
+   * @param callback - Function that receives form data (typed as TForm) and returns transformed data
+   *
+   * @example
+   * const form = useForm({ name: 'John' }, user_path.post());
+   * form.transform((data) => ({ user: data })); // data is automatically typed as TForm
+   */
+  transform(callback: (data: TForm) => Record<string, any>): void;
 };
 
 /**
  * Enhanced form type when not bound to a route
  *
  * The submit method works exactly like standard Inertia useForm.
+ * The transform method is properly typed to preserve TForm generic.
  */
-export type UnboundFormType<TForm> = ReturnType<typeof useInertiaForm<TForm>>;
+export type UnboundFormType<TForm> = Omit<ReturnType<typeof useInertiaForm<TForm>>, 'transform'> & {
+  /**
+   * Transform form data before submission
+   *
+   * Callback receives the form data with proper typing and can return transformed data.
+   *
+   * @param callback - Function that receives form data (typed as TForm) and returns transformed data
+   *
+   * @example
+   * const form = useForm({ name: 'John' });
+   * form.transform((data) => ({ user: data })); // data is automatically typed as TForm
+   */
+  transform(callback: (data: TForm) => Record<string, any>): void;
+};
 
 /**
  * Type guard to check if a value is a RouteResult object
@@ -163,17 +191,26 @@ export function useForm<TForm extends Record<string, any>>(
 ): BoundFormType<TForm> | UnboundFormType<TForm> {
   const inertiaForm = useInertiaForm<TForm>(data);
 
-  // If no route is provided, return the standard Inertia form
+  // If no route is provided, return the form with properly typed transform
   if (!route || !isRouteResult(route)) {
-    return inertiaForm;
+    const unboundForm: UnboundFormType<TForm> = {
+      ...inertiaForm,
+      transform(callback: (data: TForm) => Record<string, any>) {
+        return inertiaForm.transform(callback);
+      },
+    };
+    return unboundForm as any;
   }
 
-  // Route is provided - return enhanced form with bound submit
+  // Route is provided - return enhanced form with bound submit and typed transform
   const boundForm: BoundFormType<TForm> = {
     ...inertiaForm,
     submit(options?: BoundSubmitOptions) {
       // Call Inertia's submit with the bound route's method, URL, and options
       return inertiaForm.submit(route.method, route.url, options);
+    },
+    transform(callback: (data: TForm) => Record<string, any>) {
+      return inertiaForm.transform(callback);
     },
   };
 
