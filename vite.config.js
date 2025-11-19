@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
 import { readdirSync, statSync } from 'fs';
 
@@ -34,7 +35,15 @@ function getEntryPoints(dir, baseDir = null) {
 }
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    dts({
+      include: ['priv/nb_inertia/**/*.{ts,tsx}'],
+      exclude: ['**/*.test.ts', '**/*.test.tsx', '**/vitest.*', '**/vue/**'],
+      outDir: 'dist',
+      rollupTypes: true,
+    }),
+  ],
   build: {
     lib: {
       entry: getEntryPoints('./priv/nb_inertia'),
