@@ -74,6 +74,14 @@ export interface RouteHelperWithForm<TParams extends any[] = any[]> {
   (...args: TParams): RouteResult;
   /** GET method variant */
   get(...args: TParams): RouteResult;
+  /** POST method variant */
+  post(...args: TParams): RouteResult;
+  /** PATCH method variant */
+  patch(...args: TParams): RouteResult;
+  /** PUT method variant */
+  put(...args: TParams): RouteResult;
+  /** DELETE method variant */
+  delete(...args: TParams): RouteResult;
   /** HEAD method variant */
   head(...args: TParams): RouteResult;
   /** URL-only variant - returns just the URL string */
@@ -100,6 +108,14 @@ export interface RouteHelper<TParams extends any[] = any[]> {
   (...args: TParams): RouteResult;
   /** GET method variant */
   get(...args: TParams): RouteResult;
+  /** POST method variant */
+  post(...args: TParams): RouteResult;
+  /** PATCH method variant */
+  patch(...args: TParams): RouteResult;
+  /** PUT method variant */
+  put(...args: TParams): RouteResult;
+  /** DELETE method variant */
+  delete(...args: TParams): RouteResult;
   /** HEAD method variant */
   head(...args: TParams): RouteResult;
   /** URL-only variant - returns just the URL string */
