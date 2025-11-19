@@ -42,6 +42,7 @@ defmodule NbInertia.Modal.BaseRenderer do
   """
 
   import Plug.Conn
+
   alias NbInertia.Modal
 
   require Logger
@@ -126,44 +127,41 @@ defmodule NbInertia.Modal.BaseRenderer do
   defp validate_base_url(%Modal{base_url: nil}), do: {:error, :no_base_url}
   defp validate_base_url(%Modal{base_url: url}) when is_binary(url), do: {:ok, url}
 
+  # Create an internal request to the base URL to get the base page props
+  # We'll use Plug.Test.conn/3 to create a test connection
+  #
+  # Important: We need to:
+  # 1. Preserve session data from the original conn
+  # 2. Preserve authentication/authorization state
+  # 3. Mark it as an Inertia request
+  # 4. Add special header to exclude modal-specific middleware
   defp fetch_base_page(conn, base_url) do
-    # Create an internal request to the base URL to get the base page props
-    # We'll use Plug.Test.conn/3 to create a test connection
-    #
-    # Important: We need to:
-    # 1. Preserve session data from the original conn
-    # 2. Preserve authentication/authorization state
-    # 3. Mark it as an Inertia request
-    # 4. Add special header to exclude modal-specific middleware
+    base_conn =
+      conn
+      |> duplicate_conn_for_base_request(base_url)
+      |> Phoenix.Controller.put_new_layout(false)
+      |> put_private(:inertia_modal_base_request, true)
 
-    try do
-      base_conn =
-        conn
-        |> duplicate_conn_for_base_request(base_url)
-        |> Phoenix.Controller.Pipeline.put_new_layout(false)
-        |> put_private(:inertia_modal_base_request, true)
+    # Call the Phoenix router to dispatch the request
+    router = conn.private[:phoenix_router]
 
-      # Call the Phoenix router to dispatch the request
-      router = conn.private[:phoenix_router]
+    if router do
+      base_conn = router.call(base_conn, router.init([]))
 
-      if router do
-        base_conn = router.call(base_conn, router.init([]))
-
-        if base_conn.state == :sent do
-          {:ok, base_conn}
-        else
-          {:error, :base_request_failed, "Request not sent"}
-        end
+      if base_conn.state == :sent do
+        {:ok, base_conn}
       else
-        {:error, :base_request_failed, "No Phoenix router found"}
+        {:error, :base_request_failed, "Request not sent"}
       end
-    rescue
-      error ->
-        {:error, :base_request_failed, error}
+    else
+      {:error, :base_request_failed, "No Phoenix router found"}
     end
+  rescue
+    error ->
+      {:error, :base_request_failed, error}
   end
 
-  defp duplicate_conn_for_base_request(original_conn, base_url) do
+  defp duplicate_conn_for_base_request(%Plug.Conn{} = original_conn, base_url) do
     # Parse the base URL to extract path and query string
     uri = URI.parse(base_url)
     path = uri.path || "/"
@@ -171,7 +169,7 @@ defmodule NbInertia.Modal.BaseRenderer do
 
     # Build a new conn with the base URL path
     # Preserve important data from the original conn
-    %Plug.Conn{original_conn | path_info: split_path(path), query_string: query_string}
+    %{original_conn | path_info: split_path(path), query_string: query_string}
     |> Map.put(:request_path, path)
     |> Map.put(:method, "GET")
     |> put_req_header("x-inertia", "true")

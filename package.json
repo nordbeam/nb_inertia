@@ -24,26 +24,30 @@
     "modal",
     "nb_routes"
   ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
   "exports": {
     "./react/router": {
-      "import": "./priv/nb_inertia/react/router.tsx",
-      "types": "./priv/nb_inertia/react/router.tsx"
+      "import": "./dist/react/router.js",
+      "types": "./dist/react/router.d.ts"
     },
     "./react/Link": {
-      "import": "./priv/nb_inertia/react/Link.tsx",
-      "types": "./priv/nb_inertia/react/Link.tsx"
+      "import": "./dist/react/Link.js",
+      "types": "./dist/react/Link.d.ts"
     },
     "./react/useForm": {
-      "import": "./priv/nb_inertia/react/useForm.tsx",
-      "types": "./priv/nb_inertia/react/useForm.tsx"
+      "import": "./dist/react/useForm.js",
+      "types": "./dist/react/useForm.d.ts"
     },
     "./react/useRoutes": {
-      "import": "./priv/nb_inertia/react/useRoutes.tsx",
-      "types": "./priv/nb_inertia/react/useRoutes.tsx"
+      "import": "./dist/react/useRoutes.js",
+      "types": "./dist/react/useRoutes.d.ts"
     },
     "./react/modals": {
-      "import": "./priv/nb_inertia/react/modals/index.ts",
-      "types": "./priv/nb_inertia/react/modals/index.ts"
+      "import": "./dist/react/modals/index.js",
+      "types": "./dist/react/modals/index.d.ts"
     },
     "./vue/router": {
       "import": "./priv/nb_inertia/vue/router.ts",
@@ -62,7 +66,7 @@
     }
   },
   "files": [
-    "priv/nb_inertia/react",
+    "dist",
     "priv/nb_inertia/vue",
     "lib",
     "mix.exs",
@@ -96,5 +100,10 @@
     "vue": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
   }
 }

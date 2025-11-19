@@ -172,8 +172,11 @@ defmodule NbInertia.Modal do
       %NbInertia.Modal{base_url: "/users", ...}
   """
   @spec base_route(t(), function() | map(), list()) :: t()
+  # Default parameter declaration
+  def base_route(modal, route_or_result, params \\ [])
+
   # Handle nb_routes RouteResult struct
-  def base_route(%Modal{} = modal, %{url: url}, params \\ []) when is_binary(url) do
+  def base_route(%Modal{} = modal, %{url: url}, params) when is_binary(url) do
     _ = params
     base_url(modal, url)
   end

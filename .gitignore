@@ -36,3 +36,7 @@ nb_inertia-*.tar
 # OS files
 .DS_Store
 Thumbs.db
+
+# Node/Bun
+node_modules/
+bun.lock
