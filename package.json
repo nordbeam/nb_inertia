@@ -1,6 +1,6 @@
 {
   "name": "@nordbeam/nb-inertia",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Enhanced Inertia.js integration for Phoenix with nb_routes support and modal components",
   "type": "module",
   "author": "Nordbeam",
