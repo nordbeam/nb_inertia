@@ -196,7 +196,7 @@ declare type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5x
  */
 declare type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options';
 };
 
 export { }

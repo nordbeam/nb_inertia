@@ -27,7 +27,7 @@ import { router as inertiaRouter, type VisitOptions } from '@inertiajs/react';
  */
 export type RouteResult = {
   url: string;
-  method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+  method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options';
 };
 
 /**
@@ -46,7 +46,7 @@ function isRouteResult(value: unknown): value is RouteResult {
   return (
     typeof obj.url === 'string' &&
     typeof obj.method === 'string' &&
-    ['get', 'post', 'put', 'patch', 'delete', 'head'].includes(obj.method)
+    ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'].includes(obj.method)
   );
 }
 

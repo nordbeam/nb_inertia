@@ -27,24 +27,26 @@ import { type RouteResult } from './router';
  *
  * Extends the standard Inertia Link props to accept RouteResult objects
  * in the href prop, while maintaining backward compatibility with strings.
+ * Also includes standard HTML anchor attributes for full compatibility.
  */
-export type EnhancedLinkProps = Omit<InertiaLinkProps, 'href'> & {
-  /**
-   * The URL or RouteResult to navigate to
-   *
-   * Can be a plain string URL or a RouteResult object from nb_routes rich mode.
-   * When a RouteResult is provided, the URL and method are automatically extracted.
-   *
-   * @example
-   * // String URL
-   * <Link href="/posts/1">View</Link>
-   *
-   * // RouteResult object
-   * <Link href={post_path(1)}>View</Link>
-   * <Link href={update_post_path.patch(1)}>Edit</Link>
-   */
-  href: string | RouteResult;
-};
+export type EnhancedLinkProps = Omit<InertiaLinkProps, 'href'> &
+  Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & {
+    /**
+     * The URL or RouteResult to navigate to
+     *
+     * Can be a plain string URL or a RouteResult object from nb_routes rich mode.
+     * When a RouteResult is provided, the URL and method are automatically extracted.
+     *
+     * @example
+     * // String URL
+     * <Link href="/posts/1">View</Link>
+     *
+     * // RouteResult object
+     * <Link href={post_path(1)}>View</Link>
+     * <Link href={update_post_path.patch(1)}>Edit</Link>
+     */
+    href: string | RouteResult;
+  };
 
 /**
  * Type guard to check if a value is a RouteResult object
@@ -62,7 +64,7 @@ function isRouteResult(value: unknown): value is RouteResult {
   return (
     typeof obj.url === 'string' &&
     typeof obj.method === 'string' &&
-    ['get', 'post', 'put', 'patch', 'delete', 'head'].includes(obj.method)
+    ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'].includes(obj.method)
   );
 }
 

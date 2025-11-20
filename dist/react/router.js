@@ -3,7 +3,7 @@ function u(t) {
   if (typeof t != "object" || t === null)
     return !1;
   const e = t;
-  return typeof e.url == "string" && typeof e.method == "string" && ["get", "post", "put", "patch", "delete", "head"].includes(e.method);
+  return typeof e.url == "string" && typeof e.method == "string" && ["get", "post", "put", "patch", "delete", "head", "options"].includes(e.method);
 }
 function s(t) {
   return u(t) ? t.url : t;

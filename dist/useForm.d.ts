@@ -65,7 +65,7 @@ export declare type BoundSubmitOptions = Omit<Parameters<ReturnType<typeof useFo
  */
 declare type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options';
 };
 
 /**

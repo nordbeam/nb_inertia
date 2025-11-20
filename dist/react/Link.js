@@ -1,23 +1,23 @@
-import { jsx as s } from "react/jsx-runtime";
+import { jsx as r } from "react/jsx-runtime";
 import { Link as u } from "@inertiajs/react";
 function n(t) {
   if (typeof t != "object" || t === null)
     return !1;
   const o = t;
-  return typeof o.url == "string" && typeof o.method == "string" && ["get", "post", "put", "patch", "delete", "head"].includes(o.method);
+  return typeof o.url == "string" && typeof o.method == "string" && ["get", "post", "put", "patch", "delete", "head", "options"].includes(o.method);
 }
-function p({ href: t, method: o, ...e }) {
-  const i = n(t) ? t.url : t, r = n(t) && !o ? t.method : o;
-  return /* @__PURE__ */ s(
+function l({ href: t, method: o, ...e }) {
+  const i = n(t) ? t.url : t, s = n(t) && !o ? t.method : o;
+  return /* @__PURE__ */ r(
     u,
     {
       href: i,
-      method: r,
+      method: s,
       ...e
     }
   );
 }
 export {
-  p as Link,
-  p as default
+  l as Link,
+  l as default
 };

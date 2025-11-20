@@ -37,7 +37,7 @@ export { router }
  */
 export declare type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options';
 };
 
 export { }

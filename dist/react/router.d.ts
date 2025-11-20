@@ -24,7 +24,7 @@
  */
 export type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options';
 };
 /**
  * Enhanced Inertia router that accepts RouteResult objects

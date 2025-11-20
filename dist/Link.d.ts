@@ -1,3 +1,4 @@
+import { default as default_2 } from 'react';
 import { InertiaLinkProps } from '@inertiajs/react';
 import { JSX } from 'react/jsx-runtime';
 
@@ -6,8 +7,9 @@ import { JSX } from 'react/jsx-runtime';
  *
  * Extends the standard Inertia Link props to accept RouteResult objects
  * in the href prop, while maintaining backward compatibility with strings.
+ * Also includes standard HTML anchor attributes for full compatibility.
  */
-export declare type EnhancedLinkProps = Omit<InertiaLinkProps, 'href'> & {
+export declare type EnhancedLinkProps = Omit<InertiaLinkProps, 'href'> & Omit<default_2.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & {
     /**
      * The URL or RouteResult to navigate to
      *
@@ -105,7 +107,7 @@ export default Link;
  */
 declare type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options';
 };
 
 export { }
