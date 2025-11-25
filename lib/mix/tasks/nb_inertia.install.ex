@@ -863,9 +863,16 @@ if Code.ensure_loaded?(Igniter) do
 
       axios.defaults.xsrfHeaderName = "x-csrf-token";
 
+      const pages = import.meta.glob("./pages/**/*.#{extension}");
+
       createInertiaApp({
         resolve: async (name) => {
-          return await import(`./pages/${name}.#{extension}`);
+          const path = `./pages/${name}.#{extension}`;
+          const resolver = pages[path];
+          if (!resolver) {
+            throw new Error(`Page not found: ${name}`);
+          }
+          return resolver();
         },
         setup({ App, el, props }) {
           createRoot(el).render(<App {...props} />);
@@ -935,7 +942,7 @@ if Code.ensure_loaded?(Igniter) do
         "config.exs",
         :nb_inertia,
         [:ssr],
-        {:code, Sourceror.parse_string!("[enabled: true]")}
+        true
       )
     end
 
@@ -1200,15 +1207,13 @@ if Code.ensure_loaded?(Igniter) do
               if String.contains?(content, "render_inertia") do
                 content
               else
-                # Replace the home function to use Inertia
+                # Replace the home function to use NbInertia
                 content
                 |> String.replace(
                   ~r/def home\(conn, _params\) do\s*\n\s*render\(conn, :home\)\s*\n\s*end/,
                   """
                   def home(conn, _params) do
-                      Inertia.Controller.render_inertia(conn, "Home", %{
-                        greeting: "Welcome to Inertia.js!"
-                      })
+                      render_inertia(conn, "Home", greeting: "Welcome to Inertia.js!")
                     end
                   """,
                   global: false
@@ -1340,7 +1345,7 @@ if Code.ensure_loaded?(Igniter) do
         [
           if(camelize_props, do: "\n  - camelize_props: true", else: nil),
           if(history_encrypt, do: "\n  - history: [encrypt: true]", else: nil),
-          if(ssr_enabled && using_vite, do: "\n  - ssr: [enabled: true]", else: nil)
+          if(ssr_enabled && using_vite, do: "\n  - ssr: true", else: nil)
         ]
         |> Enum.filter(& &1)
 
