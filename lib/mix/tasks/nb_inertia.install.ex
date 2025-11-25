@@ -133,6 +133,7 @@ if Code.ensure_loaded?(Igniter) do
       |> maybe_setup_ssr()
       |> maybe_setup_nb_ts()
       |> create_sample_page()
+      |> update_page_controller()
       |> create_lib_inertia()
       |> print_next_steps()
     end
@@ -165,10 +166,17 @@ if Code.ensure_loaded?(Igniter) do
       # Add inertia dependency (nb_inertia is already added by igniter.install)
       igniter = Igniter.Project.Deps.add_dep(igniter, {:inertia, "~> 2.5"})
 
-      # Add nb_ts if TypeScript is enabled
+      # Add nb_ts if TypeScript is enabled and not already present
       igniter =
         if typescript_enabled do
-          Igniter.Project.Deps.add_dep(igniter, {:nb_ts, github: "nordbeam/nb_ts"})
+          # Only add if not already present (nb_stack might have added it already)
+          case Igniter.Project.Deps.get_dep(igniter, :nb_ts) do
+            {:ok, _} ->
+              igniter
+
+            {:error, _} ->
+              Igniter.Project.Deps.add_dep(igniter, {:nb_ts, github: "nordbeam/nb_ts"})
+          end
         else
           igniter
         end
@@ -306,17 +314,15 @@ if Code.ensure_loaded?(Igniter) do
 
       # Only create if template exists and file doesn't exist
       if File.exists?(template_path) do
-        case Igniter.include_existing_file(igniter, dest_path) do
-          {:ok, _igniter} ->
-            # File already exists, don't overwrite
-            igniter
+        if Igniter.exists?(igniter, dest_path) do
+          # File already exists, don't overwrite
+          igniter
+        else
+          # File doesn't exist, copy template
+          content = File.read!(template_path)
 
-          {:error, _} ->
-            # File doesn't exist, copy template
-            content = File.read!(template_path)
-
-            # Just create the file, user can manually import it
-            Igniter.create_new_file(igniter, dest_path, content)
+          # Just create the file, user can manually import it
+          Igniter.create_new_file(igniter, dest_path, content)
         end
       else
         igniter
@@ -349,7 +355,7 @@ if Code.ensure_loaded?(Igniter) do
       typescript = igniter.args.options[:typescript] || false
       extension = if typescript, do: "tsx", else: "jsx"
 
-      # Build the lines to append
+      # Build the lines to append (Inertia components + app.tsx entry)
       lines_to_add = build_inertia_vite_lines(client_framework, extension)
 
       # Update the file by finding the </head> tag and inserting before it
@@ -363,11 +369,22 @@ if Code.ensure_loaded?(Igniter) do
               # Inertia already configured, skip
               content
             else
-              # Find </head> and insert Inertia lines before it
+              # Check if app.tsx/jsx already exists to avoid duplicates
+              already_has_inertia_entry = String.contains?(content, "js/app.#{extension}")
+
+              # Build the lines - only include app.tsx if not already present
+              final_lines =
+                if already_has_inertia_entry do
+                  build_inertia_components_only(client_framework)
+                else
+                  lines_to_add
+                end
+
+              # Add the inertia lines before </head>
               if String.contains?(content, "</head>") do
-                String.replace(content, "</head>", "#{lines_to_add}  </head>", global: false)
+                String.replace(content, "</head>", "#{final_lines}  </head>", global: false)
               else
-                # If no </head> tag found, return content unchanged and warn
+                # If no </head> tag found, return content unchanged
                 content
               end
             end
@@ -391,6 +408,19 @@ if Code.ensure_loaded?(Igniter) do
           <.inertia_head content={@inertia_head} />
       #{react_refresh_line}    <%= NbVite.vite_assets("js/app.#{extension}") %>
       """
+    end
+
+    # Build only the Inertia component lines (without vite_assets)
+    # Used when app.tsx already exists in the layout to avoid duplicates
+    defp build_inertia_components_only(client_framework) do
+      react_refresh_line =
+        if client_framework == "react" do
+          "    <%= NbVite.react_refresh() %>\n"
+        else
+          ""
+        end
+
+      "    <.inertia_title><%= assigns[:page_title] %></.inertia_title>\n    <.inertia_head content={@inertia_head} />\n#{react_refresh_line}"
     end
 
     defp web_dir(igniter) do
@@ -553,16 +583,23 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp add_app_to_vite_input(content, extension) do
-      # Add js/app.{extension} to the input array in vite.config.js
-      # Match: input: ['js/app.ts', 'css/app.css']
-      # Result: input: ['js/app.ts', 'js/app.tsx', 'css/app.css']
+      # ADD js/app.{tsx|jsx} to the input array (keeping the existing app.ts/app.js)
+      # This allows both regular Phoenix pages (app.ts) and Inertia pages (app.tsx) to work
+      # Match: input: ['js/app.ts', ...] or input: ['js/app.js', ...]
+      # Result: input: ['js/app.ts', 'js/app.tsx', ...] (adds the new entry)
 
-      content
-      |> String.replace(
-        ~r/(input:\s*\[['"]js\/app\.(ts|js)['"])/,
-        "\\1, 'js/app.#{extension}'",
-        global: false
-      )
+      # First check if app.tsx/jsx already exists in the input
+      if String.contains?(content, "js/app.#{extension}") do
+        content
+      else
+        # Add the new entry after the existing app.ts/app.js entry
+        content
+        |> String.replace(
+          ~r/(input:\s*\[['"]js\/app\.(ts|js)['"])/,
+          "\\1, 'js/app.#{extension}'",
+          global: false
+        )
+      end
     end
 
     @doc false
@@ -1139,6 +1176,52 @@ if Code.ensure_loaded?(Igniter) do
         );
       }
       """
+    end
+
+    @doc false
+    def update_page_controller(igniter) do
+      # Update the PageController to use Inertia rendering instead of Phoenix templates
+      # This makes the sample Home page work out of the box
+      controller_path =
+        Path.join([
+          "lib",
+          web_dir(igniter),
+          "controllers",
+          "page_controller.ex"
+        ])
+
+      if Igniter.exists?(igniter, controller_path) do
+        igniter
+        |> Igniter.include_existing_file(controller_path)
+        |> Igniter.update_file(controller_path, fn source ->
+          Rewrite.Source.update(source, :content, fn
+            content when is_binary(content) ->
+              # Check if already using Inertia
+              if String.contains?(content, "render_inertia") do
+                content
+              else
+                # Replace the home function to use Inertia
+                content
+                |> String.replace(
+                  ~r/def home\(conn, _params\) do\s*\n\s*render\(conn, :home\)\s*\n\s*end/,
+                  """
+                  def home(conn, _params) do
+                      Inertia.Controller.render_inertia(conn, "Home", %{
+                        greeting: "Welcome to Inertia.js!"
+                      })
+                    end
+                  """,
+                  global: false
+                )
+              end
+
+            content ->
+              content
+          end)
+        end)
+      else
+        igniter
+      end
     end
 
     @doc false
