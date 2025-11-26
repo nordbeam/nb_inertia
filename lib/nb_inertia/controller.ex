@@ -1519,7 +1519,9 @@ defmodule NbInertia.Controller do
       optional? = Keyword.get(options, :optional, is_function_data?)
       defer = Keyword.get(options, :defer, false)
       merge = Keyword.get(options, :merge, false)
-      serialization_opts = Keyword.get(options, :opts, [])
+      # Disable NbSerializer camelization since NbInertia handles it
+      # This prevents double-camelization and preserves {:preserve, key} tuples
+      serialization_opts = Keyword.merge([camelize: false], Keyword.get(options, :opts, []))
 
       # Build the serialization function
       serialize_fn = fn ->
