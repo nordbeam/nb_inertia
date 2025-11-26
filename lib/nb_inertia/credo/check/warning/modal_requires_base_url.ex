@@ -110,10 +110,11 @@ defmodule NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl do
   end
 
   # Check if keyword list contains :base_url key
+  # In AST, keyword list items are tuples: {:key, value}
+  # The key is always an atom in keyword syntax
   defp has_base_url?(opts) when is_list(opts) do
     Enum.any?(opts, fn
-      {:base_url, _} -> true
-      {{:base_url, _, _}, _} -> true
+      {:base_url, _value} -> true
       _ -> false
     end)
   end

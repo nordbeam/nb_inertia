@@ -73,66 +73,91 @@ defmodule NbInertia.Credo.Check.Design.DeclareInertiaPage do
   def run(%SourceFile{} = source_file, params) do
     issue_meta = IssueMeta.for(source_file, params)
 
-    # First pass: collect module info
-    module_info = collect_module_info(source_file)
+    # Single pass: collect module info and check render_inertia calls
+    # We track module scopes to handle files with multiple modules correctly
+    initial_state = %{
+      issue_meta: issue_meta,
+      issues: [],
+      # Stack of module contexts (innermost module first)
+      module_stack: [],
+      # Current module's info
+      current_module: nil,
+      has_nb_inertia_controller: false,
+      declared_pages: MapSet.new()
+    }
 
-    # Second pass: check render_inertia calls
-    source_file
-    |> Credo.Code.prewalk(&traverse(&1, &2, {issue_meta, module_info}))
-    |> Enum.reverse()
+    final_state = Credo.Code.prewalk(source_file, &traverse(&1, &2), initial_state)
+    Enum.reverse(final_state.issues)
   end
 
-  # Collect information about modules in the file
-  defp collect_module_info(source_file) do
-    source_file
-    |> Credo.Code.prewalk(&collect_info(&1, &2), %{
-      has_nb_inertia_controller: false,
-      declared_pages: MapSet.new(),
-      current_module: nil
-    })
+  # Enter a new module - push current state to stack and reset
+  defp traverse({:defmodule, _meta, [{:__aliases__, _, module_parts} | _]} = ast, state) do
+    module_name = Module.concat(module_parts)
+
+    # Save current module state to stack if we're inside a module
+    new_stack =
+      if state.current_module do
+        [
+          %{
+            module: state.current_module,
+            has_nb_inertia_controller: state.has_nb_inertia_controller,
+            declared_pages: state.declared_pages
+          }
+          | state.module_stack
+        ]
+      else
+        state.module_stack
+      end
+
+    new_state = %{
+      state
+      | current_module: module_name,
+        module_stack: new_stack,
+        has_nb_inertia_controller: false,
+        declared_pages: MapSet.new()
+    }
+
+    {ast, new_state}
   end
 
   # Track `use NbInertia.Controller`
-  defp collect_info(
+  defp traverse(
          {:use, _meta, [{:__aliases__, _, [:NbInertia, :Controller]} | _]} = ast,
-         acc
+         state
        ) do
-    {ast, %{acc | has_nb_inertia_controller: true}}
+    {ast, %{state | has_nb_inertia_controller: true}}
   end
 
   # Track `inertia_page :name do ... end`
-  defp collect_info({:inertia_page, _meta, [page_name | _]} = ast, acc)
+  defp traverse({:inertia_page, _meta, [page_name | _]} = ast, state)
        when is_atom(page_name) do
-    {ast, %{acc | declared_pages: MapSet.put(acc.declared_pages, page_name)}}
+    {ast, %{state | declared_pages: MapSet.put(state.declared_pages, page_name)}}
   end
-
-  defp collect_info(ast, acc), do: {ast, acc}
 
   # Check render_inertia calls with atom page references
   defp traverse(
          {:render_inertia, meta, [_conn, page_name | _rest]} = ast,
-         issues,
-         {issue_meta, module_info}
+         state
        )
        when is_atom(page_name) do
     cond do
       # If the module doesn't have NbInertia.Controller, warn
-      not module_info.has_nb_inertia_controller ->
-        new_issue = issue_for_missing_use(issue_meta, meta[:line], page_name)
-        {ast, [new_issue | issues]}
+      not state.has_nb_inertia_controller ->
+        new_issue = issue_for_missing_use(state.issue_meta, meta[:line], page_name)
+        {ast, %{state | issues: [new_issue | state.issues]}}
 
       # If the page isn't declared, warn
-      not MapSet.member?(module_info.declared_pages, page_name) ->
-        new_issue = issue_for_undeclared_page(issue_meta, meta[:line], page_name)
-        {ast, [new_issue | issues]}
+      not MapSet.member?(state.declared_pages, page_name) ->
+        new_issue = issue_for_undeclared_page(state.issue_meta, meta[:line], page_name)
+        {ast, %{state | issues: [new_issue | state.issues]}}
 
       true ->
-        {ast, issues}
+        {ast, state}
     end
   end
 
-  defp traverse(ast, issues, _context) do
-    {ast, issues}
+  defp traverse(ast, state) do
+    {ast, state}
   end
 
   defp issue_for_missing_use(issue_meta, line_no, page_name) do
