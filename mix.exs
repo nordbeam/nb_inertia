@@ -59,7 +59,7 @@ defmodule NbInertia.MixProject do
       # Development and test dependencies
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", optional: true, runtime: false},
       {:stream_data, "~> 1.0", only: [:test, :dev]},
       {:jason, "~> 1.4"},
       {:ecto, "~> 3.10"}
