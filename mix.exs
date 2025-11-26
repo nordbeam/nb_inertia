@@ -54,11 +54,12 @@ defmodule NbInertia.MixProject do
       {:poolboy, "~> 1.5"},
 
       # Optional dependencies
-      {:nb_serializer, path: "/Users/assim/Projects/nb_serializer", optional: true},
+      {:nb_serializer, github: "nordbeam/nb_serializer", optional: true},
 
       # Development and test dependencies
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:stream_data, "~> 1.0", only: [:test, :dev]},
       {:jason, "~> 1.4"},
       {:ecto, "~> 3.10"}
