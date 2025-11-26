@@ -71,23 +71,9 @@ defmodule NbInertia.Credo.Check.Warning.UseNbInertiaController do
     |> Enum.reverse()
   end
 
-  # Match `use Inertia.Controller`
+  # Match `use Inertia.Controller` with or without options
   defp traverse(
          {:use, meta, [{:__aliases__, _, [:Inertia, :Controller]} | _opts]} = ast,
-         issues,
-         issue_meta
-       ) do
-    new_issue = issue_for(issue_meta, meta[:line], "Inertia.Controller")
-    {ast, [new_issue | issues]}
-  end
-
-  # Match `use Inertia.Controller, opts`
-  defp traverse(
-         {:use, meta,
-          [
-            {:__aliases__, _, [:Inertia, :Controller]},
-            _opts
-          ]} = ast,
          issues,
          issue_meta
        ) do

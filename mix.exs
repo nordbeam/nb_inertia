@@ -50,7 +50,7 @@ defmodule NbInertia.MixProject do
       {:inertia, "~> 2.0"},
       {:phoenix, "~> 1.7"},
       {:plug, "~> 1.14"},
-      {:deno_rider, "~> 0.2"},
+      {:deno_rider, "~> 0.2", optional: true, only: :prod},
       {:poolboy, "~> 1.5"},
 
       # Optional dependencies

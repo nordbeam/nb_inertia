@@ -1,11 +1,17 @@
 defmodule NbInertia.Credo.ChecksTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias NbInertia.Credo.Check.Warning.UseNbInertiaController
   alias NbInertia.Credo.Check.Warning.AvoidRawInertiaRender
   alias NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl
   alias NbInertia.Credo.Check.Readability.PropFromAssigns
   alias NbInertia.Credo.Check.Design.DeclareInertiaPage
+
+  # Start Credo services before running tests
+  setup_all do
+    Application.ensure_all_started(:credo)
+    :ok
+  end
 
   describe "UseNbInertiaController" do
     test "warns when using `use Inertia.Controller`" do
@@ -252,10 +258,7 @@ defmodule NbInertia.Credo.ChecksTest do
   end
 
   defp source_to_source_file(source_code) do
-    %Credo.SourceFile{
-      filename: "test.ex",
-      source: source_code,
-      status: :valid
-    }
+    # Use Credo's parse function (requires Credo services to be started)
+    Credo.SourceFile.parse(source_code, "test.ex")
   end
 end
