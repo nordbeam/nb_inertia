@@ -288,7 +288,8 @@ defmodule NbInertia.Controller do
   """
   defmacro inertia_shared(module_or_block, opts \\ [])
 
-  defmacro inertia_shared(module, opts) when is_atom(module) or is_list(opts) do
+  # Handle SharedProps module registration: inertia_shared(MyModule, opts)
+  defmacro inertia_shared(module, opts) when is_atom(module) do
     quote do
       config = %{
         module: unquote(module),
@@ -301,6 +302,23 @@ defmodule NbInertia.Controller do
     end
   end
 
+  # Handle inline shared props: inertia_shared do prop :x, :y end
+  # When called as `inertia_shared do ... end`, Elixir transforms to `inertia_shared([do: ...])`
+  defmacro inertia_shared([do: block], _opts) do
+    quote do
+      Module.put_attribute(__MODULE__, :current_page, :__shared__)
+      Module.delete_attribute(__MODULE__, :current_props)
+
+      unquote(block)
+
+      shared_props = Module.get_attribute(__MODULE__, :current_props) |> Enum.reverse()
+      Module.put_attribute(__MODULE__, :inertia_shared, shared_props)
+      Module.delete_attribute(__MODULE__, :current_page)
+      Module.delete_attribute(__MODULE__, :current_props)
+    end
+  end
+
+  # Handle inline shared props with options: inertia_shared opts, do: ... end
   defmacro inertia_shared(opts, do: block) when is_list(opts) do
     quote do
       Module.put_attribute(__MODULE__, :current_page, :__shared__)
@@ -941,13 +959,14 @@ defmodule NbInertia.Controller do
         provided_prop_names = Keyword.keys(props) |> MapSet.new()
         declared_prop_names = Enum.map(declared_props, & &1.name) |> MapSet.new()
 
-        # Find required props
+        # Find required props (exclude optional, lazy, defer, and from: :assigns)
         required_props =
           declared_props
           |> Enum.reject(fn prop ->
             Keyword.get(prop.opts, :optional, false) ||
               Keyword.get(prop.opts, :lazy, false) ||
-              Keyword.get(prop.opts, :defer, false)
+              Keyword.get(prop.opts, :defer, false) ||
+              Keyword.get(prop.opts, :from, nil) == :assigns
           end)
           |> MapSet.new(& &1.name)
 
