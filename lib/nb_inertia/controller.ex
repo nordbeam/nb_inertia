@@ -1994,7 +1994,9 @@ defmodule NbInertia.Controller do
 
   defp serialize_prop_value({serializer, data}) when is_atom(serializer) do
     if Code.ensure_loaded?(NbSerializer) do
-      case NbSerializer.serialize(serializer, data, camelize: false) do
+      camelize = NbInertia.Config.camelize_props?()
+
+      case NbSerializer.serialize(serializer, data, camelize: camelize) do
         {:ok, serialized} -> serialized
         {:error, _} -> data
       end
@@ -2006,7 +2008,8 @@ defmodule NbInertia.Controller do
   defp serialize_prop_value({serializer, data, opts})
        when is_atom(serializer) and is_list(opts) do
     if Code.ensure_loaded?(NbSerializer) do
-      serialization_opts = Keyword.merge([camelize: false], opts[:opts] || [])
+      camelize = NbInertia.Config.camelize_props?()
+      serialization_opts = Keyword.merge([camelize: camelize], opts[:opts] || [])
 
       case NbSerializer.serialize(serializer, data, serialization_opts) do
         {:ok, serialized} -> serialized

@@ -13,6 +13,9 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 - **Flexible Rendering**: Support for both all-in-one and pipe-friendly patterns
 - **Test Helpers**: Comprehensive test utilities for Inertia pages
 - **Optional Dependency**: Works standalone or with NbSerializer for advanced features
+- **Real-Time Updates**: WebSocket integration via Phoenix Channels with declarative strategies
+- **Modal System**: Render pages as modals/slideovers without full page navigation
+- **Credo Checks**: 8 custom Credo checks for compile-time code quality validation
 
 ## Installation
 
@@ -1886,6 +1889,107 @@ import { ModalLink } from '@/modals/ModalLink';
 // Vue
 import { Modal } from '@/modals/Modal.vue';
 import { ModalLink } from '@/modals/ModalLink.vue';
+```
+
+## Real-Time Updates via Phoenix Channels
+
+NbInertia provides real-time prop updates via Phoenix Channels, eliminating the need for polling. This integration leverages Phoenix's excellent WebSocket support while maintaining Inertia.js's prop-based architecture.
+
+### Setup
+
+Run the generator to set up WebSocket support:
+
+```bash
+mix nb_inertia.gen.realtime
+```
+
+### Usage
+
+```typescript
+import { socket, useChannel, useRealtimeProps } from '@/lib/socket';
+import type { ChatRoomProps } from '@/types';
+
+export default function ChatRoom({ room }: ChatRoomProps) {
+  const { props, setProp } = useRealtimeProps<ChatRoomProps>();
+
+  useChannel(socket, `chat:${room.id}`, {
+    message_created: ({ message }) => {
+      setProp('messages', msgs => [...msgs, message]);
+    },
+    message_deleted: ({ id }) => {
+      setProp('messages', msgs => msgs.filter(m => m.id !== id));
+    }
+  });
+
+  return (
+    <div>
+      {props.messages.map(msg => (
+        <Message key={msg.id} message={msg} />
+      ))}
+    </div>
+  );
+}
+```
+
+### Declarative Strategies
+
+For complex apps, use `useChannelProps` for declarative event handling:
+
+```typescript
+import { socket, useChannelProps } from '@/lib/socket';
+
+const { props } = useChannelProps(socket, `chat:${room.id}`, {
+  message_created: { prop: 'messages', strategy: 'append', transform: e => e.message },
+  message_deleted: { prop: 'messages', strategy: 'remove', match: (msg, e) => msg.id === e.id },
+  message_edited: { prop: 'messages', strategy: 'update', key: 'id', transform: e => e.message },
+  room_updated: { prop: 'room', strategy: 'replace', transform: e => e.room }
+});
+```
+
+**Available Strategies:**
+- `append` / `prepend` - Add items to arrays
+- `remove` - Remove items matching predicate
+- `update` / `upsert` - Update items in place
+- `replace` - Replace entire prop
+- `reload` - Reload prop(s) from server
+
+### Available Hooks
+
+- `useChannel` - Subscribe to Phoenix Channel events
+- `useRealtimeProps` - Manage props with optimistic updates
+- `usePresence` - Track Phoenix Presence state
+- `useChannelProps` - Declarative event-to-prop mapping
+
+## Credo Checks
+
+NbInertia includes 8 custom Credo checks for code quality:
+
+| Check | Priority | Description |
+|-------|----------|-------------|
+| `NbInertia.Credo.InertiaPageWithoutProps` | HIGH | Detects `inertia_page` blocks without any props |
+| `NbInertia.Credo.DuplicateProps` | HIGH | Detects duplicate prop definitions |
+| `NbInertia.Credo.MissingSharedPropsModule` | NORMAL | Warns when `inertia_shared` references missing module |
+| `NbInertia.Credo.UnusedInertiaPage` | NORMAL | Detects unused `inertia_page` definitions |
+| `NbInertia.Credo.LargePropsCount` | LOW | Warns when page has too many props (configurable) |
+| `NbInertia.Credo.PropWithoutType` | HIGH | Detects props without explicit types |
+| `NbInertia.Credo.SharedPropsCollision` | HIGH | Detects prop name collisions between shared and page props |
+| `NbInertia.Credo.MissingSerializerType` | NORMAL | Warns when using serializer without proper type annotation |
+
+Enable in `.credo.exs`:
+
+```elixir
+%{
+  configs: [
+    %{
+      checks: [
+        {NbInertia.Credo.PropWithoutType, []},
+        {NbInertia.Credo.DuplicateProps, []},
+        {NbInertia.Credo.SharedPropsCollision, []},
+        # ... other checks
+      ]
+    }
+  ]
+}
 ```
 
 ## Related Projects

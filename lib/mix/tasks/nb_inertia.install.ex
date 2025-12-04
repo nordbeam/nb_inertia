@@ -48,6 +48,8 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
         --history-encrypt             Enable history encryption (stored in :nb_inertia config)
         --typescript                  Enable TypeScript
         --ssr                         Enable Server-Side Rendering (SSR) support
+        --with-flop                   Install nb_flop for pagination, sorting, and filtering
+        --table                       Generate sample Table DSL module (requires --with-flop)
         --yes                         Don't prompt for confirmations
 
     ## Examples
@@ -64,6 +66,12 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     # Install with React, TypeScript, and SSR support
     mix nb_inertia.install --client-framework react --typescript --ssr
+
+    # Install with React, TypeScript, and Flop integration
+    mix nb_inertia.install --client-framework react --typescript --with-flop
+
+    # Install with Flop and sample Table DSL
+    mix nb_inertia.install --client-framework react --typescript --with-flop --table
     ```
 
     ## Using with nb_vite
@@ -108,10 +116,12 @@ if Code.ensure_loaded?(Igniter) do
           history_encrypt: :boolean,
           typescript: :boolean,
           ssr: :boolean,
+          with_flop: :boolean,
+          table: :boolean,
           yes: :boolean
         ],
         example: __MODULE__.Docs.example(),
-        defaults: [client_framework: "react"],
+        defaults: [client_framework: "react", with_flop: false, table: false],
         positional: [],
         composes: ["deps.get"]
       }
@@ -132,6 +142,7 @@ if Code.ensure_loaded?(Igniter) do
       |> setup_client()
       |> maybe_setup_ssr()
       |> maybe_setup_nb_ts()
+      |> maybe_setup_nb_flop()
       |> create_sample_page()
       |> update_page_controller()
       |> create_lib_inertia()
@@ -1123,6 +1134,32 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
+    def maybe_setup_nb_flop(igniter) do
+      with_flop = igniter.args.options[:with_flop] || false
+      with_table = igniter.args.options[:table] || false
+
+      if with_flop do
+        # Only add nb_flop dependency if not already present
+        igniter =
+          case Igniter.Project.Deps.get_dep(igniter, :nb_flop) do
+            {:ok, _} ->
+              igniter
+
+            {:error, _} ->
+              Igniter.Project.Deps.add_dep(igniter, {:nb_flop, github: "nordbeam/nb_flop"})
+          end
+
+        # Build args for nb_flop.install
+        args = if with_table, do: ["--table"], else: []
+
+        # Compose the nb_flop installer
+        Igniter.compose_task(igniter, "nb_flop.install", args)
+      else
+        igniter
+      end
+    end
+
+    @doc false
     def create_sample_page(igniter) do
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
@@ -1374,6 +1411,7 @@ if Code.ensure_loaded?(Igniter) do
       camelize_props = igniter.args.options[:camelize_props] || false
       history_encrypt = igniter.args.options[:history_encrypt] || false
       ssr_enabled = igniter.args.options[:ssr] || false
+      with_flop = igniter.args.options[:with_flop] || false
       using_vite = using_nb_vite?(igniter)
       using_bun_runtime = using_bun?(igniter)
       pkg_manager = get_package_manager_command(igniter)
@@ -1493,6 +1531,36 @@ if Code.ensure_loaded?(Igniter) do
           ""
         end
 
+      flop_info =
+        if with_flop do
+          """
+
+          Flop Integration (nb_flop):
+          - Added {:nb_flop, "~> 0.1"} and {:flop, "~> 0.26"} for pagination, sorting, and filtering
+          - Generated Flop serializers to lib/your_app_web/serializers/
+          - Copied React components to assets/js/components/flop/
+          - Installed @tanstack/react-table
+
+          Prerequisites for Flop components (shadcn/ui):
+              npx shadcn@latest add button badge popover dropdown-menu command input
+
+          Usage:
+          1. Add @derive Flop.Schema to your Ecto schemas
+          2. Use FlopMetaSerializer in your controllers:
+
+             render_inertia(conn, :posts_index,
+               posts: {PostSerializer, posts},
+               meta: {FlopMetaSerializer, meta, schema: Post}
+             )
+
+          3. Use Flop components in your frontend:
+
+             import { Pagination, FilterBar, DataTable } from '@/components/flop';
+          """
+        else
+          ""
+        end
+
       lib_inertia_info =
         if client_framework == "react" do
           extension = if typescript, do: "ts", else: "js"
@@ -1571,7 +1639,7 @@ if Code.ensure_loaded?(Igniter) do
       NbInertia has been successfully installed!
 
       What was configured:
-      - Added {:nb_inertia, "~> 0.1"} and {:inertia, "~> 2.5"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}
+      - Added {:nb_inertia, "~> 0.1"} and {:inertia, "~> 2.5"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}#{if with_flop, do: "\n- Added {:nb_flop, \"~> 0.1\"} and {:flop, \"~> 0.26\"} for pagination, sorting, and filtering", else: ""}
       - Set up controller helpers (use NbInertia.Controller)
       - Set up HTML helpers (import Inertia.HTML)
       - Added plug Inertia.Plug to the browser pipeline
@@ -1579,7 +1647,7 @@ if Code.ensure_loaded?(Igniter) do
       #{bundler_info}
       - Package manager: #{pkg_manager}#{config_info}
       - Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}
-      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{if client_framework == "react", do: "\n- Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)", else: ""}#{typescript_info}#{lib_inertia_info}#{ssr_info}
+      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{if client_framework == "react", do: "\n- Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)", else: ""}#{typescript_info}#{flop_info}#{lib_inertia_info}#{ssr_info}
 
       Next steps:
       1. Create an Inertia-enabled controller action:
@@ -1613,7 +1681,7 @@ if Code.ensure_loaded?(Igniter) do
 
       For more information:
       - NbInertia docs: https://hexdocs.pm/nb_inertia
-      - Inertia.js docs: https://inertiajs.com#{if typescript, do: "\n      - NbTs docs: https://hexdocs.pm/nb_ts", else: ""}
+      - Inertia.js docs: https://inertiajs.com#{if typescript, do: "\n      - NbTs docs: https://hexdocs.pm/nb_ts", else: ""}#{if with_flop, do: "\n      - NbFlop docs: https://hexdocs.pm/nb_flop\n      - Flop docs: https://hexdocs.pm/flop", else: ""}
       """
 
       Igniter.add_notice(igniter, next_steps)

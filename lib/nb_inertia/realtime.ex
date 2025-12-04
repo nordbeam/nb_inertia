@@ -182,7 +182,7 @@ defmodule NbInertia.Realtime do
   Serialize a payload for broadcasting.
 
   Handles tuple serialization for values:
-  - `{SerializerModule, data}` - Calls `SerializerModule.serialize(data)`
+  - `{SerializerModule, data}` - Calls `SerializerModule.serialize(data, [])`
   - `{SerializerModule, data, opts}` - Calls `SerializerModule.serialize(data, opts)`
   - Plain values - Passed through unchanged
 
@@ -202,19 +202,11 @@ defmodule NbInertia.Realtime do
   end
 
   defp serialize_value({serializer, data}) when is_atom(serializer) do
-    if function_exported?(serializer, :serialize, 1) do
-      serializer.serialize(data)
-    else
-      {serializer, data}
-    end
+    serializer.serialize(data, [])
   end
 
   defp serialize_value({serializer, data, opts}) when is_atom(serializer) and is_list(opts) do
-    if function_exported?(serializer, :serialize, 2) do
-      serializer.serialize(data, opts)
-    else
-      {serializer, data, opts}
-    end
+    serializer.serialize(data, opts)
   end
 
   defp serialize_value(value), do: value
