@@ -55,6 +55,7 @@ defmodule NbInertia.MixProject do
 
       # Optional dependencies
       {:nb_serializer, github: "nordbeam/nb_serializer", optional: true},
+      {:req, "~> 0.5", optional: true},
 
       # Development and test dependencies
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},

@@ -1,28 +1,23 @@
 import { useForm as u } from "@inertiajs/react";
-function s(r) {
-  if (typeof r != "object" || r === null)
-    return !1;
-  const t = r;
-  return typeof t.url == "string" && typeof t.method == "string" && ["get", "post", "put", "patch", "delete", "head"].includes(t.method);
-}
-function i(r, t) {
-  const o = u(r);
-  return !t || !s(t) ? {
-    ...o,
-    transform(e) {
-      return o.transform(e);
+import { isRouteResult as s } from "../shared/types.js";
+function a(t, o) {
+  const r = u(t);
+  return !o || !s(o) ? {
+    ...r,
+    transform(m) {
+      return r.transform(m);
     }
   } : {
-    ...o,
+    ...r,
     submit(n) {
-      return o.submit(t.method, t.url, n);
+      return r.submit(o.method, o.url, n);
     },
     transform(n) {
-      return o.transform(n);
+      return r.transform(n);
     }
   };
 }
 export {
-  i as default,
-  i as useForm
+  a as default,
+  a as useForm
 };

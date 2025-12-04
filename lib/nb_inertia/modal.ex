@@ -39,11 +39,7 @@ defmodule NbInertia.Modal do
           optional(:position) => position(),
           optional(:slideover) => boolean(),
           optional(:closeButton) => boolean(),
-          optional(:closeExplicitly) => boolean(),
-          optional(:maxWidth) => String.t(),
-          optional(:paddingClasses) => String.t(),
-          optional(:panelClasses) => String.t(),
-          optional(:backdropClasses) => String.t()
+          optional(:closeExplicitly) => boolean()
         }
 
   @type t :: %__MODULE__{
@@ -150,43 +146,25 @@ defmodule NbInertia.Modal do
   end
 
   @doc """
-  Sets the base URL using a route helper and parameters.
+  Sets the base URL using a RouteResult from nb_routes.
 
-  This is a convenience function for setting the base URL using Phoenix route
-  helpers. It requires the `nb_routes` package to be installed.
+  This is a convenience function for setting the base URL using nb_routes
+  rich mode RouteResult structs.
 
   ## Parameters
 
     - `modal` - The Modal struct
-    - `route_helper` - A route helper function or RouteResult struct
-    - `params` - Optional parameters for the route (default: [])
+    - `route_result` - A RouteResult struct from nb_routes (e.g., `users_path()`)
 
   ## Example
 
       iex> modal = NbInertia.Modal.new("Users/Show", %{})
-      iex> NbInertia.Modal.base_route(modal, &Routes.users_path/3, [:index])
-      %NbInertia.Modal{base_url: "/users", ...}
-
-      # With nb_routes rich mode
       iex> NbInertia.Modal.base_route(modal, users_path())
       %NbInertia.Modal{base_url: "/users", ...}
   """
-  @spec base_route(t(), function() | map(), list()) :: t()
-  # Default parameter declaration
-  def base_route(modal, route_or_result, params \\ [])
-
-  # Handle nb_routes RouteResult struct
-  def base_route(%Modal{} = modal, %{url: url}, params) when is_binary(url) do
-    _ = params
+  @spec base_route(t(), map()) :: t()
+  def base_route(%Modal{} = modal, %{url: url}) when is_binary(url) do
     base_url(modal, url)
-  end
-
-  # Handle traditional route helper function
-  def base_route(%Modal{} = _modal, route_helper, params) when is_function(route_helper) do
-    _ = params
-    # Assume conn and action are provided in params
-    # This is a simplified implementation - in practice, you'd need conn from context
-    raise "base_route/3 with function requires nb_routes rich mode RouteResult structs"
   end
 
   @doc """
@@ -297,82 +275,6 @@ defmodule NbInertia.Modal do
   @spec close_explicitly(t(), boolean()) :: t()
   def close_explicitly(%Modal{} = modal, enabled \\ true) do
     put_config(modal, :closeExplicitly, enabled)
-  end
-
-  @doc """
-  Sets custom max-width for the modal.
-
-  ## Parameters
-
-    - `modal` - The Modal struct
-    - `max_width` - CSS max-width value (e.g., "800px", "50rem")
-
-  ## Example
-
-      iex> modal = NbInertia.Modal.new("Users/Show", %{})
-      iex> NbInertia.Modal.max_width(modal, "800px")
-      %NbInertia.Modal{config: %{maxWidth: "800px"}, ...}
-  """
-  @spec max_width(t(), String.t()) :: t()
-  def max_width(%Modal{} = modal, max_width) when is_binary(max_width) do
-    put_config(modal, :maxWidth, max_width)
-  end
-
-  @doc """
-  Sets custom padding classes for the modal content.
-
-  ## Parameters
-
-    - `modal` - The Modal struct
-    - `classes` - CSS class string (e.g., "p-6", "px-4 py-6")
-
-  ## Example
-
-      iex> modal = NbInertia.Modal.new("Users/Show", %{})
-      iex> NbInertia.Modal.padding_classes(modal, "p-8")
-      %NbInertia.Modal{config: %{paddingClasses: "p-8"}, ...}
-  """
-  @spec padding_classes(t(), String.t()) :: t()
-  def padding_classes(%Modal{} = modal, classes) when is_binary(classes) do
-    put_config(modal, :paddingClasses, classes)
-  end
-
-  @doc """
-  Sets custom panel classes for the modal container.
-
-  ## Parameters
-
-    - `modal` - The Modal struct
-    - `classes` - CSS class string
-
-  ## Example
-
-      iex> modal = NbInertia.Modal.new("Users/Show", %{})
-      iex> NbInertia.Modal.panel_classes(modal, "bg-gray-900 text-white")
-      %NbInertia.Modal{config: %{panelClasses: "bg-gray-900 text-white"}, ...}
-  """
-  @spec panel_classes(t(), String.t()) :: t()
-  def panel_classes(%Modal{} = modal, classes) when is_binary(classes) do
-    put_config(modal, :panelClasses, classes)
-  end
-
-  @doc """
-  Sets custom backdrop classes for the modal overlay.
-
-  ## Parameters
-
-    - `modal` - The Modal struct
-    - `classes` - CSS class string
-
-  ## Example
-
-      iex> modal = NbInertia.Modal.new("Users/Show", %{})
-      iex> NbInertia.Modal.backdrop_classes(modal, "bg-black/75")
-      %NbInertia.Modal{config: %{backdropClasses: "bg-black/75"}, ...}
-  """
-  @spec backdrop_classes(t(), String.t()) :: t()
-  def backdrop_classes(%Modal{} = modal, classes) when is_binary(classes) do
-    put_config(modal, :backdropClasses, classes)
   end
 
   # Private helpers

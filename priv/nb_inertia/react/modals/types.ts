@@ -19,36 +19,37 @@ export type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | str
 /**
  * Configuration for a modal instance
  *
- * This interface defines all available configuration options for modals and slideovers.
+ * This interface defines behavioral configuration options for modals.
+ * Styling is left to the user's UI implementation.
  * All fields are optional with sensible defaults.
  */
 export interface ModalConfig {
   /**
-   * Size of the modal
+   * Size hint for the modal
    * @default 'md'
    *
    * Presets: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full'
-   * Custom: Any valid CSS class string (e.g., 'max-w-4xl')
+   * Your UI implementation can interpret this however you like.
    */
   size?: ModalSize;
 
   /**
-   * Position of the modal on screen
+   * Position hint for the modal
    * @default 'center'
    *
    * Presets: 'center' | 'top' | 'bottom' | 'left' | 'right'
-   * Custom: Any valid CSS class string
+   * Your UI implementation can interpret this however you like.
    */
   position?: ModalPosition;
 
   /**
-   * Whether this is a slideover (slides in from side) instead of a modal
+   * Whether this is a slideover (slides in from side) instead of a centered modal
    * @default false
    */
   slideover?: boolean;
 
   /**
-   * Show a close button in the top-right corner
+   * Whether to show a close button
    * @default true
    */
   closeButton?: boolean;
@@ -60,55 +61,11 @@ export interface ModalConfig {
   closeExplicitly?: boolean;
 
   /**
-   * Custom max-width CSS value
-   * @example '800px', '50rem'
+   * Any additional custom data your UI implementation needs
+   * This is passed through to your modal renderer unchanged.
    */
-  maxWidth?: string;
-
-  /**
-   * Custom padding classes for modal content
-   * @default 'p-6'
-   * @example 'p-8', 'px-4 py-6'
-   */
-  paddingClasses?: string;
-
-  /**
-   * Custom panel classes for the modal container
-   * @default 'bg-white rounded-lg shadow-xl'
-   * @example 'bg-gray-900 text-white rounded-xl'
-   */
-  panelClasses?: string;
-
-  /**
-   * Custom backdrop classes for the overlay
-   * @default 'bg-black/50'
-   * @example 'bg-gray-900/75', 'backdrop-blur-sm'
-   */
-  backdropClasses?: string;
+  [key: string]: unknown;
 }
-
-/**
- * Modal event types
- *
- * Events that can be emitted by modal instances:
- * - close: Modal is closing (can be canceled via beforeClose)
- * - success: Modal closed successfully with a success action
- * - blur: Modal lost focus (another modal opened on top)
- * - focus: Modal gained focus (became the top modal)
- * - beforeClose: About to close (return false to cancel)
- */
-export type ModalEventType = 'close' | 'success' | 'blur' | 'focus' | 'beforeClose';
-
-/**
- * Modal event handler function
- *
- * @param modal - The modal instance that emitted the event
- * @returns void, boolean, or Promise<void | boolean>
- *          - void/undefined: Event continues normally
- *          - true: Event continues (explicit confirmation)
- *          - false: Event is canceled (only for beforeClose)
- */
-export type ModalEventHandler = (modal: ModalInstance) => void | boolean | Promise<void | boolean>;
 
 /**
  * Represents a modal instance in the stack
@@ -129,9 +86,19 @@ export interface ModalInstance {
   component: React.ComponentType<any>;
 
   /**
+   * The component name (e.g., "Users/Edit") for page context
+   */
+  componentName: string;
+
+  /**
    * Props to pass to the component
    */
   props: Record<string, any>;
+
+  /**
+   * The URL of the modal page (for page context)
+   */
+  url: string;
 
   /**
    * Modal configuration (size, position, etc.)
@@ -147,18 +114,27 @@ export interface ModalInstance {
   baseUrl: string;
 
   /**
-   * Index in the modal stack
-   *
-   * 0 = bottom (first modal), higher numbers = on top.
-   * Used for z-indexing when multiple modals are stacked.
+   * Callback invoked when the modal is closed
    */
-  index: number;
+  onClose?: () => void;
 
   /**
-   * Event handlers registered for this modal
-   * @internal
+   * Whether the modal is in a loading state (waiting for content)
+   *
+   * When true, the modal shell is displayed with a loading indicator
+   * while the actual content is being fetched from the server.
+   * @default false
    */
-  eventHandlers: Map<ModalEventType, Set<ModalEventHandler>>;
+  loading?: boolean;
+
+  /**
+   * Custom loading component to display while loading
+   *
+   * If not provided, a default spinner/skeleton will be shown.
+   * This allows customizing the loading UI per modal.
+   */
+  loadingComponent?: React.ComponentType;
+
 }
 
 /**
@@ -175,7 +151,7 @@ export interface ModalStackContextValue {
   /**
    * Push a new modal onto the stack
    *
-   * @param modal - Modal data without id, index, and eventHandlers (auto-generated)
+   * @param modal - Modal data without id (auto-generated)
    * @returns The ID of the newly created modal
    *
    * @example
@@ -188,7 +164,7 @@ export interface ModalStackContextValue {
    * });
    * ```
    */
-  pushModal: (modal: Omit<ModalInstance, 'id' | 'index' | 'eventHandlers'>) => string;
+  pushModal: (modal: Omit<ModalInstance, 'id'>) => string;
 
   /**
    * Remove a modal from the stack by ID
@@ -229,78 +205,94 @@ export interface ModalStackContextValue {
   getModal: (id: string) => ModalInstance | undefined;
 
   /**
-   * Register an event listener for a modal
+   * Update an existing modal's properties
    *
-   * @param id - ID of the modal
-   * @param event - Event type to listen for
-   * @param handler - Event handler function
+   * Used to replace a loading modal's placeholder content with actual content
+   * when the server response arrives.
+   *
+   * @param id - ID of the modal to update
+   * @param updates - Partial modal data to merge with existing modal
    *
    * @example
    * ```tsx
-   * addEventListener('modal-0', 'beforeClose', async (modal) => {
-   *   const confirmed = await confirm('Close modal?');
-   *   return confirmed; // Return false to cancel close
+   * // Update a loading modal with actual content
+   * updateModal('modal-0', {
+   *   component: ActualComponent,
+   *   componentName: 'Users/Show',
+   *   props: { user: fetchedUser },
+   *   loading: false,
    * });
    * ```
    */
-  addEventListener: (id: string, event: ModalEventType, handler: ModalEventHandler) => void;
+  updateModal: (id: string, updates: Partial<Omit<ModalInstance, 'id'>>) => void;
 
   /**
-   * Remove an event listener from a modal
+   * Function to resolve component names to React components.
+   * This is provided by the app and used for prefetching component modules.
    *
-   * @param id - ID of the modal
-   * @param event - Event type to remove handler for
-   * @param handler - Event handler function to remove
-   *
-   * @example
-   * ```tsx
-   * removeEventListener('modal-0', 'close', myHandler);
-   * ```
+   * Returns undefined if not provided to ModalStackProvider.
    */
-  removeEventListener: (id: string, event: ModalEventType, handler: ModalEventHandler) => void;
+  resolveComponent?: (name: string) => Promise<React.ComponentType<any>>;
 
   /**
-   * Emit an event for a modal
+   * Prefetch data and component for a modal URL.
+   * Only available if resolveComponent is provided.
    *
-   * @param id - ID of the modal
-   * @param event - Event type to emit
-   * @returns Promise resolving to true if event should continue, false if canceled
+   * This handles:
+   * 1. Prefetching page data via Inertia
+   * 2. Preloading the React component module
    *
-   * @example
-   * ```tsx
-   * const shouldClose = await emitEvent('modal-0', 'beforeClose');
-   * if (shouldClose) {
-   *   // Proceed with close
-   * }
-   * ```
+   * @param url - The URL to prefetch
+   * @param options - Prefetch options
    */
-  emitEvent: (id: string, event: ModalEventType) => Promise<boolean>;
+  prefetchModal?: (url: string, options?: { cacheFor?: number }) => void;
+
+  /**
+   * Cache of prefetched modal data
+   * Maps URL to { data, component, timestamp }
+   */
+  getPrefetchedModal?: (url: string) => PrefetchedModal | undefined;
 }
 
 /**
- * Default modal configuration
- *
- * These are the default values used when configuration options are not specified.
+ * Cached prefetch data for a modal
  */
-export const DEFAULT_MODAL_CONFIG: Required<ModalConfig> = {
-  size: 'md',
-  position: 'center',
+export interface PrefetchedModal {
+  /** The prefetched page data (from _nb_modal) */
+  data: {
+    component: string;
+    props: Record<string, any>;
+    url: string;
+    baseUrl: string;
+    config?: ModalConfig;
+  };
+  /** The resolved React component */
+  component: React.ComponentType<any>;
+  /** When this was prefetched */
+  timestamp: number;
+}
+
+/**
+ * Default behavioral modal configuration
+ *
+ * These are the default behavioral values. UI styling defaults
+ * should be defined in your own modal renderer implementation.
+ */
+export const DEFAULT_MODAL_CONFIG = {
+  size: 'md' as ModalSize,
+  position: 'center' as ModalPosition,
   slideover: false,
   closeButton: true,
   closeExplicitly: false,
-  maxWidth: '',
-  paddingClasses: 'p-6',
-  panelClasses: 'bg-white rounded-lg shadow-xl',
-  backdropClasses: 'bg-black/50',
 };
 
 /**
- * Merge user config with defaults
+ * Merge user config with behavioral defaults
  *
  * @param config - User-provided configuration
  * @returns Merged configuration with defaults
  */
-export function mergeModalConfig(config?: ModalConfig): Required<ModalConfig> {
+export function mergeModalConfig(config?: ModalConfig): ModalConfig {
   return {
     ...DEFAULT_MODAL_CONFIG,
     ...config,

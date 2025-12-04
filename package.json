@@ -1,7 +1,7 @@
 {
   "name": "@nordbeam/nb-inertia",
-  "version": "0.7.4",
-  "description": "Enhanced Inertia.js integration for Phoenix with nb_routes support and modal components",
+  "version": "0.9.0",
+  "description": "Modal system, route-bound forms, and SSR-safe components for Phoenix + Inertia.js",
   "type": "module",
   "author": "Nordbeam",
   "license": "MIT",
@@ -29,13 +29,9 @@
     "dev": "vite build --watch"
   },
   "exports": {
-    "./react/router": {
-      "import": "./dist/react/router.js",
-      "types": "./dist/react/router.d.ts"
-    },
-    "./react/Link": {
-      "import": "./dist/react/Link.js",
-      "types": "./dist/react/Link.d.ts"
+    "./shared/types": {
+      "import": "./dist/shared/types.js",
+      "types": "./dist/shared/types.d.ts"
     },
     "./react/useForm": {
       "import": "./dist/react/useForm.js",
@@ -45,16 +41,17 @@
       "import": "./dist/react/useRoutes.js",
       "types": "./dist/react/useRoutes.d.ts"
     },
+    "./react/usePage": {
+      "import": "./dist/react/usePage.js",
+      "types": "./dist/react/usePage.d.ts"
+    },
+    "./react/Head": {
+      "import": "./dist/react/Head.js",
+      "types": "./dist/react/Head.d.ts"
+    },
     "./react/modals": {
       "import": "./dist/react/modals/index.js",
       "types": "./dist/react/modals/index.d.ts"
-    },
-    "./vue/router": {
-      "import": "./priv/nb_inertia/vue/router.ts",
-      "types": "./priv/nb_inertia/vue/router.ts"
-    },
-    "./vue/Link": {
-      "import": "./priv/nb_inertia/vue/Link.vue"
     },
     "./vue/useForm": {
       "import": "./priv/nb_inertia/vue/useForm.ts",
@@ -68,8 +65,7 @@
   "files": [
     "dist",
     "priv/nb_inertia/vue",
-    "lib",
-    "mix.exs",
+    "priv/nb_inertia/shared",
     "README.md",
     "LICENSE"
   ],

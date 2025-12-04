@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useForm } from '../useForm';
-import type { RouteResult } from '../router';
+import type { RouteResult } from '../../shared/types';
 
 // Mock Inertia useForm
 const mockSubmit = vi.fn();

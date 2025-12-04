@@ -253,48 +253,6 @@ defmodule NbInertia.Config do
   end
 
   @doc """
-  Returns custom CSS classes for modal backdrops.
-
-  Defaults to `nil`.
-
-  ## Examples
-
-      config :nb_inertia,
-        modal_backdrop_classes: "bg-black/75"
-  """
-  def modal_backdrop_classes do
-    get(:modal_backdrop_classes)
-  end
-
-  @doc """
-  Returns custom CSS classes for modal panels.
-
-  Defaults to `nil`.
-
-  ## Examples
-
-      config :nb_inertia,
-        modal_panel_classes: "bg-white dark:bg-gray-900"
-  """
-  def modal_panel_classes do
-    get(:modal_panel_classes)
-  end
-
-  @doc """
-  Returns custom CSS classes for modal content padding.
-
-  Defaults to `nil`.
-
-  ## Examples
-
-      config :nb_inertia,
-        modal_padding_classes: "p-6 sm:p-8"
-  """
-  def modal_padding_classes do
-    get(:modal_padding_classes)
-  end
-
-  @doc """
   Returns whether props should be automatically camelized for Inertia.
 
   Defaults to `true` to match Inertia.js conventions.

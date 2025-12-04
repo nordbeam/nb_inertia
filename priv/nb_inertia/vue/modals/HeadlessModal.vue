@@ -4,7 +4,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onUnmounted, computed } from 'vue';
-import { router } from '../router';
+import { router } from '@inertiajs/vue3';
 import { useModalStack } from './modalStack';
 import type { ModalConfig } from './types';
 import type { Component } from 'vue';

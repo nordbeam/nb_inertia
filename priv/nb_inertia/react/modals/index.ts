@@ -1,93 +1,103 @@
 /**
- * NbInertia Modal System - Public API
+ * NbInertia Modal System - Hook-First API
  *
- * This module provides a complete modal and slideover system for Inertia.js applications
- * built on Radix UI Dialog primitives. It includes:
+ * This module provides a hook-first modal system for Inertia.js applications.
+ * It handles the hard parts (state management, history integration, prop handling)
+ * while you bring your own UI (Radix, shadcn, Headless UI, etc.).
  *
- * - Modal stack management with support for nested modals
- * - Event system for modal lifecycle hooks
- * - Styled modal and slideover components
- * - Integration with nb_routes for type-safe navigation
- * - Full TypeScript support
- *
- * @example Basic usage
+ * @example Basic setup with your own UI
  * ```tsx
- * import { ModalStackProvider, Modal } from '@/modals';
+ * import {
+ *   ModalStackProvider,
+ *   useModalStack,
+ *   InitialModalHandler,
+ * } from '@nordbeam/nb-inertia/modals';
+ * import { Dialog } from '@radix-ui/react-dialog';
  *
- * function App() {
+ * // Set up component resolver (using Vite's import.meta.glob)
+ * const pages = import.meta.glob('./pages/**\/*.tsx');
+ * const resolveComponent = (name: string) =>
+ *   pages[`./pages/${name}.tsx`]().then((m: any) => m.default);
+ *
+ * function App({ Component, props }) {
  *   return (
  *     <ModalStackProvider>
- *       <YourApp />
+ *       <Component {...props} />
+ *       <InitialModalHandler resolveComponent={resolveComponent} />
+ *       <MyModalRenderer resolveComponent={resolveComponent} />
  *     </ModalStackProvider>
  *   );
  * }
  *
- * function UserProfile() {
- *   return (
- *     <Modal
- *       component={UserProfileContent}
- *       componentProps={{ userId: 1 }}
- *       baseUrl="/users"
- *       config={{ size: 'lg' }}
- *     >
- *       {(close) => <button onClick={close}>Close</button>}
- *     </Modal>
- *   );
+ * // Your custom modal renderer using any UI library
+ * function MyModalRenderer({ resolveComponent }) {
+ *   const { modals, popModal } = useModalStack();
+ *
+ *   return modals.map((modal) => (
+ *     <Dialog key={modal.id} open onOpenChange={() => popModal(modal.id)}>
+ *       <ModalPageProvider props={modal.props}>
+ *         <modal.component {...modal.props} />
+ *       </ModalPageProvider>
+ *     </Dialog>
+ *   ));
  * }
  * ```
  *
- * @example With ModalLink
+ * @example Using ModalLink with your UI
  * ```tsx
- * import { ModalLink } from '@/modals';
+ * import { ModalLink } from '@nordbeam/nb-inertia/modals';
  * import { user_path } from '@/routes';
  *
- * function UsersList() {
- *   return (
- *     <ModalLink href={user_path(1)} modalConfig={{ size: 'lg' }}>
- *       View User
- *     </ModalLink>
- *   );
- * }
+ * // ModalLink triggers the fetch, your renderer handles the display
+ * <ModalLink href={user_path(1)}>View User</ModalLink>
  * ```
  */
 
-// Core modal stack management
+// Core modal stack management (hooks and context)
 export {
   ModalStackProvider,
   useModalStack,
   useModal,
+  // Modal page context utilities
+  useIsInModal,
+  useModalPageContext,
+  ModalPageProvider,
 } from './modalStack';
 
-// Modal components
-export { Modal } from './Modal';
-export { HeadlessModal } from './HeadlessModal';
-export { ModalLink } from './ModalLink';
+export type {
+  ModalPageObject,
+  ModalPageProviderProps,
+  ModalStackProviderProps,
+  ResolveComponentFn,
+} from './modalStack';
 
-// Content components
-export { ModalContent } from './ModalContent';
-export { SlideoverContent } from './SlideoverContent';
-export { CloseButton } from './CloseButton';
+// Enhanced usePage hook that works in modals
+export { usePage } from './usePage';
+export type { Page } from './usePage';
+
+// Integration component - handles _nb_modal prop and navigation events
+export { InitialModalHandler } from './InitialModalHandler';
+export type { InitialModalHandlerProps, ModalOnBase } from './InitialModalHandler';
+
+// SSR-safe modal link wrapper
+export { ClientModalLink } from './ClientModalLink';
+export type { ClientModalLinkProps } from './ClientModalLink';
+
+// Link component that triggers modal fetches
+export { ModalLink } from './ModalLink';
+export type { ModalLinkProps } from './ModalLink';
 
 // Types and configuration
 export type {
   ModalConfig,
   ModalSize,
   ModalPosition,
-  ModalEventType,
-  ModalEventHandler,
   ModalInstance,
   ModalStackContextValue,
+  PrefetchedModal,
 } from './types';
 
-export {
-  DEFAULT_MODAL_CONFIG,
-  mergeModalConfig,
-} from './types';
+export { DEFAULT_MODAL_CONFIG, mergeModalConfig } from './types';
 
-// Component prop types
-export type { ModalProps } from './Modal';
-export type { HeadlessModalProps } from './HeadlessModal';
-export type { ModalLinkProps } from './ModalLink';
-export type { ModalContentProps } from './ModalContent';
-export type { SlideoverContentProps } from './SlideoverContent';
-export type { CloseButtonProps } from './CloseButton';
+// Modal backdrop preservation (axios interceptor)
+export { setupModalInterceptor, isModalInterceptorRegistered } from '../preserveBackdrop';

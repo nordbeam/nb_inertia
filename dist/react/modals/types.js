@@ -1,21 +1,17 @@
-const s = {
+const o = {
   size: "md",
   position: "center",
   slideover: !1,
   closeButton: !0,
-  closeExplicitly: !1,
-  maxWidth: "",
-  paddingClasses: "p-6",
-  panelClasses: "bg-white rounded-lg shadow-xl",
-  backdropClasses: "bg-black/50"
+  closeExplicitly: !1
 };
-function l(e) {
+function t(e) {
   return {
-    ...s,
+    ...o,
     ...e
   };
 }
 export {
-  s as DEFAULT_MODAL_CONFIG,
-  l as mergeModalConfig
+  o as DEFAULT_MODAL_CONFIG,
+  t as mergeModalConfig
 };

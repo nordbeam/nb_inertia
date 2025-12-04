@@ -289,7 +289,9 @@ defmodule NbInertia.Controller do
   defmacro inertia_shared(module_or_block, opts \\ [])
 
   # Handle SharedProps module registration: inertia_shared(MyModule, opts)
-  defmacro inertia_shared(module, opts) when is_atom(module) do
+  # Note: Module can be an atom (literal) or {:__aliases__, _, _} (alias)
+  defmacro inertia_shared(module, opts)
+           when is_atom(module) or (is_tuple(module) and elem(module, 0) == :__aliases__) do
     quote do
       config = %{
         module: unquote(module),
@@ -1009,8 +1011,6 @@ defmodule NbInertia.Controller do
     end
 
     quote do
-      import NbInertia.CoreController, only: [assign_prop: 3]
-
       conn_value = unquote(conn)
       page_ref = unquote(page_ref)
       props = unquote(props)
@@ -1094,7 +1094,7 @@ defmodule NbInertia.Controller do
       # Assign raw props
       conn_value =
         Enum.reduce(raw_props, conn_value, fn {key, value}, acc ->
-          assign_prop(acc, key, value)
+          NbInertia.CoreController.assign_prop(acc, key, value)
         end)
 
       # Apply camelization if configured
@@ -1842,8 +1842,6 @@ defmodule NbInertia.Controller do
   defmacro render_inertia_modal(conn, page_ref, props, opts)
            when is_atom(page_ref) and is_list(props) and is_list(opts) do
     quote do
-      import NbInertia.CoreController, only: [assign_prop: 3]
-
       conn_value = unquote(conn)
       page_ref = unquote(page_ref)
       props = unquote(props)
@@ -1852,25 +1850,13 @@ defmodule NbInertia.Controller do
       # Look up the component name
       component = __MODULE__.page(page_ref)
 
-      # Assign props using the same logic as render_inertia
-      {serialized_props, raw_props} =
-        Enum.split_with(props, fn {_key, value} ->
-          is_tuple(value) and tuple_size(value) >= 2 and is_atom(elem(value, 0))
-        end)
+      # Build modal props directly (separate from shared props)
+      # This avoids mixing modal props with shared props from inertia_shared(Auth)
+      modal_props =
+        NbInertia.Controller.build_modal_props(props)
 
-      # Assign serialized props if any
-      conn_value =
-        if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
-          NbInertia.Controller.assign_serialized_props(conn_value, serialized_props)
-        else
-          conn_value
-        end
-
-      # Assign raw props
-      conn_value =
-        Enum.reduce(raw_props, conn_value, fn {key, value}, acc ->
-          assign_prop(acc, key, value)
-        end)
+      # Store in a separate key for modal props
+      conn_value = Plug.Conn.put_private(conn_value, :inertia_modal_props, modal_props)
 
       # Build and render modal
       NbInertia.Controller.do_render_inertia_modal(conn_value, component, opts)
@@ -1956,21 +1942,15 @@ defmodule NbInertia.Controller do
       |> NbInertia.Modal.base_url(base_url)
       |> apply_modal_config_options(opts)
 
-    # First, assign modal props normally
-    shared_props = conn.private[:inertia_shared] || %{}
+    # Get modal-specific props from conn.private[:inertia_modal_props]
+    # These are serialized directly by the render_inertia_modal macro
+    # Don't include shared props here - they're already in the base page
+    modal_props = conn.private[:inertia_modal_props] || %{}
 
-    modal_with_props = %{modal | props: shared_props}
-
-    # Use BaseRenderer to render the modal
-    case NbInertia.Modal.BaseRenderer.render(conn, modal_with_props) do
-      {:ok, conn} ->
-        # Now render the actual Inertia response with the modal data
-        # The BaseRenderer has already injected modal data into conn.assigns
-        NbInertia.Controller.do_render_inertia(conn, component)
-
-      {:error, reason} ->
-        raise RuntimeError, "Failed to render modal: #{inspect(reason)}"
-    end
+    # Renderer handles the complete rendering:
+    # - XHR requests: Returns JSON with _nb_modal prop
+    # - Direct URL: Fetches base page, injects _nb_modal, returns HTML
+    NbInertia.Modal.Renderer.render!(conn, modal, modal_props)
   end
 
   defp apply_modal_config_options(modal, opts) do
@@ -1980,15 +1960,64 @@ defmodule NbInertia.Controller do
       {:slideover, enabled}, acc -> NbInertia.Modal.slideover(acc, enabled)
       {:close_button, enabled}, acc -> NbInertia.Modal.close_button(acc, enabled)
       {:close_explicitly, enabled}, acc -> NbInertia.Modal.close_explicitly(acc, enabled)
-      {:max_width, max_width}, acc -> NbInertia.Modal.max_width(acc, max_width)
-      {:padding_classes, classes}, acc -> NbInertia.Modal.padding_classes(acc, classes)
-      {:panel_classes, classes}, acc -> NbInertia.Modal.panel_classes(acc, classes)
-      {:backdrop_classes, classes}, acc -> NbInertia.Modal.backdrop_classes(acc, classes)
       {:base_url, _}, acc -> acc
       # Ignore unknown options
       _, acc -> acc
     end)
   end
+
+  @doc """
+  Builds modal props from a keyword list, handling serializer tuples.
+
+  This function is called by render_inertia_modal to serialize props directly
+  rather than storing them in conn.private[:inertia_shared] (which also contains
+  shared props from inertia_shared modules).
+
+  ## Examples
+
+      build_modal_props([
+        contact: {ContactSerializer, contact},
+        organizations: {OrganizationSerializer, organizations}
+      ])
+      # => %{contact: %{...}, organizations: [%{...}, ...]}
+  """
+  @spec build_modal_props(keyword()) :: map()
+  def build_modal_props(props) when is_list(props) do
+    props
+    |> Enum.map(fn {key, value} ->
+      # Serialize the value if it's a serializer tuple
+      serialized_value = serialize_prop_value(value)
+      {key, serialized_value}
+    end)
+    |> Map.new()
+  end
+
+  defp serialize_prop_value({serializer, data}) when is_atom(serializer) do
+    if Code.ensure_loaded?(NbSerializer) do
+      case NbSerializer.serialize(serializer, data, camelize: false) do
+        {:ok, serialized} -> serialized
+        {:error, _} -> data
+      end
+    else
+      data
+    end
+  end
+
+  defp serialize_prop_value({serializer, data, opts})
+       when is_atom(serializer) and is_list(opts) do
+    if Code.ensure_loaded?(NbSerializer) do
+      serialization_opts = Keyword.merge([camelize: false], opts[:opts] || [])
+
+      case NbSerializer.serialize(serializer, data, serialization_opts) do
+        {:ok, serialized} -> serialized
+        {:error, _} -> data
+      end
+    else
+      data
+    end
+  end
+
+  defp serialize_prop_value(value), do: value
 
   @doc false
   def do_render_inertia(conn, component) do

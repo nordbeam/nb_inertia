@@ -1,6 +1,6 @@
 import { default as React } from 'react';
-import { RouteResult } from '../router';
-import { ModalConfig } from './HeadlessModal';
+import { RouteResult } from '../../shared/types';
+import { ModalConfig } from './types';
 /**
  * Props for the ModalLink component
  */
@@ -14,16 +14,10 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
     /**
      * Optional modal configuration
      *
-     * Configure the modal appearance and behavior when opened.
+     * Note: This is passed to the backend via query params if needed,
+     * but typically the backend controls modal configuration.
      */
     modalConfig?: ModalConfig;
-    /**
-     * Base URL for the modal
-     *
-     * When the modal closes, the browser will navigate to this URL.
-     * If not provided, uses the current URL.
-     */
-    baseUrl?: string;
     /**
      * HTTP method to use for the request
      *
@@ -36,63 +30,65 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
      */
     data?: Record<string, any>;
     /**
+     * Custom loading component to display while modal content is loading
+     *
+     * If provided, this component will be rendered in the modal shell
+     * while waiting for the server response. If not provided, a default
+     * loading spinner will be shown.
+     *
+     * @example
+     * ```tsx
+     * <ModalLink
+     *   href={edit_user_path(1)}
+     *   loadingComponent={UserFormSkeleton}
+     * >
+     *   Edit User
+     * </ModalLink>
+     * ```
+     */
+    loadingComponent?: React.ComponentType;
+    /**
      * Callback when the link is clicked
      */
     onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+    /**
+     * Enable prefetching. Can be:
+     * - boolean: true enables hover prefetch
+     * - 'hover' | 'mount' | 'click': single mode
+     * - ('hover' | 'mount' | 'click')[]: multiple modes
+     *
+     * Note: Prefetching only works for GET requests.
+     *
+     * @example
+     * ```tsx
+     * // Prefetch on hover
+     * <ModalLink href={user_path(1)} prefetch>View User</ModalLink>
+     *
+     * // Prefetch on mount
+     * <ModalLink href={user_path(1)} prefetch="mount">View User</ModalLink>
+     *
+     * // Multiple modes
+     * <ModalLink href={user_path(1)} prefetch={['hover', 'mount']}>View User</ModalLink>
+     * ```
+     */
+    prefetch?: boolean | 'hover' | 'mount' | 'click' | ('hover' | 'mount' | 'click')[];
+    /**
+     * Duration in milliseconds to cache prefetched data
+     *
+     * @default 30000 (30 seconds)
+     */
+    cacheFor?: number;
+    /**
+     * Tags for organizing cached prefetch data
+     *
+     * Can be used to invalidate specific cached prefetch data.
+     */
+    cacheTags?: string[];
     /**
      * Children to render
      */
     children?: React.ReactNode;
 }
-/**
- * ModalLink - Link component that opens pages in modals
- *
- * When clicked, this component fetches the target page and displays it in a modal
- * instead of navigating to it. The modal integrates with the modal stack and
- * supports all modal configuration options.
- *
- * Features:
- * - Accepts both string URLs and RouteResult objects
- * - Shows loading state during fetch
- * - Configurable modal appearance via modalConfig
- * - Prevents default navigation behavior
- * - Maintains browser history integration
- *
- * @example
- * ```tsx
- * import { ModalLink } from '@/modals/ModalLink';
- * import { user_path, edit_user_path } from '@/routes';
- *
- * // Basic usage
- * <ModalLink href={user_path(1)}>View User</ModalLink>
- *
- * // With RouteResult
- * <ModalLink href={edit_user_path(1)}>Edit User</ModalLink>
- *
- * // With custom modal config
- * <ModalLink
- *   href={user_path(1)}
- *   modalConfig={{
- *     size: 'lg',
- *     position: 'center',
- *     closeButton: true
- *   }}
- * >
- *   View Details
- * </ModalLink>
- *
- * // Slideover variant
- * <ModalLink
- *   href={edit_user_path(1)}
- *   modalConfig={{
- *     slideover: true,
- *     position: 'right'
- *   }}
- * >
- *   Edit
- * </ModalLink>
- * ```
- */
 export declare const ModalLink: React.FC<ModalLinkProps>;
 export default ModalLink;
 //# sourceMappingURL=ModalLink.d.ts.map

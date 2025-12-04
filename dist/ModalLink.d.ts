@@ -3,33 +3,34 @@ import { default as default_2 } from 'react';
 /**
  * Configuration for a modal instance
  *
- * This interface defines all available configuration options for modals and slideovers.
+ * This interface defines behavioral configuration options for modals.
+ * Styling is left to the user's UI implementation.
  * All fields are optional with sensible defaults.
  */
 declare interface ModalConfig {
     /**
-     * Size of the modal
+     * Size hint for the modal
      * @default 'md'
      *
      * Presets: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full'
-     * Custom: Any valid CSS class string (e.g., 'max-w-4xl')
+     * Your UI implementation can interpret this however you like.
      */
     size?: ModalSize;
     /**
-     * Position of the modal on screen
+     * Position hint for the modal
      * @default 'center'
      *
      * Presets: 'center' | 'top' | 'bottom' | 'left' | 'right'
-     * Custom: Any valid CSS class string
+     * Your UI implementation can interpret this however you like.
      */
     position?: ModalPosition;
     /**
-     * Whether this is a slideover (slides in from side) instead of a modal
+     * Whether this is a slideover (slides in from side) instead of a centered modal
      * @default false
      */
     slideover?: boolean;
     /**
-     * Show a close button in the top-right corner
+     * Whether to show a close button
      * @default true
      */
     closeButton?: boolean;
@@ -39,79 +40,12 @@ declare interface ModalConfig {
      */
     closeExplicitly?: boolean;
     /**
-     * Custom max-width CSS value
-     * @example '800px', '50rem'
+     * Any additional custom data your UI implementation needs
+     * This is passed through to your modal renderer unchanged.
      */
-    maxWidth?: string;
-    /**
-     * Custom padding classes for modal content
-     * @default 'p-6'
-     * @example 'p-8', 'px-4 py-6'
-     */
-    paddingClasses?: string;
-    /**
-     * Custom panel classes for the modal container
-     * @default 'bg-white rounded-lg shadow-xl'
-     * @example 'bg-gray-900 text-white rounded-xl'
-     */
-    panelClasses?: string;
-    /**
-     * Custom backdrop classes for the overlay
-     * @default 'bg-black/50'
-     * @example 'bg-gray-900/75', 'backdrop-blur-sm'
-     */
-    backdropClasses?: string;
+    [key: string]: unknown;
 }
 
-/**
- * ModalLink - Link component that opens pages in modals
- *
- * When clicked, this component fetches the target page and displays it in a modal
- * instead of navigating to it. The modal integrates with the modal stack and
- * supports all modal configuration options.
- *
- * Features:
- * - Accepts both string URLs and RouteResult objects
- * - Shows loading state during fetch
- * - Configurable modal appearance via modalConfig
- * - Prevents default navigation behavior
- * - Maintains browser history integration
- *
- * @example
- * ```tsx
- * import { ModalLink } from '@/modals/ModalLink';
- * import { user_path, edit_user_path } from '@/routes';
- *
- * // Basic usage
- * <ModalLink href={user_path(1)}>View User</ModalLink>
- *
- * // With RouteResult
- * <ModalLink href={edit_user_path(1)}>Edit User</ModalLink>
- *
- * // With custom modal config
- * <ModalLink
- *   href={user_path(1)}
- *   modalConfig={{
- *     size: 'lg',
- *     position: 'center',
- *     closeButton: true
- *   }}
- * >
- *   View Details
- * </ModalLink>
- *
- * // Slideover variant
- * <ModalLink
- *   href={edit_user_path(1)}
- *   modalConfig={{
- *     slideover: true,
- *     position: 'right'
- *   }}
- * >
- *   Edit
- * </ModalLink>
- * ```
- */
 declare const ModalLink: default_2.FC<ModalLinkProps>;
 export { ModalLink }
 export default ModalLink;
@@ -129,16 +63,10 @@ export declare interface ModalLinkProps extends Omit<default_2.AnchorHTMLAttribu
     /**
      * Optional modal configuration
      *
-     * Configure the modal appearance and behavior when opened.
+     * Note: This is passed to the backend via query params if needed,
+     * but typically the backend controls modal configuration.
      */
     modalConfig?: ModalConfig;
-    /**
-     * Base URL for the modal
-     *
-     * When the modal closes, the browser will navigate to this URL.
-     * If not provided, uses the current URL.
-     */
-    baseUrl?: string;
     /**
      * HTTP method to use for the request
      *
@@ -151,9 +79,60 @@ export declare interface ModalLinkProps extends Omit<default_2.AnchorHTMLAttribu
      */
     data?: Record<string, any>;
     /**
+     * Custom loading component to display while modal content is loading
+     *
+     * If provided, this component will be rendered in the modal shell
+     * while waiting for the server response. If not provided, a default
+     * loading spinner will be shown.
+     *
+     * @example
+     * ```tsx
+     * <ModalLink
+     *   href={edit_user_path(1)}
+     *   loadingComponent={UserFormSkeleton}
+     * >
+     *   Edit User
+     * </ModalLink>
+     * ```
+     */
+    loadingComponent?: default_2.ComponentType;
+    /**
      * Callback when the link is clicked
      */
     onClick?: (e: default_2.MouseEvent<HTMLAnchorElement>) => void;
+    /**
+     * Enable prefetching. Can be:
+     * - boolean: true enables hover prefetch
+     * - 'hover' | 'mount' | 'click': single mode
+     * - ('hover' | 'mount' | 'click')[]: multiple modes
+     *
+     * Note: Prefetching only works for GET requests.
+     *
+     * @example
+     * ```tsx
+     * // Prefetch on hover
+     * <ModalLink href={user_path(1)} prefetch>View User</ModalLink>
+     *
+     * // Prefetch on mount
+     * <ModalLink href={user_path(1)} prefetch="mount">View User</ModalLink>
+     *
+     * // Multiple modes
+     * <ModalLink href={user_path(1)} prefetch={['hover', 'mount']}>View User</ModalLink>
+     * ```
+     */
+    prefetch?: boolean | 'hover' | 'mount' | 'click' | ('hover' | 'mount' | 'click')[];
+    /**
+     * Duration in milliseconds to cache prefetched data
+     *
+     * @default 30000 (30 seconds)
+     */
+    cacheFor?: number;
+    /**
+     * Tags for organizing cached prefetch data
+     *
+     * Can be used to invalidate specific cached prefetch data.
+     */
+    cacheTags?: string[];
     /**
      * Children to render
      */
@@ -171,32 +150,22 @@ declare type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | st
 declare type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full' | string;
 
 /**
- * NbInertia Enhanced Router for React
+ * Shared types and utilities for nb_inertia
  *
- * Provides enhanced Inertia.js router that accepts both string URLs and RouteResult objects
- * from nb_routes rich mode. Maintains full backward compatibility with standard Inertia usage.
- *
- * @example
- * import { router } from '@/nb_inertia/router';
- * import { post_path, update_post_path } from '@/routes';
- *
- * // Use with RouteResult objects
- * router.visit(post_path(1));                    // Automatically uses GET
- * router.visit(update_post_path.patch(1));       // Automatically uses PATCH
- *
- * // Still works with plain strings
- * router.visit('/posts/1');
- * router.get('/posts/1');
+ * This module provides common types and utilities used across React and Vue components.
  */
 /**
  * RouteResult type from nb_routes rich mode
  *
  * Rich mode route helpers return objects with both url and method,
- * allowing the router to automatically use the correct HTTP method.
+ * allowing components to automatically use the correct HTTP method.
+ *
+ * NOTE: This type matches @inertiajs/core's UrlMethodPair type exactly.
+ * The official Inertia.js router and Link components already support this pattern.
  */
 declare type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete';
 };
 
 export { }

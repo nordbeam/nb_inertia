@@ -304,7 +304,10 @@ defmodule NbInertia.SSR do
             {:ok, %{state | script_loaded: true, deno_pid: pid}}
 
           {:error, reason} ->
-            Logger.warning("NbInertia.SSR: Failed to start DenoRider with SSR script: #{inspect(reason)}")
+            Logger.warning(
+              "NbInertia.SSR: Failed to start DenoRider with SSR script: #{inspect(reason)}"
+            )
+
             {:ok, %{state | enabled: false}}
         end
 
@@ -442,7 +445,11 @@ defmodule NbInertia.SSR do
     if File.exists?(script_path) do
       # Start DenoRider with the SSR script as the main module
       # This will execute the script and make globalThis.render available
-      DenoRider.start(main_module_path: script_path)
+      if Code.ensure_loaded?(DenoRider) do
+        apply(DenoRider, :start, [[main_module_path: script_path]])
+      else
+        {:error, :deno_rider_not_available}
+      end
     else
       {:error, :script_not_found}
     end
@@ -501,7 +508,10 @@ defmodule NbInertia.SSR do
       if state.raise_on_failure do
         reraise e, __STACKTRACE__
       else
-        Logger.error("NbInertia.SSR: dev rendering error: #{Exception.format(:error, e, __STACKTRACE__)}")
+        Logger.error(
+          "NbInertia.SSR: dev rendering error: #{Exception.format(:error, e, __STACKTRACE__)}"
+        )
+
         {:error, :render_exception}
       end
   end
@@ -525,27 +535,31 @@ defmodule NbInertia.SSR do
     """
 
     result =
-      case DenoRider.eval(js_code, pid: state.deno_pid) do
-        # Check for error object first
-        {:ok, %{"__error" => true, "message" => message, "stack" => stack}} ->
-          handle_render_error(%{"message" => message, "stack" => stack}, page, state)
+      if Code.ensure_loaded?(DenoRider) do
+        case apply(DenoRider, :eval, [js_code, [pid: state.deno_pid]]) do
+          # Check for error object first
+          {:ok, %{"__error" => true, "message" => message, "stack" => stack}} ->
+            handle_render_error(%{"message" => message, "stack" => stack}, page, state)
 
-        {:ok, %{"__error" => true, "message" => message}} ->
-          handle_render_error(%{"message" => message}, page, state)
+          {:ok, %{"__error" => true, "message" => message}} ->
+            handle_render_error(%{"message" => message}, page, state)
 
-        # Success cases
-        {:ok, %{"head" => head, "body" => body}} ->
-          {:ok, %{"head" => head, "body" => body}}
+          # Success cases
+          {:ok, %{"head" => head, "body" => body}} ->
+            {:ok, %{"head" => head, "body" => body}}
 
-        {:ok, %{head: head, body: body}} ->
-          {:ok, %{"head" => head, "body" => body}}
+          {:ok, %{head: head, body: body}} ->
+            {:ok, %{"head" => head, "body" => body}}
 
-        {:ok, html} when is_binary(html) ->
-          {:ok, %{"head" => [], "body" => html}}
+          {:ok, html} when is_binary(html) ->
+            {:ok, %{"head" => [], "body" => html}}
 
-        # DenoRider evaluation error
-        {:error, reason} ->
-          handle_render_error(%{"message" => inspect(reason)}, page, state)
+          # DenoRider evaluation error
+          {:error, reason} ->
+            handle_render_error(%{"message" => inspect(reason)}, page, state)
+        end
+      else
+        handle_render_error(%{"message" => "DenoRider not available"}, page, state)
       end
 
     result
@@ -554,7 +568,10 @@ defmodule NbInertia.SSR do
       if state.raise_on_failure do
         reraise e, __STACKTRACE__
       else
-        Logger.error("NbInertia.SSR: rendering error: #{Exception.format(:error, e, __STACKTRACE__)}")
+        Logger.error(
+          "NbInertia.SSR: rendering error: #{Exception.format(:error, e, __STACKTRACE__)}"
+        )
+
         {:error, :render_exception}
       end
   end

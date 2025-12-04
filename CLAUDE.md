@@ -12,12 +12,30 @@ Developer guidance for Claude Code when working with the nb_inertia package.
 
 - **Declarative Page DSL**: Define Inertia pages with compile-time prop validation
 - **Type-Safe Props**: Automatic TypeScript type generation via nb_ts integration
-- **Enhanced Components**: Wayfinder-style React/Vue components that accept nb_routes RouteResult objects
+- **useForm with Route Binding**: Enhanced useForm hook that binds to nb_routes RouteResult objects
+- **Modal System**: Render Inertia pages as modals/slideovers without full page navigation
+- **SSR-Safe Components**: Head and usePage with modal context support
 - **Shared Props**: Automatically add props to all Inertia responses
 - **SSR Support**: Optional server-side rendering with DenoRider
 - **Optional Dependencies**: Works with or without nb_serializer, nb_routes, and nb_ts
 
 ## Architecture
+
+### What Official Inertia Already Supports
+
+**IMPORTANT**: Official `@inertiajs/react` and `@inertiajs/vue3` already support `UrlMethodPair` (same as RouteResult) natively:
+
+```typescript
+// Official Inertia router and Link already support RouteResult objects!
+import { router, Link } from '@inertiajs/react';
+import { user_path, update_user_path } from './routes';
+
+router.visit(user_path(1));                // RouteResult works!
+router.visit(update_user_path.patch(1));   // Method auto-detected!
+<Link href={user_path(1)}>View</Link>      // RouteResult in href works!
+```
+
+**No wrappers needed for router and Link** - use official Inertia directly.
 
 ### Core Components
 
@@ -27,20 +45,22 @@ Developer guidance for Claude Code when working with the nb_inertia package.
    - Integration with nb_serializer and nb_ts
 
 2. **Enhanced Client Components** (`priv/nb_inertia/`)
-   - React: `router.tsx`, `Link.tsx`, `useForm.tsx`
-   - Vue: `router.ts`, `Link.vue`, `useForm.ts`
-   - Automatic nb_routes RouteResult integration
+   - React: `useForm.tsx` (route binding), `Head.tsx` (modal context), `usePage.tsx` (modal context)
+   - Vue: `useForm.ts` (route binding)
+   - Modal system components in `modals/` subdirectory
+   - Shared types in `shared/types.ts`
 
 3. **Installer** (`lib/mix/tasks/nb_inertia.install.ex`)
    - Igniter-based automated setup
-   - Creates `assets/js/lib/inertia.{ts,js}` with enhanced exports
    - Configures nb_vite, nb_ts, and esbuild
 
 ## Wayfinder-Style Integration
 
 ### Concept
 
-nb_inertia provides enhanced Inertia.js components that seamlessly integrate with nb_routes rich mode. This "Wayfinder-style" integration allows you to pass RouteResult objects (which contain both URL and HTTP method) directly to Inertia components, eliminating the need to manually specify methods.
+Official `@inertiajs/react` and `@inertiajs/vue3` already support `UrlMethodPair` (same as RouteResult from nb_routes). This means you can pass RouteResult objects directly to official Inertia components without any wrappers.
+
+nb_inertia adds one enhancement: **useForm with route binding** - allowing you to bind a form to a route so `submit()` doesn't need method/URL arguments.
 
 ### Architecture Diagram
 
@@ -98,23 +118,21 @@ nb_inertia provides enhanced Inertia.js components that seamlessly integrate wit
 │                         │                                        │
 │                         ▼                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ assets/js/lib/inertia.ts (nb_inertia installer)         │   │
-│  │   // Re-exports enhanced components                     │   │
-│  │   export { router } from '@nordbeam/nb-inertia/react'   │   │
-│  │   export { Link } from '@nordbeam/nb-inertia/react'     │   │
-│  │   export { useForm } from '@nordbeam/nb-inertia/react'  │   │
+│  │ Use official Inertia + nb_inertia enhancements          │   │
+│  │   import { router, Link } from '@inertiajs/react';      │   │
+│  │   import { useForm } from '@nordbeam/nb-inertia/react'; │   │
 │  └──────────────────────┬──────────────────────────────────┘   │
 │                         │                                        │
 │                         ▼                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │ React Component (assets/js/pages/Users/Show.tsx)        │   │
 │  │                                                          │   │
-│  │   import { router, Link } from '@/lib/inertia';         │   │
+│  │   import { router, Link } from '@inertiajs/react';      │   │
 │  │   import { user_path } from '@/routes';                 │   │
 │  │   import type { UsersShowProps } from '@/types';        │   │
 │  │                                                          │   │
 │  │   export default function Show({ user }: UsersShowProps)│   │
-│  │     // RouteResult object works seamlessly              │   │
+│  │     // RouteResult object works natively in official!   │   │
 │  │     router.visit(user_path(user.id));                   │   │
 │  │     <Link href={user_path(user.id)}>View</Link>         │   │
 │  │   }                                                      │   │
@@ -137,9 +155,9 @@ Key Integration Points:
 - **Key type**: `RouteResult = { url: string, method: 'get' | 'post' | ... }`
 
 #### nb_inertia
-- **What it does**: Provides enhanced Inertia.js components that consume RouteResult objects
-- **Output**: `lib/inertia.ts` that re-exports enhanced components from `@nordbeam/nb-inertia`
-- **Key components**: `router`, `Link`, `useForm` - all accept RouteResult or string URLs
+- **What it does**: Provides enhanced useForm with route binding, SSR-safe components with modal context, and a complete modal system
+- **Key components**: `useForm` (route binding), `Head` (modal context), `usePage` (modal context), Modal system
+- **Note**: Official `@inertiajs/react` and `@inertiajs/vue3` already support RouteResult natively for `router` and `Link`
 
 #### nb_ts
 - **What it does**: Generates TypeScript types for Inertia page props and serializers
@@ -150,130 +168,58 @@ Key Integration Points:
 
 1. **Backend**: Define routes in Phoenix router
 2. **nb_routes**: Generates route helpers that return RouteResult objects
-3. **nb_inertia**: Backend DSL defines props, installer creates lib/inertia.ts
+3. **nb_inertia**: Backend DSL defines props, provides useForm with route binding
 4. **nb_ts**: Generates TypeScript types for props
-5. **Frontend**: Import enhanced components from `@/lib/inertia` and use with route helpers
+5. **Frontend**: Import from `@inertiajs/react` (router, Link) and `@nordbeam/nb-inertia` (useForm, modals)
 
 ### Installation Flow
 
-The nb_inertia installer automatically creates the integration layer:
+Install nb_inertia via the installer:
 
 ```bash
 mix nb_inertia.install --client-framework react --typescript
 ```
 
-This creates `assets/js/lib/inertia.ts`:
+**What to import:**
 
 ```typescript
-// Enhanced Inertia.js integration with nb_routes support (React)
-//
-// This file re-exports enhanced components from nb_inertia that provide
-// automatic integration with nb_routes rich mode. Import from this file
-// instead of @inertiajs/react to get the enhanced functionality.
+// Official Inertia - router and Link work with RouteResult natively
+import { router, Link, usePage } from '@inertiajs/react';
 
-export { router } from '@nordbeam/nb-inertia/react/router';
-export { Link } from '@nordbeam/nb-inertia/react/Link';
-export { useForm } from '@nordbeam/nb-inertia/react/useForm';
+// nb_inertia - useForm with route binding
+import { useForm } from '@nordbeam/nb-inertia/react/useForm';
 
-// Re-export everything else from Inertia
-export * from '@inertiajs/react';
+// nb_inertia - SSR-safe components with modal context (when using modals)
+import { Head } from '@nordbeam/nb-inertia/react/Head';
+import { usePage } from '@nordbeam/nb-inertia/react/usePage';
+
+// nb_inertia - Modal system
+import { Modal, ModalLink, ModalProvider } from '@nordbeam/nb-inertia/react/modals';
+
+// nb_routes
+import { user_path, update_user_path } from '@/routes';
 ```
 
 ## Enhanced React Components
 
-### router (React)
+### router and Link (Use Official Inertia)
 
-**Location**: `priv/nb_inertia/react/router.tsx`
-
-Enhanced Inertia router that accepts both string URLs and RouteResult objects.
-
-**Key Features**:
-- Accepts `RouteResult` objects from nb_routes rich mode
-- Automatically extracts URL and method from RouteResult
-- Falls back to standard string URL behavior
-- All router methods enhanced: `visit`, `get`, `post`, `patch`, `put`, `delete`
-
-**Usage**:
+**IMPORTANT**: Official `@inertiajs/react` already supports RouteResult objects natively via `UrlMethodPair`.
 
 ```typescript
-import { router } from '@/lib/inertia';
+import { router, Link } from '@inertiajs/react';  // Official Inertia!
 import { user_path, update_user_path } from '@/routes';
 
-// With RouteResult - method auto-detected from route
+// router.visit accepts RouteResult directly
 router.visit(user_path(1));                    // Uses GET
 router.visit(update_user_path.patch(1));       // Uses PATCH
 
-// Still works with plain strings
-router.visit('/users/1');
-router.get('/users/1');
-router.post('/users', { name: 'John' });
-```
-
-**How it works**:
-1. Type guard checks if argument is RouteResult: `{ url: string, method: string }`
-2. If RouteResult: extracts `url` and `method`, passes to Inertia router
-3. If string: passes through to Inertia router unchanged
-4. Fully backward compatible with standard Inertia.js
-
-### Link (React)
-
-**Location**: `priv/nb_inertia/react/Link.tsx`
-
-Enhanced Inertia Link component that accepts RouteResult objects in the `href` prop.
-
-**Key Features**:
-- Accepts `RouteResult` objects or string URLs in `href` prop
-- Automatically extracts URL and method from RouteResult
-- All other Inertia Link props work unchanged (preserveState, data, etc.)
-- Full TypeScript support with `EnhancedLinkProps`
-
-**Usage**:
-
-```typescript
-import { Link } from '@/lib/inertia';
-import { user_path, update_user_path, delete_user_path } from '@/routes';
-
-// With RouteResult objects
+// Link href accepts RouteResult directly
 <Link href={user_path(1)}>View User</Link>
 <Link href={update_user_path.patch(1)}>Edit User</Link>
-<Link href={delete_user_path.delete(1)} as="button">Delete</Link>
-
-// Still works with plain strings
-<Link href="/users/1">View User</Link>
-<Link href="/users/1" method="patch">Edit User</Link>
-
-// With additional Inertia options
-<Link
-  href={user_path(1)}
-  preserveState
-  preserveScroll
-  only={['user']}
->
-  View User
-</Link>
-
-// With data for mutations
-<Link
-  href={update_user_path.patch(1)}
-  data={{ name: 'Updated Name' }}
-  preserveScroll
->
-  Update Name
-</Link>
 ```
 
-**TypeScript Types**:
-
-```typescript
-export type EnhancedLinkProps = Omit<InertiaLinkProps, 'href'> & {
-  href: string | RouteResult;
-};
-
-export type RouteResult = {
-  url: string;
-  method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
-};
-```
+**No wrappers needed** - use official Inertia components directly with nb_routes.
 
 ### useForm (React)
 
@@ -291,7 +237,7 @@ Enhanced Inertia useForm hook with optional route binding. When bound to a Route
 **Usage**:
 
 ```typescript
-import { useForm } from '@/lib/inertia';
+import { useForm } from '@nordbeam/nb-inertia/react/useForm';
 import { update_user_path } from '@/routes';
 
 // Bound to a route - simplified submit()
@@ -369,50 +315,28 @@ export function useForm<TForm>(data: TForm, route?: RouteResult):
 
 ## Enhanced Vue Components
 
-### router (Vue)
+### router and Link (Use Official Inertia)
 
-**Location**: `priv/nb_inertia/vue/router.ts`
-
-Enhanced Inertia router for Vue 3 that accepts RouteResult objects.
-
-**Usage**:
-
-```typescript
-import { router } from '@/lib/inertia';
-import { user_path, update_user_path } from '@/routes';
-
-// With RouteResult objects
-router.visit(user_path(1));                    // Uses GET
-router.visit(update_user_path.patch(1));       // Uses PATCH
-
-// Still works with plain strings
-router.visit('/users/1');
-router.get('/users/1');
-```
-
-### Link (Vue)
-
-**Location**: `priv/nb_inertia/vue/Link.vue`
-
-Enhanced Inertia Link component for Vue 3.
-
-**Usage**:
+**IMPORTANT**: Official `@inertiajs/vue3` already supports RouteResult objects natively via `UrlMethodPair`.
 
 ```vue
 <script setup lang="ts">
-import { Link } from '@/lib/inertia';
+import { router, Link } from '@inertiajs/vue3';  // Official Inertia!
 import { user_path, update_user_path } from '@/routes';
+
+// router.visit accepts RouteResult directly
+router.visit(user_path(1));                    // Uses GET
+router.visit(update_user_path.patch(1));       // Uses PATCH
 </script>
 
 <template>
-  <!-- With RouteResult objects -->
+  <!-- Link href accepts RouteResult directly -->
   <Link :href="user_path(user.id)">View User</Link>
   <Link :href="update_user_path.patch(user.id)">Edit User</Link>
-
-  <!-- Still works with plain strings -->
-  <Link href="/users/1">View User</Link>
 </template>
 ```
+
+**No wrappers needed** - use official Inertia components directly with nb_routes.
 
 ### useForm (Vue)
 
@@ -424,7 +348,7 @@ Enhanced useForm composable for Vue 3 with route binding.
 
 ```vue
 <script setup lang="ts">
-import { useForm } from '@/lib/inertia';
+import { useForm } from '@nordbeam/nb-inertia/vue/useForm';
 import { update_user_path } from '@/routes';
 
 const props = defineProps<{ user: User }>();
@@ -521,12 +445,156 @@ function isRouteResult(value: unknown): value is RouteResult {
    <Link href={update_user_path.patch(1)} />  // { url: "/users/1", method: "patch" }
    ```
 
+## Shared Props with inertia_shared
+
+### Overview
+
+Shared props are props that should be available on every page in a controller. Use `inertia_shared(SharedPropsModule)` in your controller to automatically merge shared props with page props.
+
+**IMPORTANT**:
+- Use `inertia_shared()` in the controller, NOT a plug
+- Generated TypeScript page props automatically `extends` the shared props type
+- Never manually merge types like `type PageProps = DashboardProps & { auth: AuthProps }` - this is auto-generated
+
+### Step 1: Define SharedProps Module
+
+```elixir
+# lib/my_app_web/inertia_shared/auth.ex
+defmodule MyAppWeb.InertiaShared.Auth do
+  use NbInertia.SharedProps
+
+  alias MyAppWeb.Serializers.{UserSerializer, AccountSerializer}
+
+  inertia_shared do
+    prop(:user, UserSerializer, nullable: true)
+    prop(:account, AccountSerializer, nullable: true)
+    prop(:flash, :map)
+  end
+
+  @impl NbInertia.SharedProps.Behaviour
+  def build_props(conn, _opts) do
+    scope = conn.assigns[:current_scope]
+
+    %{
+      user: if(scope && scope.user, do: scope.user),
+      account: if(scope && scope.user, do: scope.user.account),
+      flash: conn.assigns[:flash] || %{}
+    }
+  end
+end
+```
+
+### Step 2: Use inertia_shared in Controller
+
+```elixir
+defmodule MyAppWeb.DashboardController do
+  use MyAppWeb, :controller
+  use NbInertia.Controller
+
+  alias MyAppWeb.InertiaShared.Auth
+
+  # This merges Auth props into ALL pages in this controller
+  inertia_shared(Auth)
+
+  inertia_page :dashboard do
+    # Page-specific props go here
+    prop :stats, StatsSerializer
+  end
+
+  def index(conn, _params) do
+    render_inertia(conn, :dashboard, stats: get_stats())
+  end
+end
+```
+
+### Step 3: Generated TypeScript Types
+
+nb_ts automatically generates types that extend shared props:
+
+```typescript
+// assets/js/types/AuthProps.ts (auto-generated)
+export interface AuthProps {
+  user: User | null;
+  account: Account | null;
+  flash: Record<string, any>;
+}
+
+// assets/js/types/DashboardProps.ts (auto-generated)
+import type { AuthProps } from "./AuthProps";
+
+export interface DashboardProps extends AuthProps {
+  stats: Stats;
+}
+```
+
+### Step 4: Frontend Usage
+
+```tsx
+// CORRECT: Just import the page props - shared props are already included
+import type { DashboardProps } from "@/types";
+
+export default function Dashboard({ user, account, flash, stats }: DashboardProps) {
+  // All props are available directly - no manual merging needed
+  return (
+    <div>
+      <h1>Welcome {user?.name}</h1>
+      {flash.success && <Alert>{flash.success}</Alert>}
+      <StatsDisplay stats={stats} />
+    </div>
+  );
+}
+```
+
+```tsx
+// WRONG: Never manually merge types - this is redundant
+import type { DashboardProps, AuthProps } from "@/types";
+type PageProps = DashboardProps & { auth: AuthProps };  // ❌ Don't do this
+```
+
+### Multiple Shared Props Modules
+
+You can use multiple shared props modules:
+
+```elixir
+defmodule MyAppWeb.AdminController do
+  use MyAppWeb, :controller
+  use NbInertia.Controller
+
+  alias MyAppWeb.InertiaShared.{Auth, AdminNav}
+
+  inertia_shared(Auth)
+  inertia_shared(AdminNav)
+
+  # Both Auth and AdminNav props are merged into all pages
+end
+```
+
+### Why NOT to Use a Plug
+
+A common mistake is creating a plug to inject shared props:
+
+```elixir
+# ❌ WRONG: Don't do this
+defmodule MyAppWeb.Plugs.InertiaSharedProps do
+  def call(conn, _opts) do
+    Inertia.Controller.assign_prop(conn, :auth, Auth.serialize_props(conn))
+  end
+end
+```
+
+This approach:
+- Doesn't integrate with nb_ts type generation
+- Requires manual type definitions in frontend
+- Props aren't validated at compile time
+
+Instead, use `inertia_shared(Auth)` in your controller - it handles serialization, type generation, and validation automatically.
+
 ## Usage Patterns
 
 ### Pattern 1: Simple Navigation
 
 ```typescript
-import { router, Link } from '@/lib/inertia';
+import { router, Link } from '@inertiajs/react';  // Official Inertia!
 import { users_path, user_path } from '@/routes';
 
 // Navigate programmatically
@@ -539,7 +607,7 @@ router.visit(users_path());
 ### Pattern 2: Form with Mutation
 
 ```typescript
-import { useForm } from '@/lib/inertia';
+import { useForm } from '@nordbeam/nb-inertia/react/useForm';
 import { create_user_path } from '@/routes';
 
 function CreateUser() {
@@ -563,8 +631,8 @@ function CreateUser() {
 ### Pattern 3: Mixed RouteResult and Strings
 
 ```typescript
-import { Link } from '@/lib/inertia';
-import { user_path } from '@/routes';
+import { Link } from '@inertiajs/react';  // Official Inertia!
+import { user_path, update_user_path } from '@/routes';
 
 // RouteResult object
 <Link href={user_path(1)}>User Profile</Link>
@@ -579,7 +647,7 @@ import { user_path } from '@/routes';
 ### Pattern 4: Complex Form with nb_serializer
 
 ```typescript
-import { useForm } from '@/lib/inertia';
+import { useForm } from '@nordbeam/nb-inertia/react/useForm';
 import { update_post_path } from '@/routes';
 import type { Post } from '@/types';
 
@@ -645,62 +713,67 @@ When you run `mix nb_inertia.install --client-framework react --typescript`, it:
 
 1. **Installs npm packages**:
    - `@inertiajs/react` (or vue3/svelte)
-   - `@nordbeam/nb-inertia` - Enhanced components package
+   - `@nordbeam/nb-inertia` - Enhanced useForm, Head, usePage, and modal components
    - `react`, `react-dom`, `axios`
    - TypeScript types (if `--typescript`)
 
-2. **Creates lib/inertia.ts**:
-   ```typescript
-   export { router } from '@nordbeam/nb-inertia/react/router';
-   export { Link } from '@nordbeam/nb-inertia/react/Link';
-   export { useForm } from '@nordbeam/nb-inertia/react/useForm';
-   export * from '@inertiajs/react';
-   ```
-
-3. **Configures Phoenix**:
+2. **Configures Phoenix**:
    - Adds `use NbInertia.Controller` to web.ex
    - Adds `import Inertia.HTML` to web.ex
    - Adds `plug Inertia.Plug` to browser pipeline
    - Updates root layout for Inertia
 
-4. **Sets up TypeScript** (if enabled):
+3. **Sets up TypeScript** (if enabled):
    - Creates `tsconfig.json`
    - Configures path alias `@/*` → `./js/*`
    - Composes `nb_ts.install` for type generation
 
-### Framework-Specific Files
+### What to Import
 
-**React**:
-- Creates: `assets/js/lib/inertia.ts` (or `.js`)
-- Imports from: `@nordbeam/nb-inertia/react/*`
+**Official Inertia** (use directly - supports RouteResult natively):
+- `router` and `Link` from `@inertiajs/react` or `@inertiajs/vue3`
 
-**Vue**:
-- Creates: `assets/js/lib/inertia.ts` (or `.js`)
-- Imports from: `@nordbeam/nb-inertia/vue/*`
+**nb_inertia** (enhanced components):
+- `useForm` from `@nordbeam/nb-inertia/react/useForm` (route binding)
+- `Head` from `@nordbeam/nb-inertia/react/Head` (modal context)
+- `usePage` from `@nordbeam/nb-inertia/react/usePage` (modal context)
+- Modal components from `@nordbeam/nb-inertia/react/modals`
 
 **Svelte**:
 - Standard Inertia setup (enhanced components not yet available for Svelte)
 
 ## Important Usage Notes
 
-### Always Import from @/lib/inertia
+### Import Guidelines
 
-**DO** import enhanced components from `@/lib/inertia`:
+**For router and Link** - use official Inertia (they support RouteResult natively):
 
 ```typescript
-import { router, Link, useForm } from '@/lib/inertia';
+import { router, Link } from '@inertiajs/react';  // Official - works with RouteResult!
 ```
 
-**DON'T** import directly from `@inertiajs/react`:
+**For useForm with route binding** - use nb_inertia:
 
 ```typescript
-// This bypasses nb_routes integration!
-import { router, Link, useForm } from '@inertiajs/react';
+import { useForm } from '@nordbeam/nb-inertia/react/useForm';
+```
+
+**For SSR-safe components with modal context** - use nb_inertia:
+
+```typescript
+import { Head } from '@nordbeam/nb-inertia/react/Head';
+import { usePage } from '@nordbeam/nb-inertia/react/usePage';
+```
+
+**For modal system** - use nb_inertia:
+
+```typescript
+import { Modal, ModalLink, ModalProvider } from '@nordbeam/nb-inertia/react/modals';
 ```
 
 ### Backward Compatibility
 
-All enhanced components are 100% backward compatible with standard Inertia usage:
+All nb_inertia components are 100% backward compatible with standard Inertia usage:
 
 ```typescript
 // These all work fine
@@ -719,13 +792,13 @@ When using TypeScript with nb_routes rich mode and nb_ts:
 ```typescript
 import type { UsersShowProps } from '@/types';  // Generated by nb_ts
 import { user_path } from '@/routes';           // Generated by nb_routes
-import { Link } from '@/lib/inertia';           // Enhanced component
+import { Link } from '@inertiajs/react';        // Official Inertia
 
 export default function Show({ user }: UsersShowProps) {
   // Full type safety:
   // - user is typed by nb_ts
   // - user_path is typed by nb_routes
-  // - Link accepts RouteResult from user_path
+  // - Link accepts RouteResult from user_path (native support!)
   return <Link href={user_path(user.id)}>{user.name}</Link>;
 }
 ```
@@ -997,10 +1070,24 @@ Link component that opens pages as modals:
 - Accepts string URLs or nb_routes RouteResult objects
 - Intercepts clicks to prevent navigation
 - Fetches target page via Inertia router
-- Reads modal headers from response
-- Pushes modal to stack
+- Detects `_nb_modal` prop and defers to InitialModalHandler (for `render_inertia_modal` responses)
+- Falls back to legacy flow (pushes page component directly) for non-modal responses
 - Shows loading state during fetch
 - Respects modifier keys (Ctrl/Cmd for new tab)
+
+**Important Implementation Detail:**
+
+When the backend uses `render_inertia_modal/4`, the response includes a `_nb_modal` prop. ModalLink detects this and returns early, allowing InitialModalHandler to handle pushing the modal. This prevents duplicate modals from being created.
+
+```typescript
+// In onSuccess callback:
+if (pageProps._nb_modal) {
+  // Modal response - let InitialModalHandler handle it
+  setIsLoading(false);
+  return;
+}
+// Legacy flow for non-modal responses...
+```
 
 **Usage Pattern:**
 ```typescript
@@ -1011,6 +1098,37 @@ Link component that opens pages as modals:
   View User
 </ModalLink>
 ```
+
+##### InitialModalHandler
+
+**Required Setup Component**
+
+InitialModalHandler must be rendered inside the Inertia App context. It handles:
+1. Initial page load with `_nb_modal` prop (direct URL access to modal)
+2. Navigation events that include modal data from `render_inertia_modal`
+
+**Key Implementation Details:**
+
+- Tracks the current modal in a ref (`currentModalRef`) to prevent duplicate pushes
+- **Must clear `currentModalRef` in `onClose` callback** to allow reopening the same modal
+- Uses `history.replaceState` on close to update URL without triggering Inertia navigation
+
+```typescript
+// Example InitialModalHandler onClose callback:
+onClose: () => {
+  // IMPORTANT: Clear ref so the same modal can be opened again
+  currentModalRef.current = null;
+
+  // Update URL to base URL when modal is closed
+  if (modalOnBase.baseUrl && typeof window !== "undefined") {
+    if (window.location.pathname !== modalOnBase.baseUrl) {
+      window.history.replaceState({}, "", modalOnBase.baseUrl);
+    }
+  }
+},
+```
+
+**Why this matters:** When closing a modal via `history.replaceState`, no Inertia navigate event fires. Without clearing `currentModalRef`, the duplicate detection logic would prevent the same modal from opening again.
 
 ##### modalStack.ts
 
@@ -1349,10 +1467,366 @@ def edit(conn, %{"id" => id, "step" => step}) do
 end
 ```
 
+## Real-Time WebSocket Support
+
+### Overview
+
+nb_inertia provides real-time prop updates via Phoenix Channels, eliminating the need for polling. This integration leverages Phoenix's excellent WebSocket support while maintaining Inertia.js's prop-based architecture.
+
+### Installation
+
+Run the generator to set up WebSocket support:
+
+```bash
+mix nb_inertia.gen.realtime
+```
+
+This creates:
+- `lib/my_app_web/channels/user_socket.ex` - Phoenix Socket module
+- `assets/js/lib/socket.{ts,js}` - Socket setup with React hooks
+- Socket route in your endpoint
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Phoenix Backend                             │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Phoenix Channel                                          │   │
+│  │   def join("chat:" <> room_id, _params, socket)         │   │
+│  │   # Standard Phoenix Channel                             │   │
+│  └──────────────────────┬──────────────────────────────────┘   │
+│                         │                                        │
+│                         │ broadcast/3                            │
+│                         ▼                                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ NbInertia.Realtime (optional helper)                    │   │
+│  │   broadcast(Endpoint, topic, event,                     │   │
+│  │     message: {MessageSerializer, message})              │   │
+│  │   # Same serialization as render_inertia                │   │
+│  └──────────────────────┬──────────────────────────────────┘   │
+│                         │                                        │
+└─────────────────────────┼────────────────────────────────────────┘
+                          │ WebSocket
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend (React)                              │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ useChannel Hook                                          │   │
+│  │   useChannel(socket, `chat:\${room.id}`, {              │   │
+│  │     message_created: ({ message }) => { ... }           │   │
+│  │   });                                                    │   │
+│  └──────────────────────┬──────────────────────────────────┘   │
+│                         │                                        │
+│                         ▼                                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ useRealtimeProps Hook                                    │   │
+│  │   const { props, setProp } = useRealtimeProps();        │   │
+│  │   setProp('messages', msgs => [...msgs, message]);      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Backend Implementation
+
+#### Standard Phoenix Channels
+
+No special backend integration required. Use standard Phoenix Channels:
+
+```elixir
+# lib/my_app_web/channels/chat_channel.ex
+defmodule MyAppWeb.ChatChannel do
+  use Phoenix.Channel
+
+  def join("chat:" <> room_id, _params, socket) do
+    {:ok, assign(socket, :room_id, room_id)}
+  end
+end
+
+# lib/my_app_web/channels/user_socket.ex
+defmodule MyAppWeb.UserSocket do
+  use Phoenix.Socket
+
+  channel "chat:*", MyAppWeb.ChatChannel
+
+  def connect(_params, socket, _connect_info), do: {:ok, socket}
+  def id(_socket), do: nil
+end
+```
+
+#### Broadcasting Updates
+
+Use standard Phoenix broadcasting:
+
+```elixir
+defmodule MyApp.Chat do
+  def create_message(room, attrs) do
+    {:ok, message} = Repo.insert(Message.changeset(attrs))
+
+    # Standard Phoenix broadcast
+    MyAppWeb.Endpoint.broadcast("chat:#{room.id}", "message_created", %{
+      message: MyApp.Serializers.MessageSerializer.serialize(message)
+    })
+
+    {:ok, message}
+  end
+end
+```
+
+Or use the `NbInertia.Realtime` helper for consistent serialization:
+
+```elixir
+defmodule MyApp.Chat do
+  import NbInertia.Realtime
+
+  def create_message(room, attrs) do
+    {:ok, message} = Repo.insert(Message.changeset(attrs))
+
+    # Uses same tuple serialization as render_inertia
+    broadcast(MyAppWeb.Endpoint, "chat:#{room.id}", "message_created",
+      message: {MyApp.Serializers.MessageSerializer, message}
+    )
+
+    {:ok, message}
+  end
+end
+```
+
+### Frontend Implementation
+
+#### Level 1: Simple (Like Rails)
+
+```typescript
+import { socket, useChannel, useRealtimeProps } from '@/lib/socket';
+
+export default function ChatRoom({ room }: ChatRoomProps) {
+  const { props, setProp } = useRealtimeProps<ChatRoomProps>();
+
+  useChannel(socket, `chat:${room.id}`, {
+    message_created: ({ message }) => {
+      setProp('messages', msgs => [...msgs, message]);
+    },
+    message_deleted: ({ id }) => {
+      setProp('messages', msgs => msgs.filter(m => m.id !== id));
+    }
+  });
+
+  return (
+    <div>
+      {props.messages.map(msg => (
+        <Message key={msg.id} message={msg} />
+      ))}
+    </div>
+  );
+}
+```
+
+#### Level 2: Type-Safe Events
+
+```typescript
+import { socket, useChannel, useRealtimeProps } from '@/lib/socket';
+import type { ChatEvents, ChatRoomProps } from '@/types';
+
+export default function ChatRoom({ room }: ChatRoomProps) {
+  const { props, setProp } = useRealtimeProps<ChatRoomProps>();
+
+  useChannel<ChatEvents>(socket, `chat:${room.id}`, {
+    message_created: ({ message }) => {
+      // message is typed!
+      setProp('messages', msgs => [...msgs, message]);
+    }
+  });
+
+  return <div>{props.messages.map(...)}</div>;
+}
+```
+
+#### Level 3: Declarative Strategies
+
+For complex apps, use `useChannelProps` for declarative event handling:
+
+```typescript
+import { socket, useChannelProps } from '@/lib/socket';
+import type { ChatEvents, ChatRoomProps } from '@/types';
+
+export default function ChatRoom({ room }: ChatRoomProps) {
+  const { props } = useChannelProps<ChatRoomProps, ChatEvents>(
+    socket,
+    `chat:${room.id}`,
+    {
+      // Append new message to array
+      message_created: {
+        prop: 'messages',
+        strategy: 'append',
+        transform: e => e.message
+      },
+
+      // Remove message from array
+      message_deleted: {
+        prop: 'messages',
+        strategy: 'remove',
+        match: (msg, event) => msg.id === event.id
+      },
+
+      // Update message in place
+      message_edited: {
+        prop: 'messages',
+        strategy: 'update',
+        key: 'id',
+        transform: e => e.message
+      },
+
+      // Replace entire prop
+      room_updated: {
+        prop: 'room',
+        strategy: 'replace',
+        transform: e => e.room
+      },
+
+      // Reload from server
+      major_change: {
+        prop: 'messages',
+        strategy: 'reload',
+        only: ['messages', 'room']
+      }
+    }
+  );
+
+  return <div>{props.messages.map(...)}</div>;
+}
+```
+
+#### Level 4: Mixed Approach
+
+```typescript
+useChannelProps<ChatRoomProps, ChatEvents>(socket, `chat:${room.id}`, {
+  // Declarative for simple cases
+  message_created: {
+    prop: 'messages',
+    strategy: 'append',
+    transform: e => e.message
+  },
+
+  // Custom handler for complex logic
+  presence_changed: (event, { props, setProp, reload }) => {
+    if (event.userCount > 100) {
+      // Too many users, fall back to polling
+      reload({ only: ['messages'] });
+    } else {
+      setProp('onlineUsers', event.users);
+    }
+  }
+});
+```
+
+### Available Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `append` | Add item to end of array |
+| `prepend` | Add item to start of array |
+| `remove` | Remove items matching predicate |
+| `update` | Update item in place by key |
+| `upsert` | Update if exists, append if not |
+| `replace` | Replace entire prop value |
+| `reload` | Reload prop(s) from server |
+
+### Hooks Reference
+
+#### useChannel
+
+```typescript
+function useChannel<TEvents>(
+  socket: Socket | null,
+  topic: string,
+  handlers: { [K in keyof TEvents]?: (payload: TEvents[K]) => void },
+  options?: {
+    params?: Record<string, unknown>;
+    onJoin?: (response: unknown) => void;
+    onError?: (error: unknown) => void;
+    onClose?: () => void;
+    enabled?: boolean;
+  }
+): Channel | null;
+```
+
+#### useRealtimeProps
+
+```typescript
+function useRealtimeProps<T>(): {
+  props: T;
+  setProp: <K extends keyof T>(key: K, updater: T[K] | ((current: T[K]) => T[K])) => void;
+  setProps: (updater: Partial<T> | ((current: T) => Partial<T>)) => void;
+  reload: (options?: { only?: string[] }) => void;
+  resetOptimistic: () => void;
+  hasOptimisticUpdates: boolean;
+};
+```
+
+#### usePresence
+
+```typescript
+function usePresence<T>(
+  socket: Socket | null,
+  topic: string,
+  options?: PresenceOptions
+): {
+  presences: PresenceState<T>;
+  list: () => Array<{ id: string; metas: T[] }>;
+  getByKey: (key: string) => T[] | undefined;
+};
+```
+
+### NbInertia.Realtime Module
+
+**Location**: `lib/nb_inertia/realtime.ex`
+
+Helper module for broadcasting with consistent serialization:
+
+```elixir
+# Import in a context module
+defmodule MyApp.Chat do
+  use NbInertia.Realtime, endpoint: MyAppWeb.Endpoint
+
+  def create_message(room, attrs) do
+    {:ok, message} = Repo.insert(...)
+
+    # Endpoint is pre-configured
+    broadcast("chat:#{room.id}", "message_created",
+      message: {MessageSerializer, message}
+    )
+
+    {:ok, message}
+  end
+end
+```
+
+**Functions:**
+- `broadcast/4` - Broadcast with serialization support
+- `broadcast_from/4` - Broadcast excluding sender
+- `serialize_payload/1` - Serialize payload map
+
+### Comparison with Rails/Inertia
+
+| Aspect | Rails + Inertia | Phoenix + nb_inertia |
+|--------|-----------------|----------------------|
+| Backend channel | ActionCable (standard) | Phoenix Channel (standard) |
+| Broadcasting | `ActionCable.server.broadcast` | `Endpoint.broadcast` |
+| Frontend subscribe | Manual setup | `useChannel` hook |
+| Prop updates | `router.replace({ props })` | `setProp` / `setProps` |
+| Type safety | Manual | Auto-generated |
+| Declarative patterns | None | Optional strategies |
+| Reconnection | ActionCable handles | Phoenix Socket handles |
+| Presence | Separate library | Built-in `usePresence` |
+
 ## Related Resources
 
 - **Source**: https://github.com/nordbeam/nb/tree/main/nb_inertia
 - **Inertia.js docs**: https://inertiajs.com
+- **Phoenix Channels**: https://hexdocs.pm/phoenix/channels.html
 - **nb_routes integration**: ../nb_routes/CLAUDE.md
 - **nb_ts integration**: ../nb_ts/CLAUDE.md
 - **Monorepo CLAUDE.md**: ../CLAUDE.md

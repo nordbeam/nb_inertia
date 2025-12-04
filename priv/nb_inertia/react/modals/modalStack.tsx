@@ -38,20 +38,93 @@
  * ```
  */
 
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { router } from '@inertiajs/react';
 import type {
   ModalConfig,
-  ModalEventType,
-  ModalEventHandler,
   ModalInstance,
   ModalStackContextValue,
+  PrefetchedModal,
 } from './types';
+
+/**
+ * Inertia Page object structure for modal context
+ */
+export interface ModalPageObject {
+  component: string;
+  props: Record<string, any>;
+  url: string;
+  version?: string;
+  scrollRegions?: Array<{ top: number; left: number }>;
+  rememberedState?: Record<string, unknown>;
+  clearHistory?: boolean;
+  encryptHistory?: boolean;
+}
+
+/**
+ * Context for providing modal page data
+ * This allows usePage() to work correctly inside modals
+ */
+const ModalPageContext = createContext<ModalPageObject | null>(null);
+ModalPageContext.displayName = 'NbInertiaModalPageContext';
+
+/**
+ * Hook to check if we're inside a modal context
+ * @returns true if component is rendered inside a modal
+ */
+export function useIsInModal(): boolean {
+  return useContext(ModalPageContext) !== null;
+}
+
+/**
+ * Hook to get the modal's page object
+ * Returns null if not in a modal context
+ */
+export function useModalPageContext(): ModalPageObject | null {
+  return useContext(ModalPageContext);
+}
+
+/**
+ * Provider component that wraps modal content with page context
+ * This should be used by modal renderers to provide page data to modal content
+ */
+export interface ModalPageProviderProps {
+  component: string;
+  props: Record<string, any>;
+  url: string;
+  children: React.ReactNode;
+}
+
+export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
+  component,
+  props,
+  url,
+  children,
+}) => {
+  const page: ModalPageObject = React.useMemo(
+    () => ({
+      component,
+      props,
+      url,
+      version: '1.0',
+      scrollRegions: [],
+      rememberedState: {},
+      clearHistory: false,
+      encryptHistory: false,
+    }),
+    [component, props, url]
+  );
+
+  return (
+    <ModalPageContext.Provider value={page}>
+      {children}
+    </ModalPageContext.Provider>
+  );
+};
 
 // Re-export types for convenience
 export type {
   ModalConfig,
-  ModalEventType,
-  ModalEventHandler,
   ModalInstance,
   ModalStackContextValue,
 } from './types';
@@ -133,6 +206,11 @@ export const useModal = (): ModalInstance | null => {
 };
 
 /**
+ * Function type for resolving component names to React components
+ */
+export type ResolveComponentFn = (name: string) => Promise<React.ComponentType<any>>;
+
+/**
  * Props for ModalStackProvider
  */
 export interface ModalStackProviderProps {
@@ -145,6 +223,24 @@ export interface ModalStackProviderProps {
    * Optional callback when modal stack changes
    */
   onStackChange?: (modals: ModalInstance[]) => void;
+
+  /**
+   * Function to resolve component names to React components.
+   * When provided, enables ModalLink to prefetch both data AND component modules
+   * for instant modal opening.
+   *
+   * @example
+   * ```tsx
+   * const pages = import.meta.glob('./pages/**\/*.tsx');
+   * const resolveComponent = (name: string) =>
+   *   pages[`./pages/${name}.tsx`]().then((m: any) => m.default);
+   *
+   * <ModalStackProvider resolveComponent={resolveComponent}>
+   *   <App />
+   * </ModalStackProvider>
+   * ```
+   */
+  resolveComponent?: ResolveComponentFn;
 }
 
 /**
@@ -188,26 +284,40 @@ export interface ModalStackProviderProps {
 export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
   children,
   onStackChange,
+  resolveComponent,
 }) => {
   const [modals, setModals] = useState<ModalInstance[]>([]);
   const nextIdRef = useRef(0);
 
+  // Cache for prefetched modal data (keyed by URL)
+  const prefetchCacheRef = useRef<Map<string, PrefetchedModal>>(new Map());
+  // Cache for preloaded components (keyed by component name)
+  const componentCacheRef = useRef<Map<string, React.ComponentType<any>>>(new Map());
+  // Track in-progress prefetches to avoid duplicates
+  const prefetchingRef = useRef<Set<string>>(new Set());
+
   /**
    * Push a new modal onto the stack
+   * Returns the modal ID, or empty string if a modal with the same URL already exists
    */
   const pushModal = useCallback(
-    (modalData: Omit<ModalInstance, 'id' | 'index' | 'eventHandlers'>) => {
+    (modalData: Omit<ModalInstance, 'id'>) => {
       const id = `modal-${nextIdRef.current++}`;
-      const index = modals.length;
 
       const modal: ModalInstance = {
         ...modalData,
         id,
-        index,
-        eventHandlers: new Map(),
       };
 
+      let didPush = false;
       setModals((prev) => {
+        // Check if a modal with this URL already exists (prevent duplicates)
+        const existingModal = prev.find((m) => m.url === modalData.url);
+        if (existingModal) {
+          return prev; // Don't add duplicate
+        }
+
+        didPush = true;
         const newModals = [...prev, modal];
         if (onStackChange) {
           onStackChange(newModals);
@@ -215,29 +325,55 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
         return newModals;
       });
 
-      return id;
+      return didPush ? id : '';
     },
-    [modals.length, onStackChange]
+    [onStackChange]
   );
 
   /**
    * Remove a modal from the stack by ID
+   * Calls the modal's onClose callback after removing it from the stack
    */
   const popModal = useCallback(
     (id: string) => {
+      // Use ref-like object to capture callback from inside setModals
+      // This avoids stale closure issues where `modals` in the outer scope is outdated
+      const callbackRef: { current: (() => void) | null } = { current: null };
+
+      // Remove from stack and capture the callback
       setModals((prev) => {
+        // Find the modal in the CURRENT state (prev), not the closure's `modals`
+        const modal = prev.find((m) => m.id === id);
+        callbackRef.current = modal?.onClose || null;
+
         const newModals = prev.filter((m) => m.id !== id);
         if (onStackChange) {
           onStackChange(newModals);
         }
         return newModals;
       });
+
+      // Call onClose AFTER state update is scheduled (outside the updater)
+      // Use setTimeout to ensure the modal is removed from DOM first
+      // Note: setModals callback runs synchronously, so callbackRef.current is set
+      setTimeout(() => {
+        if (callbackRef.current) {
+          try {
+            callbackRef.current();
+          } catch (error) {
+            console.error('Error in modal onClose callback:', error);
+          }
+        }
+      }, 0);
     },
     [onStackChange]
   );
 
   /**
    * Clear all modals from the stack
+   * Note: Does NOT call onClose callbacks. This is intentional because clearModals
+   * is typically called during navigation when we're already going somewhere else.
+   * Use popModal if you need onClose callbacks to fire.
    */
   const clearModals = useCallback(() => {
     setModals([]);
@@ -257,70 +393,131 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
   );
 
   /**
-   * Add an event listener to a modal
+   * Update an existing modal's properties
+   * Used to replace a loading modal with actual content
    */
-  const addEventListener = useCallback((id: string, event: ModalEventType, handler: ModalEventHandler) => {
-    setModals((prev) =>
-      prev.map((modal) => {
-        if (modal.id === id) {
-          const handlers = modal.eventHandlers.get(event) || new Set();
-          handlers.add(handler);
-          modal.eventHandlers.set(event, handlers);
+  const updateModal = useCallback(
+    (id: string, updates: Partial<Omit<ModalInstance, 'id'>>) => {
+      setModals((prev) => {
+        const newModals = prev.map((modal) =>
+          modal.id === id ? { ...modal, ...updates } : modal
+        );
+        if (onStackChange) {
+          onStackChange(newModals);
         }
-        return modal;
-      })
-    );
+        return newModals;
+      });
+    },
+    [onStackChange]
+  );
+
+  /**
+   * Get prefetched modal data from cache by URL
+   */
+  const getPrefetchedModal = useCallback((url: string): PrefetchedModal | undefined => {
+    const cached = prefetchCacheRef.current.get(url);
+    if (!cached) return undefined;
+
+    // Check if cache is still valid (default 30 seconds)
+    const maxAge = 30000;
+    if (Date.now() - cached.timestamp > maxAge) {
+      prefetchCacheRef.current.delete(url);
+      return undefined;
+    }
+
+    return cached;
   }, []);
 
   /**
-   * Remove an event listener from a modal
+   * Prefetch modal data and component for a URL
+   * This triggers Inertia's prefetch and then resolves the component
    */
-  const removeEventListener = useCallback(
-    (id: string, event: ModalEventType, handler: ModalEventHandler) => {
-      setModals((prev) =>
-        prev.map((modal) => {
-          if (modal.id === id) {
-            const handlers = modal.eventHandlers.get(event);
-            if (handlers) {
-              handlers.delete(handler);
-            }
-          }
-          return modal;
-        })
-      );
-    },
-    []
-  );
+  const prefetchModal = useCallback((url: string, options?: { cacheFor?: number }) => {
+    // Skip if already prefetching or cached
+    if (prefetchingRef.current.has(url)) return;
+    if (prefetchCacheRef.current.has(url)) return;
+
+    prefetchingRef.current.add(url);
+
+    // Trigger Inertia's prefetch
+    const prefetchOptions: { cacheFor?: number } = {};
+    if (options?.cacheFor !== undefined) prefetchOptions.cacheFor = options.cacheFor;
+
+    (router as any).prefetch?.(url, { preserveState: true }, prefetchOptions);
+    prefetchingRef.current.delete(url);
+  }, []);
 
   /**
-   * Emit an event for a modal
+   * Listen for Inertia prefetch events and preload component modules
+   * When a prefetch completes, we:
+   * 1. Extract modal data from the response
+   * 2. Resolve the component module (triggers dynamic import)
+   * 3. Cache both data and component together keyed by URL
    */
-  const emitEvent = useCallback(
-    async (id: string, event: ModalEventType): Promise<boolean> => {
-      const modal = modals.find((m) => m.id === id);
-      if (!modal) return true;
+  useEffect(() => {
+    if (!resolveComponent) return;
 
-      const handlers = modal.eventHandlers.get(event);
-      if (!handlers || handlers.size === 0) return true;
+    // Listen for prefetch completions
+    const unsubscribe = router.on('prefetched', (event: any) => {
+      // The response may be a JSON string or already parsed object
+      const rawResponse = event.detail?.response;
+      const pageData = typeof rawResponse === 'string' ? JSON.parse(rawResponse) : rawResponse;
 
-      // Execute all handlers
-      for (const handler of handlers) {
-        try {
-          const result = await handler(modal);
-          // If any handler returns false, cancel the event
-          if (result === false) {
-            return false;
-          }
-        } catch (error) {
-          console.error(`Error in modal event handler (${event}):`, error);
-          // Continue with other handlers even if one fails
-        }
+      const modalData = pageData?.props?._nb_modal;
+      if (!modalData?.component) return;
+
+      const componentName = modalData.component;
+      const modalUrl = modalData.url || pageData?.url;
+
+      if (!modalUrl) return;
+
+      // Skip if already fully cached
+      if (prefetchCacheRef.current.has(modalUrl)) return;
+
+      // Check if component is already cached
+      const cachedComponent = componentCacheRef.current.get(componentName);
+
+      if (cachedComponent) {
+        // Component already loaded, just cache the full prefetch
+        prefetchCacheRef.current.set(modalUrl, {
+          data: {
+            component: componentName,
+            props: modalData.props || {},
+            url: modalUrl,
+            baseUrl: modalData.baseUrl || '',
+            config: modalData.config,
+          },
+          component: cachedComponent,
+          timestamp: Date.now(),
+        });
+      } else {
+        // Preload the component module (triggers dynamic import)
+        resolveComponent(componentName)
+          .then((Component) => {
+            // Cache the component for reuse
+            componentCacheRef.current.set(componentName, Component);
+
+            // Cache the full prefetch data
+            prefetchCacheRef.current.set(modalUrl, {
+              data: {
+                component: componentName,
+                props: modalData.props || {},
+                url: modalUrl,
+                baseUrl: modalData.baseUrl || '',
+                config: modalData.config,
+              },
+              component: Component,
+              timestamp: Date.now(),
+            });
+          })
+          .catch((error) => {
+            console.warn('[ModalStack] Component preload failed:', componentName, error);
+          });
       }
+    });
 
-      return true;
-    },
-    [modals]
-  );
+    return unsubscribe;
+  }, [resolveComponent]);
 
   const value: ModalStackContextValue = {
     modals,
@@ -328,9 +525,10 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
     popModal,
     clearModals,
     getModal,
-    addEventListener,
-    removeEventListener,
-    emitEvent,
+    updateModal,
+    resolveComponent,
+    prefetchModal: resolveComponent ? prefetchModal : undefined,
+    getPrefetchedModal,
   };
 
   return <ModalStackContext.Provider value={value}>{children}</ModalStackContext.Provider>;

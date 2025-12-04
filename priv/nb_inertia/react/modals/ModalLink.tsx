@@ -2,11 +2,11 @@
  * NbInertia ModalLink Component for React
  *
  * Provides a link component that opens Inertia pages in modals instead of
- * navigating to them. When clicked, it fetches the target page and displays
- * it in a modal overlay.
+ * navigating to them.
  *
  * @example
- * import { ModalLink } from '@/modals/ModalLink';
+ * ```tsx
+ * import { ModalLink } from '@nordbeam/nb-inertia/modals';
  * import { user_path } from '@/routes';
  *
  * // Open user show page in a modal
@@ -19,12 +19,15 @@
  * >
  *   View User Details
  * </ModalLink>
+ * ```
  */
 
-import React, { useState, useCallback } from 'react';
-import { router } from '../router';
-import { type RouteResult } from '../router';
-import { useModalStack, type ModalConfig } from './HeadlessModal';
+import React, { useCallback, useMemo, useEffect, useRef } from 'react';
+import { router } from '@inertiajs/react';
+import type { RouteResult } from '../../shared/types';
+import type { ModalConfig } from './types';
+import { useModalStack } from './modalStack';
+import type { ResolveComponentFn } from './modalStack';
 
 /**
  * Props for the ModalLink component
@@ -40,17 +43,10 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
   /**
    * Optional modal configuration
    *
-   * Configure the modal appearance and behavior when opened.
+   * Note: This is passed to the backend via query params if needed,
+   * but typically the backend controls modal configuration.
    */
   modalConfig?: ModalConfig;
-
-  /**
-   * Base URL for the modal
-   *
-   * When the modal closes, the browser will navigate to this URL.
-   * If not provided, uses the current URL.
-   */
-  baseUrl?: string;
 
   /**
    * HTTP method to use for the request
@@ -66,9 +62,64 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
   data?: Record<string, any>;
 
   /**
+   * Custom loading component to display while modal content is loading
+   *
+   * If provided, this component will be rendered in the modal shell
+   * while waiting for the server response. If not provided, a default
+   * loading spinner will be shown.
+   *
+   * @example
+   * ```tsx
+   * <ModalLink
+   *   href={edit_user_path(1)}
+   *   loadingComponent={UserFormSkeleton}
+   * >
+   *   Edit User
+   * </ModalLink>
+   * ```
+   */
+  loadingComponent?: React.ComponentType;
+
+  /**
    * Callback when the link is clicked
    */
   onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+
+  /**
+   * Enable prefetching. Can be:
+   * - boolean: true enables hover prefetch
+   * - 'hover' | 'mount' | 'click': single mode
+   * - ('hover' | 'mount' | 'click')[]: multiple modes
+   *
+   * Note: Prefetching only works for GET requests.
+   *
+   * @example
+   * ```tsx
+   * // Prefetch on hover
+   * <ModalLink href={user_path(1)} prefetch>View User</ModalLink>
+   *
+   * // Prefetch on mount
+   * <ModalLink href={user_path(1)} prefetch="mount">View User</ModalLink>
+   *
+   * // Multiple modes
+   * <ModalLink href={user_path(1)} prefetch={['hover', 'mount']}>View User</ModalLink>
+   * ```
+   */
+  prefetch?: boolean | 'hover' | 'mount' | 'click' | ('hover' | 'mount' | 'click')[];
+
+  /**
+   * Duration in milliseconds to cache prefetched data
+   *
+   * @default 30000 (30 seconds)
+   */
+  cacheFor?: number;
+
+  /**
+   * Tags for organizing cached prefetch data
+   *
+   * Can be used to invalidate specific cached prefetch data.
+   */
+  cacheTags?: string[];
 
   /**
    * Children to render
@@ -96,20 +147,18 @@ function isRouteResult(value: unknown): value is RouteResult {
 /**
  * ModalLink - Link component that opens pages in modals
  *
- * When clicked, this component fetches the target page and displays it in a modal
- * instead of navigating to it. The modal integrates with the modal stack and
- * supports all modal configuration options.
+ * When clicked, this component:
+ * 1. Triggers an Inertia visit to fetch the content
+ * 2. InitialModalHandler renders the modal when response arrives
  *
  * Features:
  * - Accepts both string URLs and RouteResult objects
- * - Shows loading state during fetch
- * - Configurable modal appearance via modalConfig
  * - Prevents default navigation behavior
- * - Maintains browser history integration
+ * - Respects modifier keys (Ctrl/Cmd+click opens in new tab)
  *
  * @example
  * ```tsx
- * import { ModalLink } from '@/modals/ModalLink';
+ * import { ModalLink } from '@nordbeam/nb-inertia/modals';
  * import { user_path, edit_user_path } from '@/routes';
  *
  * // Basic usage
@@ -121,110 +170,192 @@ function isRouteResult(value: unknown): value is RouteResult {
  * // With custom modal config
  * <ModalLink
  *   href={user_path(1)}
- *   modalConfig={{
- *     size: 'lg',
- *     position: 'center',
- *     closeButton: true
- *   }}
+ *   modalConfig={{ size: 'lg', position: 'center' }}
  * >
  *   View Details
  * </ModalLink>
- *
- * // Slideover variant
- * <ModalLink
- *   href={edit_user_path(1)}
- *   modalConfig={{
- *     slideover: true,
- *     position: 'right'
- *   }}
- * >
- *   Edit
- * </ModalLink>
  * ```
  */
+/**
+ * Placeholder component for loading modals
+ * This is used as the component when the modal is in loading state
+ */
+const LoadingPlaceholder: React.FC = () => null;
+
 export const ModalLink: React.FC<ModalLinkProps> = ({
   href,
   method,
   data,
-  modalConfig = {},
-  baseUrl,
+  modalConfig,
+  loadingComponent,
   onClick,
+  prefetch,
+  cacheFor,
+  cacheTags,
   children,
   className,
   ...anchorProps
 }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const { pushModal } = useModalStack();
+  const { pushModal, modals, prefetchModal, getPrefetchedModal } = useModalStack();
 
   // Extract URL and method from RouteResult if provided
   const finalHref = isRouteResult(href) ? href.url : href;
   const finalMethod = (isRouteResult(href) && !method ? href.method : method) || 'get';
 
-  const handleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-    // Allow modifier keys to work normally (open in new tab, etc.)
-    if (e.ctrlKey || e.metaKey || e.shiftKey) {
-      return;
+  // Normalize prefetch prop to array of modes
+  const prefetchModes = useMemo(() => {
+    if (!prefetch) return [];
+    if (prefetch === true) return ['hover'] as const;
+    if (typeof prefetch === 'string') return [prefetch] as const;
+    return prefetch;
+  }, [prefetch]);
+
+  // Prefetch function - uses our custom prefetch that loads both data AND component
+  const doPrefetch = useCallback(() => {
+    if (finalMethod !== 'get') return;
+
+    // Use our custom prefetchModal if available (loads data + component)
+    if (prefetchModal) {
+      prefetchModal(finalHref, { cacheFor });
+    } else {
+      // Fallback to Inertia's prefetch (data only)
+      const prefetchOptions: { cacheFor?: number; cacheTags?: string[] } = {};
+      if (cacheFor !== undefined) prefetchOptions.cacheFor = cacheFor;
+      if (cacheTags !== undefined) prefetchOptions.cacheTags = cacheTags;
+      (router as any).prefetch?.(finalHref, { preserveState: true }, prefetchOptions);
     }
+  }, [finalHref, finalMethod, cacheFor, cacheTags, prefetchModal]);
 
-    e.preventDefault();
-
-    // Call user's onClick if provided
-    if (onClick) {
-      onClick(e);
+  // Mount prefetch
+  useEffect(() => {
+    if (prefetchModes.includes('mount')) {
+      const timer = setTimeout(doPrefetch, 0);
+      return () => clearTimeout(timer);
     }
+  }, [prefetchModes, doPrefetch]);
 
-    setIsLoading(true);
+  // Hover prefetch with delay
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Use Inertia router to fetch the modal page
-    // The response will contain modal headers if it's a modal response
-    router.visit(finalHref, {
-      method: finalMethod,
-      data,
-      preserveState: true,
-      preserveScroll: true,
-      only: [], // Don't merge with current page props
-      onSuccess: (page) => {
-        // The page response should contain modal information
-        // For now, we assume the component name from the page response
-        // In a full implementation, the backend would send modal headers
+  const handleMouseEnter = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      // Call any existing onMouseEnter from anchorProps
+      (anchorProps as any).onMouseEnter?.(e);
 
-        // Extract modal data from response (this is a simplified version)
-        // In practice, you'd read custom headers from the response
-        const component = page.component;
-        const props = page.props;
+      if (prefetchModes.includes('hover')) {
+        hoverTimeoutRef.current = setTimeout(doPrefetch, 75);
+      }
+    },
+    [prefetchModes, doPrefetch, anchorProps]
+  );
 
-        // Push modal to stack
+  const handleMouseLeave = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      // Call any existing onMouseLeave from anchorProps
+      (anchorProps as any).onMouseLeave?.(e);
+
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+    },
+    [anchorProps]
+  );
+
+  // Click prefetch (mousedown)
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      // Call any existing onMouseDown from anchorProps
+      (anchorProps as any).onMouseDown?.(e);
+
+      if (prefetchModes.includes('click')) {
+        doPrefetch();
+      }
+    },
+    [prefetchModes, doPrefetch, anchorProps]
+  );
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      // Allow modifier keys to work normally (open in new tab, etc.)
+      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+        return;
+      }
+
+      e.preventDefault();
+
+      // Call user's onClick if provided
+      if (onClick) {
+        onClick(e);
+      }
+
+      // Check if there's already a modal for this URL (prevent duplicates)
+      const existingModal = modals.find((m) => m.url === finalHref);
+      if (existingModal) {
+        return;
+      }
+
+      // Check if we have fully prefetched data (both data AND component)
+      const prefetched = getPrefetchedModal?.(finalHref);
+      if (prefetched) {
+        // Instant modal opening - no loading state needed!
         pushModal({
-          component: component as any, // This would need proper component resolution
-          props,
-          config: modalConfig,
-          baseUrl: baseUrl || window.location.pathname,
+          component: prefetched.component,
+          componentName: prefetched.data.component,
+          props: prefetched.data.props,
+          url: prefetched.data.url,
+          config: prefetched.data.config || modalConfig || {},
+          baseUrl: prefetched.data.baseUrl,
+          onClose: () => {
+            // Update URL to base URL when modal is closed
+            if (prefetched.data.baseUrl && typeof window !== 'undefined') {
+              if (window.location.pathname !== prefetched.data.baseUrl) {
+                window.history.replaceState({}, '', prefetched.data.baseUrl);
+              }
+            }
+          },
         });
 
-        setIsLoading(false);
-      },
-      onError: () => {
-        setIsLoading(false);
-      },
-      onFinish: () => {
-        setIsLoading(false);
-      },
-    });
-  }, [finalHref, finalMethod, data, modalConfig, baseUrl, onClick, pushModal]);
+        // Update browser URL to modal URL
+        if (typeof window !== 'undefined') {
+          window.history.pushState({}, '', prefetched.data.url);
+        }
 
-  // Build the class names
-  const linkClassName = [
-    className,
-    isLoading ? 'opacity-50 cursor-wait' : 'cursor-pointer',
-  ]
-    .filter(Boolean)
-    .join(' ');
+        return;
+      }
+
+      // No prefetched data - show loading modal and fetch via Inertia
+      pushModal({
+        component: LoadingPlaceholder,
+        componentName: '',
+        props: {},
+        url: finalHref,
+        config: modalConfig || {},
+        baseUrl: '', // Will be updated by InitialModalHandler
+        loading: true,
+        loadingComponent,
+      });
+
+      // Fetch the content via Inertia
+      // InitialModalHandler will update the loading modal when response arrives
+      router.visit(finalHref, {
+        method: finalMethod,
+        data: data ?? {},
+        preserveState: true,
+        preserveScroll: true,
+      });
+    },
+    [finalHref, finalMethod, data, onClick, modalConfig, loadingComponent, pushModal, modals, getPrefetchedModal]
+  );
 
   return (
     <a
       href={finalHref}
-      className={linkClassName}
+      className={className}
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onMouseDown={handleMouseDown}
       {...anchorProps}
     >
       {children}

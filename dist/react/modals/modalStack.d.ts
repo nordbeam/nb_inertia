@@ -1,6 +1,43 @@
 import { default as React } from 'react';
 import { ModalInstance, ModalStackContextValue } from './types';
-export type { ModalConfig, ModalEventType, ModalEventHandler, ModalInstance, ModalStackContextValue, } from './types';
+/**
+ * Inertia Page object structure for modal context
+ */
+export interface ModalPageObject {
+    component: string;
+    props: Record<string, any>;
+    url: string;
+    version?: string;
+    scrollRegions?: Array<{
+        top: number;
+        left: number;
+    }>;
+    rememberedState?: Record<string, unknown>;
+    clearHistory?: boolean;
+    encryptHistory?: boolean;
+}
+/**
+ * Hook to check if we're inside a modal context
+ * @returns true if component is rendered inside a modal
+ */
+export declare function useIsInModal(): boolean;
+/**
+ * Hook to get the modal's page object
+ * Returns null if not in a modal context
+ */
+export declare function useModalPageContext(): ModalPageObject | null;
+/**
+ * Provider component that wraps modal content with page context
+ * This should be used by modal renderers to provide page data to modal content
+ */
+export interface ModalPageProviderProps {
+    component: string;
+    props: Record<string, any>;
+    url: string;
+    children: React.ReactNode;
+}
+export declare const ModalPageProvider: React.FC<ModalPageProviderProps>;
+export type { ModalConfig, ModalInstance, ModalStackContextValue, } from './types';
 /**
  * Hook to access the modal stack
  *
@@ -61,6 +98,10 @@ export declare const useModalStack: () => ModalStackContextValue;
  */
 export declare const useModal: () => ModalInstance | null;
 /**
+ * Function type for resolving component names to React components
+ */
+export type ResolveComponentFn = (name: string) => Promise<React.ComponentType<any>>;
+/**
  * Props for ModalStackProvider
  */
 export interface ModalStackProviderProps {
@@ -72,6 +113,23 @@ export interface ModalStackProviderProps {
      * Optional callback when modal stack changes
      */
     onStackChange?: (modals: ModalInstance[]) => void;
+    /**
+     * Function to resolve component names to React components.
+     * When provided, enables ModalLink to prefetch both data AND component modules
+     * for instant modal opening.
+     *
+     * @example
+     * ```tsx
+     * const pages = import.meta.glob('./pages/**\/*.tsx');
+     * const resolveComponent = (name: string) =>
+     *   pages[`./pages/${name}.tsx`]().then((m: any) => m.default);
+     *
+     * <ModalStackProvider resolveComponent={resolveComponent}>
+     *   <App />
+     * </ModalStackProvider>
+     * ```
+     */
+    resolveComponent?: ResolveComponentFn;
 }
 /**
  * Provider for the modal stack

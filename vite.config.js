@@ -59,6 +59,8 @@ export default defineConfig({
         '@radix-ui/react-dialog',
         'radix-vue',
         'vue',
+        'phoenix',
+        'axios',
       ],
       output: {
         preserveModules: true,
