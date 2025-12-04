@@ -935,9 +935,11 @@ if Code.ensure_loaded?(Igniter) do
       extension = if typescript, do: "tsx", else: "jsx"
 
       igniter
-      |> Igniter.create_new_file("assets/js/ssr_dev.#{extension}", ssr_dev_template(),
+      # Create unified ssr.tsx - uses the same code as ssr_dev for Vite Module Runner API
+      |> Igniter.create_new_file("assets/js/ssr.#{extension}", ssr_dev_template(),
         on_exists: :skip
       )
+      # Also create ssr_prod for production builds with DenoRider (eager loading)
       |> Igniter.create_new_file("assets/js/ssr_prod.#{extension}", ssr_prod_template(),
         on_exists: :skip
       )
@@ -1446,8 +1448,8 @@ if Code.ensure_loaded?(Igniter) do
           SSR Configuration:
           - Added {:deno_rider, "~> 0.2"} for production SSR
           - Created SSR entry points:
-            • assets/js/ssr_dev.#{if typescript, do: "tsx", else: "jsx"} - Development SSR with HMR
-            • assets/js/ssr_prod.#{if typescript, do: "tsx", else: "jsx"} - Production SSR for Deno
+            • assets/js/ssr.#{if typescript, do: "tsx", else: "jsx"} - Main SSR entry (used by Vite)
+            • assets/js/ssr_prod.#{if typescript, do: "tsx", else: "jsx"} - Production SSR for Deno (eager loading)
           - Created Vite plugin for Deno compatibility
           - SSR enabled in nb_inertia config
 
@@ -1495,7 +1497,7 @@ if Code.ensure_loaded?(Igniter) do
                  enabled: true,
                  path: '/ssr',
                  healthPath: '/ssr-health',
-                 entryPoint: './js/ssr_dev.#{if typescript, do: "tsx", else: "jsx"}',
+                 entryPoint: './js/ssr.#{if typescript, do: "tsx", else: "jsx"}',
                  hotFile: '../priv/ssr-hot',
                },
              })
