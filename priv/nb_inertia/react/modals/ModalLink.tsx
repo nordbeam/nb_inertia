@@ -295,6 +295,10 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
         return;
       }
 
+      // Capture the current full URL (with query params) before opening the modal
+      // This will be used to restore the URL when the modal closes
+      const returnUrl = typeof window !== 'undefined' ? window.location.href : '';
+
       // Check if we have fully prefetched data (both data AND component)
       const prefetched = getPrefetchedModal?.(finalHref);
       if (prefetched) {
@@ -306,12 +310,11 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
           url: prefetched.data.url,
           config: prefetched.data.config || modalConfig || {},
           baseUrl: prefetched.data.baseUrl,
+          returnUrl,
           onClose: () => {
-            // Update URL to base URL when modal is closed
-            if (prefetched.data.baseUrl && typeof window !== 'undefined') {
-              if (window.location.pathname !== prefetched.data.baseUrl) {
-                window.history.replaceState({}, '', prefetched.data.baseUrl);
-              }
+            // Update URL to the original URL (with query params) when modal is closed
+            if (returnUrl && typeof window !== 'undefined') {
+              window.history.replaceState({}, '', returnUrl);
             }
           },
         });
@@ -332,6 +335,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
         url: finalHref,
         config: modalConfig || {},
         baseUrl: '', // Will be updated by InitialModalHandler
+        returnUrl, // Capture the return URL now so it's available when modal is updated
         loading: true,
         loadingComponent,
       });

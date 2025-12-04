@@ -36,7 +36,7 @@ function l() {
           }
         const o = {
           ...JSON.parse(JSON.stringify(t.props)),
-          ...r.props
+          _nb_modal: r.props._nb_modal
         };
         return r.component = t.component, r.props = o, e.data = r, e;
       },

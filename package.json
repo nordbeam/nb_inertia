@@ -1,6 +1,6 @@
 {
   "name": "@nordbeam/nb-inertia",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Modal system, route-bound forms, and SSR-safe components for Phoenix + Inertia.js",
   "type": "module",
   "author": "Nordbeam",
@@ -52,6 +52,10 @@
     "./react/modals": {
       "import": "./dist/react/modals/index.js",
       "types": "./dist/react/modals/index.d.ts"
+    },
+    "./react/realtime": {
+      "import": "./dist/react/realtime/index.js",
+      "types": "./dist/react/realtime/index.d.ts"
     },
     "./vue/useForm": {
       "import": "./priv/nb_inertia/vue/useForm.ts",

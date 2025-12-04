@@ -92,6 +92,14 @@ export interface ModalInstance {
      */
     baseUrl: string;
     /**
+     * The full URL (including query params) to return to when the modal closes
+     *
+     * This captures the exact URL the user was on before opening the modal,
+     * preserving query parameters like pagination, filters, and sorting.
+     * If not set, falls back to baseUrl.
+     */
+    returnUrl?: string;
+    /**
      * Callback invoked when the modal is closed
      */
     onClose?: () => void;

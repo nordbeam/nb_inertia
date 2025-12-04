@@ -130,11 +130,12 @@ export function setupModalInterceptor(): void {
       // Deep clone current props to avoid mutations
       const currentProps = JSON.parse(JSON.stringify(currentPage.props));
 
-      // Merge props: current page props + modal response props
-      // Modal props (including _nb_modal) take precedence
+      // IMPORTANT: Only merge the _nb_modal prop from the response
+      // Keep all current page props intact (preserves filters, pagination, etc.)
+      // The backend fetches base_url without query params, so its data is stale
       const mergedProps = {
         ...currentProps,
-        ...responseData.props,
+        _nb_modal: responseData.props._nb_modal,
       };
 
       // Modify response to keep current component (preserve backdrop)

@@ -135,6 +135,7 @@ if Code.ensure_loaded?(Igniter) do
       |> create_sample_page()
       |> update_page_controller()
       |> create_lib_inertia()
+      |> copy_modal_components()
       |> print_next_steps()
     end
 
@@ -675,19 +676,23 @@ if Code.ensure_loaded?(Igniter) do
       # Add @vitejs/plugin-react if using nb_vite
       react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react", else: ""
 
+      # Core packages + @radix-ui/react-visually-hidden for modal accessibility
+      base_packages =
+        "@inertiajs/react @nordbeam/nb-inertia react react-dom axios @radix-ui/react-visually-hidden"
+
       install_cmd =
         case pkg_manager do
           "bun" ->
-            "bun add --cwd #{assets_dir} @inertiajs/react @nordbeam/nb-inertia react react-dom axios#{react_plugin}"
+            "bun add --cwd #{assets_dir} #{base_packages}#{react_plugin}"
 
           "pnpm" ->
-            "pnpm add --dir #{assets_dir} @inertiajs/react @nordbeam/nb-inertia react react-dom axios#{react_plugin}"
+            "pnpm add --dir #{assets_dir} #{base_packages}#{react_plugin}"
 
           "yarn" ->
-            "yarn --cwd #{assets_dir} add @inertiajs/react @nordbeam/nb-inertia react react-dom axios#{react_plugin}"
+            "yarn --cwd #{assets_dir} add #{base_packages}#{react_plugin}"
 
           _ ->
-            "npm install --prefix #{assets_dir} @inertiajs/react @nordbeam/nb-inertia react react-dom axios#{react_plugin}"
+            "npm install --prefix #{assets_dir} #{base_packages}#{react_plugin}"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -1331,6 +1336,38 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
+    @doc false
+    def copy_modal_components(igniter) do
+      # Only copy for React for now (Vue support can be added later)
+      client_framework = igniter.args.options[:client_framework]
+
+      if client_framework == "react" do
+        priv_dir = :code.priv_dir(:nb_inertia)
+        source_path = Path.join([priv_dir, "components", "modals"])
+        dest_path = "assets/js/components/modals"
+
+        # Modal component files to copy
+        component_files = [
+          "ModalStackRenderer.tsx",
+          "index.ts"
+        ]
+
+        Enum.reduce(component_files, igniter, fn filename, acc ->
+          source_file = Path.join(source_path, filename)
+          dest_file = Path.join(dest_path, filename)
+
+          if File.exists?(source_file) do
+            content = File.read!(source_file)
+            Igniter.create_new_file(acc, dest_file, content, on_exists: :skip)
+          else
+            acc
+          end
+        end)
+      else
+        igniter
+      end
+    end
+
     defp print_next_steps(igniter) do
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
@@ -1479,6 +1516,27 @@ if Code.ensure_loaded?(Igniter) do
 
           This gives you enhanced functionality while maintaining full backward
           compatibility with standard Inertia.js usage.
+
+          Modal Components (shadcn/ui):
+          - Copied ModalStackRenderer to assets/js/components/modals/
+          - Uses shadcn Dialog (modals) and Sheet (slideovers)
+          - Prerequisites: npx shadcn@latest add dialog sheet
+          - Customize the renderer to match your app's design
+
+          To enable modals, wrap your app:
+
+            import { ModalStackProvider, InitialModalHandler } from '@/lib/inertia';
+            import { ModalStackRenderer } from '@/components/modals';
+
+            function App({ children }) {
+              return (
+                <ModalStackProvider resolveComponent={resolvePageComponent}>
+                  <InitialModalHandler resolveComponent={resolvePageComponent} />
+                  {children}
+                  <ModalStackRenderer />
+                </ModalStackProvider>
+              );
+            }
           """
         else
           if client_framework == "vue" do
@@ -1521,7 +1579,7 @@ if Code.ensure_loaded?(Igniter) do
       #{bundler_info}
       - Package manager: #{pkg_manager}#{config_info}
       - Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}
-      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{typescript_info}#{lib_inertia_info}#{ssr_info}
+      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{if client_framework == "react", do: "\n- Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)", else: ""}#{typescript_info}#{lib_inertia_info}#{ssr_info}
 
       Next steps:
       1. Create an Inertia-enabled controller action:

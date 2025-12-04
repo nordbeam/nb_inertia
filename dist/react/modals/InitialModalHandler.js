@@ -1,38 +1,44 @@
-import { useRef as u, useCallback as w, useEffect as H } from "react";
-import { usePage as m, router as p } from "@inertiajs/react";
-import { useModalStack as I } from "./modalStack.js";
-function _({ resolveComponent: f }) {
-  const { props: R } = m(), { pushModal: g, updateModal: b, clearModals: M, modals: i } = I(), a = u(!1), h = u(!1), o = u(null), t = u(/* @__PURE__ */ new Set()), s = w((n) => () => {
-    o.current = null, t.current.delete(n.url), n.baseUrl && !a.current && typeof window < "u" && window.location.pathname !== n.baseUrl && window.history.replaceState({}, "", n.baseUrl);
-  }, []), d = w((n) => {
-    const e = n.url;
-    if (console.log("[InitialModalHandler] openModal called:", { url: e, alreadyHandled: t.current.has(e), modalsCount: i.length }), t.current.has(e)) {
+import { useRef as u, useCallback as H, useEffect as m } from "react";
+import { usePage as I, router as p } from "@inertiajs/react";
+import { useModalStack as y } from "./modalStack.js";
+function k({ resolveComponent: f }) {
+  const { props: R } = I(), { pushModal: g, updateModal: M, clearModals: b, modals: i } = y(), a = u(!1), h = u(!1), t = u(null), l = u(/* @__PURE__ */ new Set()), s = H((n, r) => () => {
+    if (t.current = null, l.current.delete(n.url), !a.current && typeof window < "u") {
+      const e = r || n.baseUrl;
+      e && window.location.href !== e && window.history.replaceState({}, "", e);
+    }
+  }, []), d = H((n) => {
+    const r = n.url;
+    if (console.log("[InitialModalHandler] openModal called:", { url: r, alreadyHandled: l.current.has(r), modalsCount: i.length }), l.current.has(r)) {
       console.log("[InitialModalHandler] URL already handled, skipping");
       return;
     }
-    const l = i.find(
-      (r) => r.loading && r.url === e
+    const e = i.find(
+      (o) => o.loading && o.url === r
     );
-    console.log("[InitialModalHandler] loadingModal found:", !!l), t.current.add(e), f(n.component).then((r) => {
-      if (l) {
+    console.log("[InitialModalHandler] loadingModal found:", !!e), l.current.add(r), f(n.component).then((o) => {
+      if (e) {
         if (!i.find(
-          (U) => U.id === l.id && U.loading
+          (w) => w.id === e.id && w.loading
         )) {
-          t.current.delete(e);
+          l.current.delete(r);
           return;
         }
-        b(l.id, {
-          component: r,
+        const U = e.returnUrl;
+        M(e.id, {
+          component: o,
           componentName: n.component,
           props: n.props,
           config: n.config || {},
           baseUrl: n.baseUrl,
-          onClose: s(n),
+          returnUrl: U,
+          // Preserve the return URL
+          onClose: s(n, U),
           loading: !1
-        }), o.current = n;
+        }), t.current = n;
       } else
-        o.current = n, g({
-          component: r,
+        t.current = n, g({
+          component: o,
           componentName: n.component,
           props: n.props,
           url: n.url,
@@ -40,32 +46,32 @@ function _({ resolveComponent: f }) {
           baseUrl: n.baseUrl,
           onClose: s(n)
         });
-    }).catch((r) => {
-      t.current.delete(e), console.error("[InitialModalHandler] Failed to resolve modal component:", n.component, r);
+    }).catch((o) => {
+      l.current.delete(r), console.error("[InitialModalHandler] Failed to resolve modal component:", n.component, o);
     });
-  }, [f, g, b, i, s]);
-  return H(() => {
+  }, [f, g, M, i, s]);
+  return m(() => {
     const n = R._nb_modal;
     n && !h.current && (h.current = !0, d(n));
-  }, []), H(() => {
+  }, []), m(() => {
     const n = p.on("start", () => {
       a.current = !0;
-    }), e = p.on("finish", () => {
+    }), r = p.on("finish", () => {
       a.current = !1;
-    }), l = p.on("navigate", (r) => {
-      const c = r.detail.page.props?._nb_modal;
+    }), e = p.on("navigate", (o) => {
+      const c = o.detail.page.props?._nb_modal;
       if (!c) {
-        M(), o.current = null, t.current.clear();
+        b(), t.current = null, l.current.clear();
         return;
       }
-      o.current && o.current.component === c.component && o.current.url === c.url || d(c);
+      t.current && t.current.component === c.component && t.current.url === c.url || d(c);
     });
     return () => {
-      n(), e(), l();
+      n(), r(), e();
     };
-  }, [d, M]), null;
+  }, [d, b]), null;
 }
 export {
-  _ as InitialModalHandler,
-  _ as default
+  k as InitialModalHandler,
+  k as default
 };

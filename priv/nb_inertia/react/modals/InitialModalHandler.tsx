@@ -89,22 +89,28 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
   /**
    * Creates an onClose handler for a modal that:
    * 1. Clears the currentModalRef so the same modal can be reopened
-   * 2. Updates the URL to the base URL using history.replaceState
+   * 2. Updates the URL to the return URL (or base URL) using history.replaceState
+   *
+   * @param modalOnBase - The modal data from the backend
+   * @param returnUrl - Optional return URL captured when the modal was opened (includes query params)
    */
-  const createOnClose = useCallback((modalOnBase: ModalOnBase) => {
+  const createOnClose = useCallback((modalOnBase: ModalOnBase, returnUrl?: string) => {
     return () => {
       // Clear the current modal ref so the same modal can be opened again
       currentModalRef.current = null;
       // Allow this URL to be opened again
       handledUrlsRef.current.delete(modalOnBase.url);
 
-      // Update URL to base URL when modal is closed
+      // Update URL when modal is closed
       // We use history.replaceState instead of router.visit because:
       // 1. The backdrop already shows the correct base page content
       // 2. router.visit would trigger a full navigation that races with React re-render
-      if (modalOnBase.baseUrl && !isNavigatingRef.current && typeof window !== 'undefined') {
-        if (window.location.pathname !== modalOnBase.baseUrl) {
-          window.history.replaceState({}, '', modalOnBase.baseUrl);
+      //
+      // Priority: returnUrl (full URL with query params) > baseUrl (path only)
+      if (!isNavigatingRef.current && typeof window !== 'undefined') {
+        const targetUrl = returnUrl || modalOnBase.baseUrl;
+        if (targetUrl && window.location.href !== targetUrl) {
+          window.history.replaceState({}, '', targetUrl);
         }
       }
     };
@@ -148,6 +154,9 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
             return;
           }
 
+          // Preserve the returnUrl from the loading modal (captured by ModalLink)
+          const returnUrl = loadingModal.returnUrl;
+
           // Update the existing loading modal with actual content
           updateModal(loadingModal.id, {
             component: Component,
@@ -155,12 +164,14 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
             props: modalOnBase.props,
             config: modalOnBase.config || {},
             baseUrl: modalOnBase.baseUrl,
-            onClose: createOnClose(modalOnBase),
+            returnUrl, // Preserve the return URL
+            onClose: createOnClose(modalOnBase, returnUrl),
             loading: false,
           });
           currentModalRef.current = modalOnBase;
         } else {
           // No loading modal found - push new modal (direct URL access case)
+          // For direct URL access, there's no return URL - use baseUrl for restoration
           currentModalRef.current = modalOnBase;
           pushModal({
             component: Component,
