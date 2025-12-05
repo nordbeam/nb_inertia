@@ -689,7 +689,7 @@ if Code.ensure_loaded?(Igniter) do
 
       # Core packages + @radix-ui/react-visually-hidden for modal accessibility
       base_packages =
-        "@inertiajs/react @nordbeam/nb-inertia react react-dom axios @radix-ui/react-visually-hidden"
+        "@inertiajs/react github:nordbeam/nb_inertia react react-dom axios @radix-ui/react-visually-hidden"
 
       install_cmd =
         case pkg_manager do
@@ -713,12 +713,14 @@ if Code.ensure_loaded?(Igniter) do
       pkg_manager = get_package_manager_command(igniter)
       assets_dir = "assets"
 
+      base_packages = "@inertiajs/vue3 github:nordbeam/nb_inertia vue vue-loader axios"
+
       install_cmd =
         case pkg_manager do
-          "bun" -> "bun add --cwd #{assets_dir} @inertiajs/vue3 vue vue-loader axios"
-          "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/vue3 vue vue-loader axios"
-          "yarn" -> "yarn --cwd #{assets_dir} add @inertiajs/vue3 vue vue-loader axios"
-          _ -> "npm install --prefix #{assets_dir} @inertiajs/vue3 vue vue-loader axios"
+          "bun" -> "bun add --cwd #{assets_dir} #{base_packages}"
+          "pnpm" -> "pnpm add --dir #{assets_dir} #{base_packages}"
+          "yarn" -> "yarn --cwd #{assets_dir} add #{base_packages}"
+          _ -> "npm install --prefix #{assets_dir} #{base_packages}"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
