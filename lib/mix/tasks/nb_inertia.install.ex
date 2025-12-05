@@ -688,8 +688,12 @@ if Code.ensure_loaded?(Igniter) do
       react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react", else: ""
 
       # Core packages + @radix-ui/react-visually-hidden for modal accessibility
+      # Note: @nordbeam/nb-inertia is NOT included here because when nb_inertia is installed
+      # as an Elixir dependency, bun automatically creates a workspace dependency
+      # (workspace:../deps/nb_inertia) that provides the npm package. Adding it again
+      # via GitHub would create a dependency loop.
       base_packages =
-        "@inertiajs/react github:nordbeam/nb_inertia react react-dom axios @radix-ui/react-visually-hidden"
+        "@inertiajs/react react react-dom axios @radix-ui/react-visually-hidden"
 
       install_cmd =
         case pkg_manager do
@@ -713,7 +717,8 @@ if Code.ensure_loaded?(Igniter) do
       pkg_manager = get_package_manager_command(igniter)
       assets_dir = "assets"
 
-      base_packages = "@inertiajs/vue3 github:nordbeam/nb_inertia vue vue-loader axios"
+      # Note: @nordbeam/nb-inertia is NOT included - see comment in React version
+      base_packages = "@inertiajs/vue3 vue vue-loader axios"
 
       install_cmd =
         case pkg_manager do
