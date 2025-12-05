@@ -129,11 +129,16 @@ if Code.ensure_loaded?(Igniter) do
 
     @impl Igniter.Mix.Task
     def igniter(igniter) do
+      yes? = igniter.args.options[:yes] || false
+
       igniter
       |> Igniter.Project.Formatter.import_dep(:nb_inertia)
       |> add_dependencies()
       # Fetch and compile dependencies so nb_ts.install and nb_flop.install are available
-      |> Igniter.apply_and_fetch_dependencies(operation: "installing nb_inertia dependencies")
+      |> Igniter.apply_and_fetch_dependencies(
+        operation: "installing nb_inertia dependencies",
+        yes: yes?
+      )
       |> setup_controller_helpers()
       |> setup_html_helpers()
       |> setup_router()
