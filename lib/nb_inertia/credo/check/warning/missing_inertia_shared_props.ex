@@ -42,7 +42,8 @@ if Code.ensure_loaded?(Credo.Check) do
 
         {NbInertia.Credo.Check.Warning.MissingInertiaSharedProps, [
           expected: [Auth, FormErrors],
-          exclude_modules: [MyApp.PublicController]
+          exclude_modules: [MyApp.PublicController],
+          exclude_module_patterns: ["Public", "Unsubscribe", "EmailPreferences"]
         ]}
 
     """
@@ -52,7 +53,8 @@ if Code.ensure_loaded?(Credo.Check) do
       category: :warning,
       param_defaults: [
         expected: [],
-        exclude_modules: []
+        exclude_modules: [],
+        exclude_module_patterns: []
       ],
       explanations: [
         check: """
@@ -68,7 +70,9 @@ if Code.ensure_loaded?(Credo.Check) do
         """,
         params: [
           expected: "List of expected shared prop module names (atoms)",
-          exclude_modules: "List of controller modules to exclude from this check"
+          exclude_modules: "List of controller modules to exclude from this check",
+          exclude_module_patterns:
+            "List of string patterns - modules containing any pattern are excluded"
         ]
       ]
 
@@ -77,6 +81,7 @@ if Code.ensure_loaded?(Credo.Check) do
     def run(%SourceFile{} = source_file, params) do
       expected = Params.get(params, :expected, __MODULE__)
       exclude_modules = Params.get(params, :exclude_modules, __MODULE__)
+      exclude_module_patterns = Params.get(params, :exclude_module_patterns, __MODULE__)
 
       # Skip if no expected shared props configured
       if Enum.empty?(expected) do
@@ -89,6 +94,7 @@ if Code.ensure_loaded?(Credo.Check) do
           issues: [],
           expected: expected,
           exclude_modules: exclude_modules,
+          exclude_module_patterns: exclude_module_patterns,
           current_module: nil,
           has_nb_inertia_controller: false,
           declared_shared: [],
@@ -161,7 +167,16 @@ if Code.ensure_loaded?(Credo.Check) do
     end
 
     defp check_missing_for_module(state) do
-      if state.current_module in state.exclude_modules do
+      module_string = to_string(state.current_module)
+
+      excluded_by_module? = state.current_module in state.exclude_modules
+
+      excluded_by_pattern? =
+        Enum.any?(state.exclude_module_patterns, fn pattern ->
+          String.contains?(module_string, to_string(pattern))
+        end)
+
+      if excluded_by_module? or excluded_by_pattern? do
         []
       else
         # Get just the last part of module names for comparison
