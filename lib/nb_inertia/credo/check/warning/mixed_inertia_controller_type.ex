@@ -5,6 +5,23 @@ if Code.ensure_loaded?(Credo.Check) do
     Warns when a module uses both `use MyAppWeb, :controller` and
     `use NbInertia.Controller` together, which can cause conflicts.
 
+    ## Exception: Mixed Controllers
+
+    If a controller legitimately needs both patterns (e.g., it has both Inertia
+    pages AND JSON API endpoints), include "Mixed controller" in the @moduledoc:
+
+        defmodule MyAppWeb.ItemsController do
+          @moduledoc \"\"\"
+          Items controller.
+
+          Mixed controller: has both Inertia pages and JSON API endpoints.
+          \"\"\"
+          use MyAppWeb, :controller
+          use NbInertia.Controller
+
+          # ...
+        end
+
     ## Example
 
     Instead of:
@@ -45,6 +62,10 @@ if Code.ensure_loaded?(Credo.Check) do
         `NbInertia.Controller` already includes controller functionality
         and provides the declarative page DSL. Using both can cause
         conflicts and confusion.
+
+        Exception: If the controller legitimately needs both patterns
+        (e.g., Inertia pages + JSON endpoints), include "Mixed controller"
+        in the @moduledoc to suppress this warning.
         """
       ]
 
@@ -59,7 +80,8 @@ if Code.ensure_loaded?(Credo.Check) do
         current_module: nil,
         module_line: nil,
         has_use_controller: false,
-        has_nb_inertia_controller: false
+        has_nb_inertia_controller: false,
+        is_mixed_controller: false
       }
 
       final_state = Credo.Code.prewalk(source_file, &traverse(&1, &2), initial_state)
@@ -81,30 +103,31 @@ if Code.ensure_loaded?(Credo.Check) do
          | current_module: module_name,
            module_line: meta[:line],
            has_use_controller: false,
-           has_nb_inertia_controller: false
+           has_nb_inertia_controller: false,
+           is_mixed_controller: false
        }}
     end
 
+    # Track @moduledoc and check for "Mixed controller"
+    defp traverse({:@, _, [{:moduledoc, _, [doc_content]}]} = ast, state) when is_binary(doc_content) do
+      is_mixed = String.contains?(doc_content, "Mixed controller")
+      {ast, %{state | is_mixed_controller: is_mixed}}
+    end
+
     # Track use MyAppWeb, :controller
-    defp traverse(
-           {:use, _meta, [{:__aliases__, _, _app_web}, :controller | _]} = ast,
-           state
-         ) do
+    defp traverse({:use, _meta, [{:__aliases__, _, _app_web}, :controller | _]} = ast, state) do
       {ast, %{state | has_use_controller: true}}
     end
 
     # Track use NbInertia.Controller
-    defp traverse(
-           {:use, _meta, [{:__aliases__, _, [:NbInertia, :Controller]} | _]} = ast,
-           state
-         ) do
+    defp traverse({:use, _meta, [{:__aliases__, _, [:NbInertia, :Controller]} | _]} = ast, state) do
       {ast, %{state | has_nb_inertia_controller: true}}
     end
 
     defp traverse(ast, state), do: {ast, state}
 
     defp maybe_add_issues_for_previous_module(state) do
-      if state.has_use_controller and state.has_nb_inertia_controller and state.current_module do
+      if should_report_issue?(state) do
         issue = issue_for(state.issue_meta, state.module_line, state.current_module)
         %{state | issues: [issue | state.issues]}
       else
@@ -114,13 +137,20 @@ if Code.ensure_loaded?(Credo.Check) do
 
     defp check_mixed_usage(state) do
       issues =
-        if state.has_use_controller and state.has_nb_inertia_controller and state.current_module do
+        if should_report_issue?(state) do
           [issue_for(state.issue_meta, state.module_line, state.current_module) | state.issues]
         else
           state.issues
         end
 
       Enum.reverse(issues)
+    end
+
+    defp should_report_issue?(state) do
+      state.has_use_controller and
+        state.has_nb_inertia_controller and
+        state.current_module != nil and
+        not state.is_mixed_controller
     end
 
     defp issue_for(issue_meta, line_no, module_name) do
