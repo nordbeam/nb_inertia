@@ -50,9 +50,9 @@ defmodule NbInertia.ParamsConverter do
   - Works seamlessly with `camelize_props: true` for bidirectional conversion
   """
 
-  alias NbInertia.Config
-
   @behaviour Plug
+
+  alias NbInertia.Config
 
   @impl Plug
   def init(opts), do: opts
@@ -73,6 +73,10 @@ defmodule NbInertia.ParamsConverter do
   end
 
   @doc false
+  # Pass through structs unchanged (e.g., Plug.Upload, DateTime, etc.)
+  # Structs are maps with __struct__ key but aren't enumerable
+  def deep_convert_keys(%{__struct__: _} = value), do: value
+
   def deep_convert_keys(value) when is_map(value) do
     Map.new(value, fn {key, val} ->
       {convert_key(key), deep_convert_keys(val)}
