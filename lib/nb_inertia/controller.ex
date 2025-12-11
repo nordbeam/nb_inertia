@@ -791,6 +791,12 @@ defmodule NbInertia.Controller do
         end
       end
 
+    # Generate catch-all for undeclared pages (returns nil)
+    config_catch_all =
+      quote do
+        def inertia_page_config(_name), do: nil
+      end
+
     # Generate inertia_shared_props/0 function
     shared_props_clause =
       quote do
@@ -838,6 +844,7 @@ defmodule NbInertia.Controller do
       unquote(page_clauses)
       unquote(page_error_clause)
       unquote(config_clauses)
+      unquote(config_catch_all)
       unquote(shared_props_clause)
       unquote(inertia_pages_clause)
       unquote(shared_modules_clause)
@@ -1015,8 +1022,21 @@ defmodule NbInertia.Controller do
       page_ref = unquote(page_ref)
       props = unquote(props)
 
-      # Look up the component name
+      # Look up the component name (will raise at runtime if page not declared)
       component = page(page_ref)
+
+      # Build a map of prop name -> DSL opts for quick lookup
+      # inertia_page_config returns nil for undeclared pages
+      dsl_opts_map =
+        case inertia_page_config(page_ref) do
+          nil ->
+            %{}
+
+          page_config ->
+            page_config.props
+            |> Enum.map(fn prop -> {prop.name, prop.opts || []} end)
+            |> Map.new()
+        end
 
       # Get registered shared modules
       shared_modules = __inertia_shared_modules__()
@@ -1084,17 +1104,23 @@ defmodule NbInertia.Controller do
         end)
 
       # Assign serialized props if any (and if nb_serializer is available)
+      # Merge DSL opts with any runtime opts provided in the tuple
       conn_value =
         if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
-          NbInertia.Controller.assign_serialized_props(conn_value, serialized_props)
+          NbInertia.Controller.assign_serialized_props_with_dsl_opts(
+            conn_value,
+            serialized_props,
+            dsl_opts_map
+          )
         else
           conn_value
         end
 
-      # Assign raw props
+      # Assign raw props with DSL opts applied
       conn_value =
         Enum.reduce(raw_props, conn_value, fn {key, value}, acc ->
-          NbInertia.CoreController.assign_prop(acc, key, value)
+          dsl_opts = Map.get(dsl_opts_map, key, [])
+          NbInertia.Controller.assign_raw_prop_with_dsl_opts(acc, key, value, dsl_opts)
         end)
 
       # Apply camelization if configured
@@ -1537,6 +1563,7 @@ defmodule NbInertia.Controller do
       lazy? = Keyword.get(options, :lazy, false)
       optional? = Keyword.get(options, :optional, is_function_data?)
       defer = Keyword.get(options, :defer, false)
+      once = Keyword.get(options, :once, false)
       merge = Keyword.get(options, :merge, false)
       # Disable NbSerializer camelization since NbInertia handles it
       # This prevents double-camelization and preserves {:preserve, key} tuples
@@ -1555,8 +1582,23 @@ defmodule NbInertia.Controller do
       end
 
       # Wrap based on options
+      # Priority: defer+once (defer_once) > once > defer > optional > lazy
       value =
         cond do
+          # defer + once = defer_once (deferred loading with client caching)
+          defer != false and once != false ->
+            once_opts = build_once_opts(once)
+            defer_group = if is_binary(defer), do: defer, else: "default"
+
+            NbInertia.CoreController.inertia_defer(serialize_fn, defer_group)
+            |> NbInertia.CoreController.defer_once()
+            |> maybe_apply_once_opts(once_opts)
+
+          # once alone (evaluated immediately, cached on client)
+          once != false ->
+            once_opts = build_once_opts(once)
+            NbInertia.CoreController.inertia_once(serialize_fn, once_opts)
+
           optional? ->
             NbInertia.CoreController.inertia_optional(serialize_fn)
 
@@ -1584,6 +1626,30 @@ defmodule NbInertia.Controller do
       # Assign the prop
       NbInertia.CoreController.assign_prop(conn, key, value)
     end
+
+    # Builds once options from various input formats
+    defp build_once_opts(true), do: []
+    defp build_once_opts(opts) when is_list(opts), do: opts
+    defp build_once_opts(_), do: []
+
+    # Applies once options to a once/defer_once prop using pipe modifiers
+    defp maybe_apply_once_opts(prop, []), do: prop
+
+    defp maybe_apply_once_opts(prop, opts) do
+      prop
+      |> maybe_apply_fresh(Keyword.get(opts, :fresh))
+      |> maybe_apply_until(Keyword.get(opts, :until))
+      |> maybe_apply_as(Keyword.get(opts, :as))
+    end
+
+    defp maybe_apply_fresh(prop, nil), do: prop
+    defp maybe_apply_fresh(prop, fresh), do: NbInertia.CoreController.once_fresh(prop, fresh)
+
+    defp maybe_apply_until(prop, nil), do: prop
+    defp maybe_apply_until(prop, until), do: NbInertia.CoreController.once_until(prop, until)
+
+    defp maybe_apply_as(prop, nil), do: prop
+    defp maybe_apply_as(prop, as), do: NbInertia.CoreController.once_as(prop, as)
 
     @doc """
     Assigns serialized errors from an Ecto changeset or error map.
@@ -1645,6 +1711,53 @@ defmodule NbInertia.Controller do
 
           {serializer, data, options} when is_list(options) ->
             assign_serialized(acc, key, serializer, data, options)
+
+          _ ->
+            raise ArgumentError,
+                  "Expected prop value to be {serializer, data} or {serializer, data, options}, got: #{inspect(value)}"
+        end
+      end)
+    end
+
+    @doc """
+    Assigns serialized props with DSL options merged in.
+
+    This function merges DSL-declared options (like `defer: true`, `lazy: true`, `merge: true`)
+    with any runtime options provided in the prop tuple. DSL options serve as defaults that
+    can be overridden by runtime options.
+
+    ## Parameters
+
+      - `conn` - The connection struct
+      - `props` - A keyword list of props with serializer tuples
+      - `dsl_opts_map` - A map of prop name -> DSL options from the inertia_page declaration
+
+    ## Examples
+
+        # Given DSL declaration:
+        inertia_page :dashboard do
+          prop :stats, StatsSerializer, defer: true
+        end
+
+        # And render call:
+        render_inertia(conn, :dashboard, stats: {StatsSerializer, get_stats()})
+
+        # The defer: true from DSL will be automatically applied
+    """
+    @spec assign_serialized_props_with_dsl_opts(Plug.Conn.t(), keyword(), map()) :: Plug.Conn.t()
+    def assign_serialized_props_with_dsl_opts(conn, props, dsl_opts_map) do
+      Enum.reduce(props, conn, fn {key, value}, acc ->
+        dsl_opts = Map.get(dsl_opts_map, key, [])
+
+        case value do
+          {serializer, data} ->
+            # No runtime opts, use DSL opts directly
+            assign_serialized(acc, key, serializer, data, dsl_opts)
+
+          {serializer, data, runtime_opts} when is_list(runtime_opts) ->
+            # Merge: runtime opts override DSL opts
+            merged_opts = Keyword.merge(dsl_opts, runtime_opts)
+            assign_serialized(acc, key, serializer, data, merged_opts)
 
           _ ->
             raise ArgumentError,
@@ -2021,6 +2134,139 @@ defmodule NbInertia.Controller do
   end
 
   defp serialize_prop_value(value), do: value
+
+  @doc """
+  Assigns a raw (non-serialized) prop with DSL options applied.
+
+  This function applies DSL-declared options (like `defer: true`, `lazy: true`,
+  `optional: true`, `merge: true`) to a raw prop value before assigning it.
+
+  ## Parameters
+
+    - `conn` - The connection struct
+    - `key` - The prop name (atom)
+    - `value` - The raw prop value (NOT a serializer tuple)
+    - `dsl_opts` - DSL options from the inertia_page declaration
+
+  ## DSL Options Supported
+
+    - `:defer` - When `true` or a group name string, wraps with `inertia_defer`
+    - `:lazy` - When `true`, wraps value in a function for lazy evaluation
+    - `:optional` - When `true`, wraps with `inertia_optional`
+    - `:merge` - When `true` or `:deep`, wraps with `inertia_merge` or `inertia_deep_merge`
+
+  ## Examples
+
+      # Given DSL declaration:
+      inertia_page :dashboard do
+        prop :stats, :map, defer: true
+        prop :settings, :map, merge: true
+      end
+
+      # And render call:
+      render_inertia(conn, :dashboard, stats: get_stats(), settings: settings)
+
+      # The defer: true and merge: true from DSL will be automatically applied
+  """
+  @spec assign_raw_prop_with_dsl_opts(Plug.Conn.t(), atom(), any(), keyword()) :: Plug.Conn.t()
+  def assign_raw_prop_with_dsl_opts(conn, key, value, dsl_opts) do
+    # Extract DSL options
+    defer = Keyword.get(dsl_opts, :defer, false)
+    once = Keyword.get(dsl_opts, :once, false)
+    lazy? = Keyword.get(dsl_opts, :lazy, false)
+    optional? = Keyword.get(dsl_opts, :optional, false)
+    merge = Keyword.get(dsl_opts, :merge, false)
+
+    # Ensure value is a function for defer/once/optional/lazy
+    value_fn = if is_function(value, 0), do: value, else: fn -> value end
+
+    # Build the value with wrappers applied based on DSL options
+    # Priority: defer+once (defer_once) > once > defer > optional > lazy
+    wrapped_value =
+      cond do
+        # defer + once = defer_once (deferred loading with client caching)
+        defer != false and once != false ->
+          once_opts = build_once_opts_from_dsl(once, dsl_opts)
+          defer_group = if is_binary(defer), do: defer, else: "default"
+
+          NbInertia.CoreController.inertia_defer(value_fn, defer_group)
+          |> NbInertia.CoreController.defer_once()
+          |> apply_once_opts_from_dsl(once_opts)
+
+        # once alone (evaluated immediately, cached on client)
+        once != false ->
+          once_opts = build_once_opts_from_dsl(once, dsl_opts)
+          NbInertia.CoreController.inertia_once(value_fn, once_opts)
+
+        # Defer wraps in a function and marks for deferred loading
+        is_binary(defer) ->
+          NbInertia.CoreController.inertia_defer(value_fn, defer)
+
+        defer == true ->
+          NbInertia.CoreController.inertia_defer(value_fn)
+
+        optional? ->
+          # Optional wraps in a function that's only called on partial reloads
+          NbInertia.CoreController.inertia_optional(value_fn)
+
+        lazy? ->
+          # Lazy just ensures the value is a function (for lazy evaluation)
+          value_fn
+
+        true ->
+          # No special handling needed
+          value
+      end
+
+    # Apply merge wrapper if needed (can be combined with above)
+    final_value =
+      case merge do
+        :deep -> NbInertia.CoreController.inertia_deep_merge(wrapped_value)
+        true -> NbInertia.CoreController.inertia_merge(wrapped_value)
+        false -> wrapped_value
+      end
+
+    # Assign the prop
+    NbInertia.CoreController.assign_prop(conn, key, final_value)
+  end
+
+  # Build once options from DSL, checking for both `once: [opts]` and separate keys
+  defp build_once_opts_from_dsl(once, dsl_opts) do
+    base_opts =
+      case once do
+        true -> []
+        opts when is_list(opts) -> opts
+        _ -> []
+      end
+
+    # Also check for once_until, once_as, once_fresh as separate DSL keys
+    base_opts
+    |> maybe_add_opt(:until, Keyword.get(dsl_opts, :once_until))
+    |> maybe_add_opt(:as, Keyword.get(dsl_opts, :once_as))
+    |> maybe_add_opt(:fresh, Keyword.get(dsl_opts, :once_fresh))
+  end
+
+  defp maybe_add_opt(opts, _key, nil), do: opts
+  defp maybe_add_opt(opts, key, value), do: Keyword.put_new(opts, key, value)
+
+  # Applies once options to a once/defer_once prop using pipe modifiers
+  defp apply_once_opts_from_dsl(prop, []), do: prop
+
+  defp apply_once_opts_from_dsl(prop, opts) do
+    prop
+    |> apply_fresh_opt(Keyword.get(opts, :fresh))
+    |> apply_until_opt(Keyword.get(opts, :until))
+    |> apply_as_opt(Keyword.get(opts, :as))
+  end
+
+  defp apply_fresh_opt(prop, nil), do: prop
+  defp apply_fresh_opt(prop, fresh), do: NbInertia.CoreController.once_fresh(prop, fresh)
+
+  defp apply_until_opt(prop, nil), do: prop
+  defp apply_until_opt(prop, until), do: NbInertia.CoreController.once_until(prop, until)
+
+  defp apply_as_opt(prop, nil), do: prop
+  defp apply_as_opt(prop, as), do: NbInertia.CoreController.once_as(prop, as)
 
   @doc false
   def do_render_inertia(conn, component) do

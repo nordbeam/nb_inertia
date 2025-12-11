@@ -23,6 +23,24 @@ defmodule NbInertia.CoreController do
   @opaque defer() :: {:defer, {fun(), String.t()}}
   @opaque preserved_prop_key :: {:preserve, raw_prop_key()}
 
+  @typedoc """
+  Configuration map for once props.
+
+  - `:callback` - The function to evaluate for the prop value
+  - `:fresh` - When `true`, forces the prop to be re-evaluated even if cached (default: `false`)
+  - `:until` - Expiration time as Unix timestamp in milliseconds
+  - `:as` - Custom key for sharing data across pages with different prop names
+  """
+  @type once_config() :: %{
+          callback: fun(),
+          fresh: boolean(),
+          until: integer() | nil,
+          as: String.t() | nil
+        }
+
+  @opaque once() :: {:once, once_config()}
+  @opaque defer_once() :: {:defer_once, {fun(), String.t(), once_config()}}
+
   @type render_opt() :: {:ssr, boolean()}
   @type render_opts() :: [render_opt()]
 
@@ -101,6 +119,254 @@ defmodule NbInertia.CoreController do
   def inertia_defer(_, _) do
     raise ArgumentError, message: "inertia_defer/2 only accepts function and group arguments"
   end
+
+  @doc """
+  Marks a prop as a "once prop", which is remembered by the client and reused on
+  subsequent pages that include the same prop. This is ideal for data that rarely
+  changes, is expensive to compute, or is simply large.
+
+  Once props are only resolved on the first page that includes them. Navigating to
+  subsequent pages with the same once prop will skip resolution and reuse the cached
+  value. Navigating to a page without the once prop will forget the cached value.
+
+  ## Options
+
+  - `:fresh` - When `true`, forces the prop to be re-evaluated (default: `false`)
+  - `:until` - Expiration time as DateTime, Unix ms timestamp, or duration keyword list
+  - `:as` - Custom key for sharing data across pages with different prop names
+
+  ## Examples
+
+      # Simple once prop
+      conn
+      |> assign_prop(:plans, inertia_once(fn -> Plan.all() end))
+
+      # With expiration (1 day)
+      conn
+      |> assign_prop(:rates, inertia_once(fn -> ExchangeRate.all() end, until: [days: 1]))
+
+      # With custom key for sharing across pages
+      conn
+      |> assign_prop(:member_roles, inertia_once(fn -> Role.all() end, as: "roles"))
+      # On another page:
+      |> assign_prop(:available_roles, inertia_once(fn -> Role.all() end, as: "roles"))
+
+      # Force refresh based on condition
+      conn
+      |> assign_prop(:data, inertia_once(fn -> load_data() end, fresh: should_refresh?()))
+
+  ## Pipe-friendly modifiers
+
+  For complex configurations, you can use pipe-friendly modifiers:
+
+      conn
+      |> assign_prop(:plans,
+          inertia_once(fn -> Plan.all() end)
+          |> once_fresh(page == 3)
+          |> once_until(hours: 24)
+          |> once_as("cached_plans")
+        )
+
+  """
+  @doc since: "2.6.0"
+  @spec inertia_once(fun()) :: once()
+  def inertia_once(fun) when is_function(fun, 0) do
+    {:once, %{callback: fun, fresh: false, until: nil, as: nil}}
+  end
+
+  def inertia_once(_) do
+    raise ArgumentError, message: "inertia_once/1 only accepts a zero-arity function argument"
+  end
+
+  @doc """
+  Marks a prop as a "once prop" with options.
+
+  See `inertia_once/1` for full documentation.
+
+  ## Options
+
+  - `:fresh` - When `true`, forces the prop to be re-evaluated (default: `false`)
+  - `:until` - Expiration as DateTime, Unix ms timestamp, or duration keyword list like
+    `[hours: 24]`, `[days: 1]`, `[minutes: 30]`
+  - `:as` - Custom key for sharing data across pages with different prop names
+
+  ## Examples
+
+      inertia_once(fn -> Plan.all() end, until: [days: 1], as: "plans")
+      inertia_once(fn -> Rate.all() end, fresh: needs_refresh?)
+
+  """
+  @doc since: "2.6.0"
+  @spec inertia_once(fun(), keyword()) :: once()
+  def inertia_once(fun, opts) when is_function(fun, 0) and is_list(opts) do
+    {:once,
+     %{
+       callback: fun,
+       fresh: Keyword.get(opts, :fresh, false),
+       until: parse_until(Keyword.get(opts, :until)),
+       as: parse_as(Keyword.get(opts, :as))
+     }}
+  end
+
+  @doc """
+  Sets the `fresh` option on a once prop, forcing it to be re-evaluated.
+
+  When `true`, the server will always resolve the prop callback, ignoring any
+  cached value on the client.
+
+  ## Examples
+
+      inertia_once(fn -> load_data() end)
+      |> once_fresh()
+
+      inertia_once(fn -> load_data() end)
+      |> once_fresh(should_refresh?)
+
+  """
+  @doc since: "2.6.0"
+  @spec once_fresh(once()) :: once()
+  @spec once_fresh(once(), boolean()) :: once()
+  def once_fresh(once_prop, condition \\ true)
+
+  def once_fresh({:once, config}, condition) when is_boolean(condition) do
+    {:once, %{config | fresh: condition}}
+  end
+
+  def once_fresh({:defer_once, {fun, group, config}}, condition) when is_boolean(condition) do
+    {:defer_once, {fun, group, %{config | fresh: condition}}}
+  end
+
+  @doc """
+  Sets the expiration time for a once prop.
+
+  After the expiration time passes, the prop will be re-evaluated on the next
+  page that includes it.
+
+  ## Duration formats
+
+  - `[days: n]` - Expires in n days
+  - `[hours: n]` - Expires in n hours
+  - `[minutes: n]` - Expires in n minutes
+  - `[seconds: n]` - Expires in n seconds
+  - `DateTime.t()` - Expires at specific DateTime
+  - `integer()` - Unix timestamp in milliseconds
+
+  ## Examples
+
+      inertia_once(fn -> rates() end)
+      |> once_until(hours: 24)
+
+      inertia_once(fn -> data() end)
+      |> once_until(~U[2024-12-31 23:59:59Z])
+
+  """
+  @doc since: "2.6.0"
+  @spec once_until(once(), DateTime.t() | integer() | keyword()) :: once()
+  def once_until({:once, config}, duration) do
+    {:once, %{config | until: parse_until(duration)}}
+  end
+
+  def once_until({:defer_once, {fun, group, config}}, duration) do
+    {:defer_once, {fun, group, %{config | until: parse_until(duration)}}}
+  end
+
+  @doc """
+  Sets a custom key for a once prop, allowing data to be shared across pages
+  with different prop names.
+
+  ## Examples
+
+      # Team member list page
+      conn
+      |> assign_prop(:member_roles,
+          inertia_once(fn -> Role.all() end)
+          |> once_as("roles")
+        )
+
+      # Invite form page - shares the same cached data
+      conn
+      |> assign_prop(:available_roles,
+          inertia_once(fn -> Role.all() end)
+          |> once_as("roles")
+        )
+
+  """
+  @doc since: "2.6.0"
+  @spec once_as(once(), String.t() | atom()) :: once()
+  def once_as({:once, config}, key) do
+    {:once, %{config | as: parse_as(key)}}
+  end
+
+  def once_as({:defer_once, {fun, group, config}}, key) do
+    {:defer_once, {fun, group, %{config | as: parse_as(key)}}}
+  end
+
+  @doc """
+  Converts a deferred prop to also be a once prop.
+
+  This combines the benefits of both: the prop is loaded after initial page render
+  (deferred), and once loaded, it's cached and reused across page navigations (once).
+
+  ## Examples
+
+      conn
+      |> assign_prop(:permissions,
+          inertia_defer(fn -> Permission.all() end)
+          |> defer_once()
+        )
+
+      # With once options
+      conn
+      |> assign_prop(:permissions,
+          inertia_defer(fn -> Permission.all() end)
+          |> defer_once()
+          |> once_until(hours: 1)
+          |> once_as("user_permissions")
+        )
+
+  """
+  @doc since: "2.6.0"
+  @spec defer_once(defer()) :: defer_once()
+  def defer_once({:defer, {fun, group}}) do
+    {:defer_once, {fun, group, %{callback: fun, fresh: false, until: nil, as: nil}}}
+  end
+
+  def defer_once(_) do
+    raise ArgumentError,
+      message: "defer_once/1 only accepts a deferred prop (created with inertia_defer/1,2)"
+  end
+
+  # Duration parsing helpers
+
+  defp parse_until(nil), do: nil
+  defp parse_until(%DateTime{} = dt), do: DateTime.to_unix(dt, :millisecond)
+
+  defp parse_until(ms) when is_integer(ms) and ms > 1_000_000_000_000 do
+    # Already a Unix timestamp in milliseconds
+    ms
+  end
+
+  defp parse_until(seconds) when is_integer(seconds) do
+    # Treat small integers as seconds from now
+    System.system_time(:millisecond) + seconds * 1000
+  end
+
+  defp parse_until(opts) when is_list(opts) do
+    ms =
+      cond do
+        days = Keyword.get(opts, :days) -> days * 86_400_000
+        hours = Keyword.get(opts, :hours) -> hours * 3_600_000
+        minutes = Keyword.get(opts, :minutes) -> minutes * 60_000
+        seconds = Keyword.get(opts, :seconds) -> seconds * 1000
+        true -> 0
+      end
+
+    if ms > 0, do: System.system_time(:millisecond) + ms, else: nil
+  end
+
+  defp parse_as(nil), do: nil
+  defp parse_as(key) when is_binary(key), do: key
+  defp parse_as(key) when is_atom(key), do: Atom.to_string(key)
 
   @doc """
   Marks a prop value as "always included", which means it will be included in
@@ -359,7 +625,7 @@ defmodule NbInertia.CoreController do
 
     props = Map.merge(shared_props, inline_props)
     {props, merge_props, deep_merge_props} = resolve_merge_props(props, opts)
-    {props, deferred_props} = resolve_deferred_props(props)
+    {props, deferred_props, once_props} = resolve_deferred_and_once_props(props, opts)
 
     props =
       props
@@ -374,6 +640,7 @@ defmodule NbInertia.CoreController do
       merge_props: merge_props,
       deep_merge_props: deep_merge_props,
       deferred_props: deferred_props,
+      once_props: once_props,
       is_partial: is_partial
     })
     |> detect_ssr(opts)
@@ -446,22 +713,51 @@ defmodule NbInertia.CoreController do
     end)
   end
 
-  defp resolve_deferred_props(props) do
-    Enum.reduce(props, {[], %{}}, fn {key, value}, {props, keys} ->
+  defp resolve_deferred_and_once_props(props, opts) do
+    Enum.reduce(props, {[], %{}, %{}}, fn {key, value}, {props_acc, deferred_acc, once_acc} ->
+      transformed_key =
+        key
+        |> transform_key(opts)
+        |> to_string()
+
       case value do
         {:defer, {fun, group}} ->
-          keys =
-            case Map.get(keys, group) do
-              [_ | _] = group_keys -> Map.put(keys, group, [key | group_keys])
-              _ -> Map.put(keys, group, [key])
-            end
+          deferred_acc = add_to_deferred_group(deferred_acc, group, key)
+          {[{key, {:optional, fun}} | props_acc], deferred_acc, once_acc}
 
-          {[{key, {:optional, fun}} | props], keys}
+        {:defer_once, {fun, group, once_config}} ->
+          deferred_acc = add_to_deferred_group(deferred_acc, group, key)
+          once_acc = build_once_prop_entry(once_acc, transformed_key, once_config)
+          {[{key, {:optional, fun}} | props_acc], deferred_acc, once_acc}
+
+        {:once, %{callback: fun} = once_config} ->
+          once_acc = build_once_prop_entry(once_acc, transformed_key, once_config)
+          {[{key, {:once_value, fun}} | props_acc], deferred_acc, once_acc}
 
         _ ->
-          {[{key, value} | props], keys}
+          {[{key, value} | props_acc], deferred_acc, once_acc}
       end
     end)
+  end
+
+  defp add_to_deferred_group(deferred_acc, group, key) do
+    case Map.get(deferred_acc, group) do
+      [_ | _] = group_keys -> Map.put(deferred_acc, group, [key | group_keys])
+      _ -> Map.put(deferred_acc, group, [key])
+    end
+  end
+
+  defp build_once_prop_entry(once_acc, transformed_key, once_config) do
+    once_key = once_config.as || transformed_key
+
+    entry =
+      if is_nil(once_config.until) do
+        %{prop: transformed_key}
+      else
+        %{prop: transformed_key, expiresAt: once_config.until}
+      end
+
+    Map.put(once_acc, once_key, entry)
   end
 
   defp apply_filters(props, only, _except, opts) when is_list(only) and only != [] do
@@ -507,6 +803,7 @@ defmodule NbInertia.CoreController do
     |> Enum.filter(fn {_key, value} ->
       case value do
         {:optional, _} -> false
+        {:once_value, _} -> true
         _ -> true
       end
     end)
@@ -528,6 +825,10 @@ defmodule NbInertia.CoreController do
   defp resolve_props({:optional, value}, opts), do: resolve_props(value, opts)
   defp resolve_props({:keep, value}, opts), do: resolve_props(value, opts)
   defp resolve_props({:merge, value}, opts), do: resolve_props(value, opts)
+
+  defp resolve_props({:once_value, fun}, opts) when is_function(fun, 0),
+    do: resolve_props(fun.(), opts)
+
   defp resolve_props(fun, opts) when is_function(fun, 0), do: resolve_props(fun.(), opts)
   defp resolve_props(value, _opts), do: value
 
@@ -628,6 +929,7 @@ defmodule NbInertia.CoreController do
     |> maybe_put_merge_props(conn)
     |> maybe_put_deep_merge_props(conn)
     |> maybe_put_deferred_props(conn)
+    |> maybe_put_once_props(conn)
   end
 
   defp maybe_put_merge_props(assigns, conn) do
@@ -658,6 +960,16 @@ defmodule NbInertia.CoreController do
       assigns
     else
       Map.put(assigns, :deferredProps, deferred_props)
+    end
+  end
+
+  defp maybe_put_once_props(assigns, conn) do
+    once_props = conn.private.inertia_page.once_props
+
+    if Enum.empty?(once_props) do
+      assigns
+    else
+      Map.put(assigns, :onceProps, once_props)
     end
   end
 

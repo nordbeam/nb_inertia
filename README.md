@@ -207,6 +207,9 @@ end)
 # Deferred loading - async load after initial render
 assign_serialized(conn, :stats, StatsSerializer, stats, defer: true)
 
+# Once props - client-cached props that persist across navigations
+assign_prop(conn, :plans, inertia_once(fn -> Plan.all() end))
+
 # Merge props - for infinite scroll/pagination
 assign_serialized(conn, :items, ItemSerializer, items, merge: true)
 ```
@@ -544,6 +547,62 @@ end
 # Valid - optional/lazy/defer props can be omitted
 render_inertia(conn, :users_show, user: user)
 ```
+
+### Once Props
+
+Once props are client-cached props that persist across page navigations. They're ideal for data that rarely changes, is expensive to compute, or is large.
+
+```elixir
+# Simple once prop - cached on client, reused across pages
+conn
+|> assign_prop(:plans, inertia_once(fn -> Plan.all() end))
+
+# With expiration (1 day)
+conn
+|> assign_prop(:rates, inertia_once(fn -> ExchangeRate.all() end, until: [days: 1]))
+
+# With custom key for sharing across pages with different prop names
+conn
+|> assign_prop(:member_roles, inertia_once(fn -> Role.all() end, as: "roles"))
+# On another page:
+|> assign_prop(:available_roles, inertia_once(fn -> Role.all() end, as: "roles"))
+
+# Force refresh based on condition
+conn
+|> assign_prop(:data, inertia_once(fn -> load_data() end, fresh: should_refresh?()))
+```
+
+**Pipe-friendly modifiers** for complex configurations:
+
+```elixir
+conn
+|> assign_prop(:plans,
+    inertia_once(fn -> Plan.all() end)
+    |> once_fresh(page == 3)      # Force re-evaluation when condition is true
+    |> once_until(hours: 24)      # Expire after 24 hours
+    |> once_as("cached_plans")    # Custom cache key
+  )
+```
+
+**Combine with defer** for deferred loading that's also cached:
+
+```elixir
+conn
+|> assign_prop(:permissions,
+    inertia_defer(fn -> Permission.all() end)
+    |> defer_once()              # Make it a once prop too
+    |> once_until(hours: 1)
+    |> once_as("user_permissions")
+  )
+```
+
+**Duration formats** for `until` option:
+- `[days: n]` - Expires in n days
+- `[hours: n]` - Expires in n hours
+- `[minutes: n]` - Expires in n minutes
+- `[seconds: n]` - Expires in n seconds
+- `DateTime.t()` - Expires at specific DateTime
+- `integer` - Unix timestamp in milliseconds
 
 ## Configuration
 
