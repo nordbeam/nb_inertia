@@ -14,7 +14,7 @@
  */
 export type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
 };
 /**
  * Type guard to check if a value is a RouteResult object
