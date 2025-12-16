@@ -15,7 +15,7 @@
  */
 export type RouteResult = {
   url: string;
-  method: 'get' | 'post' | 'put' | 'patch' | 'delete';
+  method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
 };
 
 /**
