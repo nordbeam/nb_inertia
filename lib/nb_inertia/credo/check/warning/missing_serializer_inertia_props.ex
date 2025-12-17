@@ -87,6 +87,10 @@ if Code.ensure_loaded?(Credo.Check) do
 
     defp traverse(ast, issues, _issue_meta), do: {ast, issues}
 
+    # Common Ecto/Context function patterns that return structs
+    @struct_returning_functions ~w(get get! get_by get_by! one one! all preload load)a
+    @repo_modules ~w(Repo)
+
     # Find props that look like unserialized complex data
     defp find_unserialzed_complex_props(props) do
       Enum.flat_map(props, fn
@@ -104,6 +108,31 @@ if Code.ensure_loaded?(Credo.Check) do
         {_prop_name, {{:__aliases__, _, _}, _data, _opts}} ->
           []
 
+        # Function call that looks like it returns a struct: Repo.get!(), Context.get_user()
+        {prop_name, {{:., _, [{:__aliases__, _, module_parts}, func_name]}, _, _args}}
+        when is_atom(prop_name) ->
+          module_name = List.last(module_parts)
+
+          cond do
+            # Direct Repo calls: Repo.get!(), Repo.one!()
+            module_name in @repo_modules and func_name in @struct_returning_functions ->
+              [{prop_name, :repo_call}]
+
+            # Context function calls that look like getters: Accounts.get_user()
+            func_name in @struct_returning_functions ->
+              [{prop_name, :context_getter}]
+
+            # Function names starting with "get_" or "list_" likely return structs
+            String.starts_with?(Atom.to_string(func_name), "get_") ->
+              [{prop_name, :getter_function}]
+
+            String.starts_with?(Atom.to_string(func_name), "list_") ->
+              [{prop_name, :list_function}]
+
+            true ->
+              []
+          end
+
         _ ->
           []
       end)
@@ -114,6 +143,46 @@ if Code.ensure_loaded?(Credo.Check) do
         issue_meta,
         message:
           "Prop `:#{prop_name}` accesses a field directly. Consider using a serializer: `{MySerializer, data}`.",
+        trigger: "render_inertia",
+        line_no: line_no
+      )
+    end
+
+    defp issue_for(issue_meta, line_no, prop_name, :repo_call) do
+      format_issue(
+        issue_meta,
+        message:
+          "Prop `:#{prop_name}` passes a Repo result directly. Use a serializer: `{MySerializer, data}`.",
+        trigger: "render_inertia",
+        line_no: line_no
+      )
+    end
+
+    defp issue_for(issue_meta, line_no, prop_name, :context_getter) do
+      format_issue(
+        issue_meta,
+        message:
+          "Prop `:#{prop_name}` passes a context getter result. Consider using a serializer: `{MySerializer, data}`.",
+        trigger: "render_inertia",
+        line_no: line_no
+      )
+    end
+
+    defp issue_for(issue_meta, line_no, prop_name, :getter_function) do
+      format_issue(
+        issue_meta,
+        message:
+          "Prop `:#{prop_name}` uses a getter function that may return a struct. Consider using a serializer: `{MySerializer, data}`.",
+        trigger: "render_inertia",
+        line_no: line_no
+      )
+    end
+
+    defp issue_for(issue_meta, line_no, prop_name, :list_function) do
+      format_issue(
+        issue_meta,
+        message:
+          "Prop `:#{prop_name}` uses a list function that may return structs. Consider using a serializer: `{MySerializer, data}`.",
         trigger: "render_inertia",
         line_no: line_no
       )

@@ -61,11 +61,24 @@ if Code.ensure_loaded?(Credo.Check) do
       |> Enum.reverse()
     end
 
-    # Match prop declarations with generic types
+    # Match prop declarations with generic types as second arg: `prop :name, :map`
     defp traverse({:prop, meta, [prop_name, type | _rest]} = ast, issues, issue_meta)
          when is_atom(prop_name) and type in @generic_types do
       new_issue = issue_for(issue_meta, meta[:line], prop_name, type)
       {ast, [new_issue | issues]}
+    end
+
+    # Match prop declarations with keyword syntax: `prop :name, type: :map`
+    defp traverse({:prop, meta, [prop_name, opts]} = ast, issues, issue_meta)
+         when is_atom(prop_name) and is_list(opts) do
+      type = Keyword.get(opts, :type)
+
+      if type in @generic_types do
+        new_issue = issue_for(issue_meta, meta[:line], prop_name, type)
+        {ast, [new_issue | issues]}
+      else
+        {ast, issues}
+      end
     end
 
     defp traverse(ast, issues, _issue_meta), do: {ast, issues}
