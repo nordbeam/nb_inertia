@@ -13,6 +13,7 @@ Developer guidance for Claude Code when working with the nb_inertia package.
 - **Declarative Page DSL**: Define Inertia pages with compile-time prop validation
 - **Type-Safe Props**: Automatic TypeScript type generation via nb_ts integration
 - **useForm with Route Binding**: Enhanced useForm hook that binds to nb_routes RouteResult objects
+- **Precognition Support**: Real-time form validation via Inertia.js v2.3+ Precognition protocol
 - **Modal System**: Render Inertia pages as modals/slideovers without full page navigation
 - **SSR-Safe Components**: Head and usePage with modal context support
 - **Shared Props**: Automatically add props to all Inertia responses
@@ -374,6 +375,338 @@ const handleSubmit = () => {
     <div v-if="form.errors.name">{{ form.errors.name }}</div>
   </form>
 </template>
+```
+
+## Precognition (Real-Time Validation)
+
+### Overview
+
+Precognition enables real-time form validation by sending validation requests to the server before form submission. nb_inertia provides both backend (Elixir Plug) and frontend (enhanced useForm) support for the Inertia.js v2.3+ Precognition protocol.
+
+### Protocol
+
+Precognition uses HTTP headers to identify validation requests and responses:
+
+**Request Headers:**
+- `Precognition: true` - Indicates this is a Precognition request
+- `Precognition-Validate-Only: name,email` - Optional comma-separated list of fields to validate
+
+**Response Headers:**
+- `Precognition: true` - Confirms this is a Precognition response
+- `Precognition-Success: true` - Indicates validation passed (with 204)
+- `Vary: Precognition` - Cache variation header
+
+**Response Codes:**
+- `204 No Content` - Validation passed (no errors)
+- `422 Unprocessable Entity` - Validation errors exist (JSON body with errors)
+
+### Backend Setup
+
+#### 1. Add Plug to Router Pipeline
+
+```elixir
+# lib/my_app_web/router.ex
+pipeline :browser do
+  plug :accepts, ["html"]
+  plug :fetch_session
+  plug :fetch_live_flash
+  plug :put_root_layout, html: {MyAppWeb.Layouts, :root}
+  plug :protect_from_forgery
+  plug :put_secure_browser_headers
+  plug NbInertia.Plugs.Precognition  # Add this
+end
+```
+
+#### 2. Use in Controllers
+
+**Option A: Using the `precognition/3` macro (recommended)**
+
+```elixir
+defmodule MyAppWeb.UserController do
+  use MyAppWeb, :controller
+  use NbInertia.Controller
+  use NbInertia.Plugs.Precognition  # Import the macro
+
+  def create(conn, %{"user" => user_params}) do
+    changeset = User.changeset(%User{}, user_params)
+
+    precognition conn, changeset do
+      # This block only runs for real submissions (not Precognition requests)
+      case Accounts.create_user(user_params) do
+        {:ok, user} ->
+          conn
+          |> put_flash(:info, "User created!")
+          |> redirect(to: ~p"/users/#{user.id}")
+
+        {:error, changeset} ->
+          render_inertia(conn, :users_new, changeset: changeset)
+      end
+    end
+  end
+end
+```
+
+**Option B: Using `validate_precognition/3` directly**
+
+```elixir
+def create(conn, %{"user" => user_params}) do
+  changeset = User.changeset(%User{}, user_params)
+
+  case validate_precognition(conn, changeset) do
+    {:precognition, conn} ->
+      # Precognition handled the response, we're done
+      conn
+
+    {:ok, conn} ->
+      # Not a Precognition request, proceed normally
+      case Accounts.create_user(user_params) do
+        {:ok, user} ->
+          conn
+          |> put_flash(:info, "User created!")
+          |> redirect(to: ~p"/users/#{user.id}")
+
+        {:error, changeset} ->
+          render_inertia(conn, :users_new, changeset: changeset)
+      end
+  end
+end
+```
+
+#### 3. Respecting Precognition-Validate-Only
+
+Use `precognition_fields/1` to filter validation to only requested fields:
+
+```elixir
+# With macro
+precognition conn, changeset, only: precognition_fields(conn) do
+  # ...
+end
+
+# With function
+validate_precognition(conn, changeset, only: precognition_fields(conn))
+```
+
+#### 4. Custom Validation (without Ecto Changeset)
+
+```elixir
+def create(conn, %{"payment" => params}) do
+  errors = validate_payment(params)  # Returns %{} or %{field: ["error"]}
+
+  case validate_precognition(conn, errors) do
+    {:precognition, conn} -> conn
+    {:ok, conn} ->
+      # Real submission logic...
+  end
+end
+```
+
+### Frontend Usage
+
+#### Precognition with Route Binding (Recommended)
+
+```typescript
+import { useForm } from '@nordbeam/nb-inertia/react/useForm';
+import { store_user_path } from '@/routes';
+
+function CreateUser() {
+  // Pattern 1: Precognition shorthand (route first)
+  // Same endpoint for BOTH validation AND submission
+  const form = useForm(store_user_path.post(), { name: '', email: '' });
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); form.submit(); }}>
+      <input
+        value={form.data.name}
+        onChange={e => form.setData('name', e.target.value)}
+        onBlur={() => form.validate('name')}  // Validate on blur
+      />
+      {form.invalid('name') && <span>{form.errors.name}</span>}
+
+      <input
+        value={form.data.email}
+        onChange={e => form.setData('email', e.target.value)}
+        onBlur={() => form.validate('email')}
+      />
+      {form.invalid('email') && <span>{form.errors.email}</span>}
+
+      {form.validating && <span>Validating...</span>}
+
+      <button type="submit" disabled={form.processing}>
+        Create User
+      </button>
+    </form>
+  );
+}
+```
+
+#### Different Validation and Submission Endpoints
+
+```typescript
+import { useFormWithPrecognition } from '@nordbeam/nb-inertia/react/useForm';
+import { validate_user_path, store_user_path } from '@/routes';
+
+function CreateUser() {
+  const form = useFormWithPrecognition(
+    { name: '', email: '' },
+    validate_user_path.post(),  // Validation endpoint
+    store_user_path.post()      // Submission endpoint
+  );
+
+  // form.validate() uses validate_user_path
+  // form.submit() uses store_user_path
+}
+```
+
+#### Precognition Methods
+
+When Precognition is enabled, the form has these additional methods:
+
+```typescript
+form.validate(field?: string | string[])  // Validate specific field(s)
+form.touch(field?: string | string[])     // Mark field(s) as touched
+form.touched(field?: string)              // Check if field was touched
+form.valid(field: string)                 // Check if field is valid
+form.invalid(field: string)               // Check if field has errors
+form.validating                           // Boolean - is validation in progress?
+form.setValidationTimeout(duration)       // Set debounce timeout
+form.validateFiles()                      // Validate file inputs
+form.withAllErrors()                      // Show all errors (not just first)
+```
+
+### Vue Usage
+
+```vue
+<script setup lang="ts">
+import { useForm } from '@nordbeam/nb-inertia/vue/useForm';
+import { store_user_path } from '@/routes';
+
+// Same patterns as React
+const form = useForm(store_user_path.post(), { name: '', email: '' });
+
+const validateField = (field: string) => form.validate(field);
+</script>
+
+<template>
+  <form @submit.prevent="form.submit()">
+    <input
+      v-model="form.data.name"
+      @blur="validateField('name')"
+    />
+    <span v-if="form.invalid('name')">{{ form.errors.name }}</span>
+
+    <input
+      v-model="form.data.email"
+      @blur="validateField('email')"
+    />
+    <span v-if="form.invalid('email')">{{ form.errors.email }}</span>
+
+    <span v-if="form.validating">Validating...</span>
+
+    <button type="submit" :disabled="form.processing">
+      Create User
+    </button>
+  </form>
+</template>
+```
+
+### Backend API Reference
+
+#### NbInertia.Plugs.Precognition
+
+**Plug Functions:**
+- `call/2` - Plug callback that extracts Precognition headers
+
+**Public Functions:**
+- `precognition_request?/1` - Check if request is a Precognition request
+- `precognition_fields/1` - Get list of fields to validate (from header)
+- `validate_precognition/3` - Validate changeset or error map
+- `send_precognition_response/2` - Send raw Precognition response
+
+**Macros:**
+- `precognition/3` - Handle Precognition with a do block
+- `precognition/4` - Handle Precognition with options and a do block
+
+#### Options
+
+Both `validate_precognition/3` and the `precognition` macro accept:
+
+- `:only` - List of field names to filter errors to
+- `:camelize` - Whether to camelize error keys (default: from config)
+
+```elixir
+# Filter to specific fields
+validate_precognition(conn, changeset, only: ["name", "email"])
+
+# Control camelization
+validate_precognition(conn, changeset, camelize: true)
+# %{first_name: ["error"]} becomes %{"firstName" => ["error"]}
+```
+
+### Error Response Format
+
+Precognition error responses return JSON:
+
+```json
+{
+  "errors": {
+    "name": ["can't be blank", "should be at least 3 characters"],
+    "email": ["has invalid format"]
+  }
+}
+```
+
+When `:camelize` is enabled (or configured globally):
+
+```json
+{
+  "errors": {
+    "firstName": ["can't be blank"],
+    "lastName": ["can't be blank"]
+  }
+}
+```
+
+### Integration with Ecto Changesets
+
+The Precognition plug integrates seamlessly with Ecto changesets:
+
+```elixir
+changeset = User.changeset(%User{}, %{name: "ab", email: "invalid"})
+
+# Errors are extracted using Ecto.Changeset.traverse_errors/2
+# Validation messages are interpolated with their options
+```
+
+### Testing Precognition
+
+```elixir
+defmodule MyAppWeb.UserControllerTest do
+  use MyAppWeb.ConnCase
+
+  test "validates name on Precognition request", %{conn: conn} do
+    conn =
+      conn
+      |> put_req_header("precognition", "true")
+      |> put_req_header("precognition-validate-only", "name")
+      |> post(~p"/users", user: %{name: ""})
+
+    assert conn.status == 422
+    assert get_resp_header(conn, "precognition") == ["true"]
+
+    body = json_response(conn, 422)
+    assert body["errors"]["name"] != nil
+  end
+
+  test "returns 204 on valid Precognition request", %{conn: conn} do
+    conn =
+      conn
+      |> put_req_header("precognition", "true")
+      |> post(~p"/users", user: %{name: "John", email: "john@example.com"})
+
+    assert conn.status == 204
+    assert get_resp_header(conn, "precognition-success") == ["true"]
+  end
+end
 ```
 
 ## Integration with nb_routes

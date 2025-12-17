@@ -66,8 +66,11 @@ if Code.ensure_loaded?(Credo.Check) do
     end
 
     defp controller_file?(filename) do
-      String.contains?(filename, "_controller.ex") or
-        String.contains?(filename, "/controllers/")
+      # Exclude test files - tests often call Repo directly for setup/assertions
+      not String.contains?(filename, "_test.exs") and
+        not String.contains?(filename, "/test/") and
+        (String.contains?(filename, "_controller.ex") or
+           String.contains?(filename, "/controllers/"))
     end
 
     # Match Repo.function() calls
