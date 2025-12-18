@@ -981,7 +981,6 @@ if Code.ensure_loaded?(Igniter) do
 
     defp ssr_dev_template() do
       ~S"""
-      import React from "react";
       import ReactDOMServer from "react-dom/server";
       import { createInertiaApp } from "@inertiajs/react";
 
@@ -994,7 +993,8 @@ if Code.ensure_loaded?(Igniter) do
       // Lazy loading - create import functions once at module level
       const pages = import.meta.glob("./pages/**/*.tsx");
 
-      export async function render(page) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      export async function render(page: any) {
         return await createInertiaApp({
           page,
           render: ReactDOMServer.renderToString,
@@ -1033,7 +1033,6 @@ if Code.ensure_loaded?(Igniter) do
 
     defp ssr_prod_template() do
       ~S"""
-      import React from "react";
       import ReactDOMServer from "react-dom/server";
       import { createInertiaApp } from "@inertiajs/react";
 
@@ -1044,7 +1043,8 @@ if Code.ensure_loaded?(Igniter) do
        * This is required for Deno/DenoRider which doesn't support dynamic imports
        * in the same way as Node.js.
        */
-      export async function render(page) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      export async function render(page: any) {
         return await createInertiaApp({
           page,
           render: ReactDOMServer.renderToString,

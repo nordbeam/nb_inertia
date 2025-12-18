@@ -170,15 +170,14 @@ function AnimatedModal({
       <Sheet open={isOpen} onOpenChange={handleOpenChange}>
         <SheetContent
           side={side}
-          // @ts-expect-error - showCloseButton may not be in Sheet type but works
           showCloseButton={showCloseButton}
           className="overflow-y-auto p-0"
-          onInteractOutside={(e) => {
+          onInteractOutside={(e: Event) => {
             if (closeExplicitly) {
               e.preventDefault();
             }
           }}
-          onEscapeKeyDown={(e) => {
+          onEscapeKeyDown={(e: KeyboardEvent) => {
             if (closeExplicitly) {
               e.preventDefault();
             }
@@ -200,14 +199,13 @@ function AnimatedModal({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
         className={`overflow-y-auto max-h-[90vh] ${sizeClass}`}
-        // @ts-expect-error - showCloseButton may not be in Dialog type but works
         showCloseButton={showCloseButton}
-        onInteractOutside={(e) => {
+        onInteractOutside={(e: Event) => {
           if (closeExplicitly) {
             e.preventDefault();
           }
         }}
-        onEscapeKeyDown={(e) => {
+        onEscapeKeyDown={(e: KeyboardEvent) => {
           if (closeExplicitly) {
             e.preventDefault();
           }
