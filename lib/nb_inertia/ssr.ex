@@ -256,7 +256,9 @@ defmodule NbInertia.SSR do
       case System.get_env("VITE_DEV_SERVER_URL") do
         nil ->
           vite_port = System.get_env("VITE_PORT", "5173")
-          vite_host = System.get_env("VITE_HOST", "localhost")
+          # Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
+          # where Erlang's :httpc tries IPv4 first but Vite may listen on IPv6
+          vite_host = System.get_env("VITE_HOST", "127.0.0.1")
           "http://#{vite_host}:#{vite_port}"
 
         url ->

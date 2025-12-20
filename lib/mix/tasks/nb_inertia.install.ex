@@ -967,12 +967,19 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp add_ssr_config(igniter) do
-      Igniter.Project.Config.configure(
-        igniter,
+      igniter
+      |> Igniter.Project.Config.configure(
         "config.exs",
         :nb_inertia,
         [:ssr],
         true
+      )
+      # Add env: :dev to dev.exs so SSR uses the Vite dev server
+      |> Igniter.Project.Config.configure(
+        "dev.exs",
+        :nb_inertia,
+        [:env],
+        :dev
       )
     end
 
