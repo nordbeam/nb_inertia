@@ -61,6 +61,9 @@ defmodule NbInertia.Controller do
           render_inertia: 4
         ]
 
+      # Import flash helpers
+      import NbInertia.Flash, only: [inertia_flash: 2, inertia_flash: 3]
+
       Module.register_attribute(__MODULE__, :inertia_pages, accumulate: false)
       Module.register_attribute(__MODULE__, :inertia_shared, accumulate: false)
       Module.register_attribute(__MODULE__, :inertia_shared_modules, accumulate: true)

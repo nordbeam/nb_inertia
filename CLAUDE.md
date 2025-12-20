@@ -13,12 +13,118 @@ Developer guidance for Claude Code when working with the nb_inertia package.
 - **Declarative Page DSL**: Define Inertia pages with compile-time prop validation
 - **Type-Safe Props**: Automatic TypeScript type generation via nb_ts integration
 - **useForm with Route Binding**: Enhanced useForm hook that binds to nb_routes RouteResult objects
+- **Flash Data**: One-time data that doesn't persist in browser history (v2.3.3+ compatible)
 - **Precognition Support**: Real-time form validation via Inertia.js v2.3+ Precognition protocol
 - **Modal System**: Render Inertia pages as modals/slideovers without full page navigation
 - **SSR-Safe Components**: Head and usePage with modal context support
 - **Shared Props**: Automatically add props to all Inertia responses
 - **SSR Support**: Optional server-side rendering with DenoRider
 - **Optional Dependencies**: Works with or without nb_serializer, nb_routes, and nb_ts
+
+## Flash Data
+
+Flash data is one-time data that doesn't persist in browser history, ideal for success messages, newly created IDs, or other temporary values.
+
+### Backend Usage
+
+```elixir
+defmodule MyAppWeb.UserController do
+  use MyAppWeb, :controller
+  use NbInertia.Controller
+
+  def create(conn, %{"user" => user_params}) do
+    {:ok, user} = Accounts.create_user(user_params)
+
+    conn
+    |> inertia_flash(:message, "User created successfully!")
+    |> inertia_flash(new_user_id: user.id)  # Multiple values
+    |> redirect(to: ~p"/users/#{user.id}")
+  end
+
+  # Chain with render_inertia
+  def index(conn, _params) do
+    conn
+    |> inertia_flash(:highlight, conn.params["highlight"])
+    |> render_inertia(:users_index, users: list_users())
+  end
+end
+```
+
+### Frontend Usage (React)
+
+```tsx
+import { useFlash, useOnFlash } from '@nordbeam/nb-inertia/react';
+
+// Access flash data
+function Layout({ children }) {
+  const { flash, has, get } = useFlash<{ message?: string }>();
+
+  return (
+    <div>
+      {has('message') && <Toast>{get('message')}</Toast>}
+      {children}
+    </div>
+  );
+}
+
+// Listen for flash events
+function UserForm() {
+  const [userId, setUserId] = useState<number | null>(null);
+
+  useOnFlash<{ newUserId?: number }>(({ newUserId }) => {
+    if (newUserId) {
+      setUserId(newUserId);
+    }
+  });
+
+  return <form>...</form>;
+}
+```
+
+### Frontend Usage (Vue)
+
+```vue
+<script setup lang="ts">
+import { useFlash, useOnFlash } from '@nordbeam/nb-inertia/vue';
+
+interface MyFlash {
+  message?: string;
+  toast?: { type: 'success' | 'error'; message: string };
+}
+
+const { flash, has, get } = useFlash<MyFlash>();
+
+useOnFlash<MyFlash>(({ message }) => {
+  if (message) showToast(message);
+});
+</script>
+
+<template>
+  <div v-if="has('message')" class="alert">
+    {{ get('message') }}
+  </div>
+</template>
+```
+
+### Configuration
+
+```elixir
+# config/config.exs
+config :nb_inertia,
+  # Include Phoenix flash in Inertia flash (default: true)
+  include_phoenix_flash: true,
+
+  # Camelize flash keys (follows camelize_props setting by default)
+  camelize_flash: nil
+```
+
+### How It Works
+
+1. `inertia_flash/2,3` stores flash data in `conn.private[:nb_inertia_flash]`
+2. On redirects, `NbInertia.Plugs.Flash` persists flash to the session
+3. On the next request, flash is loaded from session and cleared
+4. Flash is sent as a top-level `flash` field in the Inertia response (not inside props)
+5. Frontend hooks access `page.flash` to display temporary data
 
 ## Architecture
 

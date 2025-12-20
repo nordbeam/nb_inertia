@@ -850,10 +850,10 @@ defmodule NbInertia.CoreController do
   defp atomize_if(value, true), do: String.to_atom(value)
   defp atomize_if(value, false), do: value
 
-  # Skip putting flash in the props if there's already `:flash` key assigned.
-  # Otherwise, put the flash in the props.
-  defp maybe_put_flash(%{flash: _} = props, _conn), do: props
-  defp maybe_put_flash(props, conn), do: Map.put(props, :flash, conn.assigns.flash)
+  # Flash is now a top-level field in the Inertia response (not inside props).
+  # This function is kept for backward compatibility but is now a no-op.
+  # See NbInertia.Flash for the new flash data API.
+  defp maybe_put_flash(props, _conn), do: props
 
   defp send_response(%{private: %{inertia_request: true}} = conn) do
     conn
@@ -924,7 +924,8 @@ defmodule NbInertia.CoreController do
       url: request_path(conn),
       version: conn.private.inertia_version,
       encryptHistory: conn.private.inertia_encrypt_history,
-      clearHistory: conn.private.inertia_clear_history
+      clearHistory: conn.private.inertia_clear_history,
+      flash: NbInertia.Flash.get_flash_for_response(conn)
     }
     |> maybe_put_merge_props(conn)
     |> maybe_put_deep_merge_props(conn)

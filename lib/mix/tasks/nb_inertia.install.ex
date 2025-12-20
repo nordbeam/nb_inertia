@@ -277,6 +277,7 @@ if Code.ensure_loaded?(Igniter) do
     @doc false
     def setup_router(igniter) do
       igniter
+      |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug NbInertia.Plugs.Flash")
       |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug Inertia.Plug")
       |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug NbInertia.Plugs.ModalHeaders")
     end
@@ -1330,6 +1331,10 @@ if Code.ensure_loaded?(Igniter) do
       export { Link } from '@nordbeam/nb-inertia/react/Link';
       export { useForm } from '@nordbeam/nb-inertia/react/useForm';
 
+      // Flash data hooks
+      export { useFlash } from '@nordbeam/nb-inertia/react/useFlash';
+      export { useOnFlash } from '@nordbeam/nb-inertia/react/useOnFlash';
+
       // Modal components
       export {
         Modal,
@@ -1366,6 +1371,9 @@ if Code.ensure_loaded?(Igniter) do
       export { router } from '@nordbeam/nb-inertia/vue/router';
       export { default as Link } from '@nordbeam/nb-inertia/vue/Link';
       export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
+
+      // Flash data composables
+      export { useFlash, useOnFlash } from '@nordbeam/nb-inertia/vue/useFlash';
 
       // Modal components
       export {

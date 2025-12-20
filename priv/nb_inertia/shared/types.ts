@@ -4,6 +4,59 @@
  * This module provides common types and utilities used across React and Vue components.
  */
 
+// =============================================================================
+// Flash Data Types
+// =============================================================================
+
+/**
+ * Base flash data type.
+ *
+ * Flash data is one-time data that doesn't persist in browser history.
+ * Unlike regular props, flash values are cleared after being sent.
+ *
+ * @example
+ * ```ts
+ * // Extend via declaration merging for type-safe flash access
+ * declare module '@nordbeam/nb-inertia/shared/types' {
+ *   interface FlashData {
+ *     message?: string;
+ *     toast?: {
+ *       type: 'success' | 'error';
+ *       message: string;
+ *     };
+ *     newUserId?: number;
+ *   }
+ * }
+ * ```
+ */
+export interface FlashData {
+  [key: string]: unknown;
+}
+
+/**
+ * Page object with flash as a top-level field.
+ *
+ * This extends the standard Inertia page object with a flash field
+ * that contains one-time data.
+ */
+export interface PageWithFlash<TProps = Record<string, unknown>> {
+  component: string;
+  props: TProps;
+  url: string;
+  version: string;
+  flash: FlashData;
+  encryptHistory?: boolean;
+  clearHistory?: boolean;
+  mergeProps?: string[];
+  deepMergeProps?: string[];
+  deferredProps?: Record<string, string[]>;
+  onceProps?: Record<string, { prop: string; expiresAt?: number }>;
+}
+
+// =============================================================================
+// Route Types
+// =============================================================================
+
 /**
  * RouteResult type from nb_routes rich mode
  *
