@@ -1,6 +1,15 @@
 /**
  * Modal Backdrop Preservation via Axios Interceptor
  *
+ * **Important:** This module requires `axios` to be installed and configured as
+ * Inertia's HTTP client. Inertia v2 uses `fetch` by default, so this interceptor
+ * only works if you've configured Inertia to use axios.
+ *
+ * For most use cases, the recommended approach is to use `ModalLink` +
+ * `InitialModalHandler` which work without axios. This interceptor is only
+ * needed if you want backdrop preservation for standard `router.visit()` calls
+ * to modal URLs.
+ *
  * When navigating to a modal URL via XHR, this interceptor modifies the
  * response to preserve the current page as the backdrop. It detects the
  * `x-inertia-modal` header and:
@@ -13,6 +22,8 @@
  * rendered by ModalRoot which detects `_nb_modal` in the props.
  *
  * Based on the approach from inertiaui/modal and emargareten/inertia-modal.
+ *
+ * @requires axios - `npm install axios`
  *
  * @example
  * ```tsx

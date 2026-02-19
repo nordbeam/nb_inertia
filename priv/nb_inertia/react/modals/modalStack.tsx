@@ -40,6 +40,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { router } from '@inertiajs/react';
+import { routerPrefetch } from '../../shared/routerCompat';
 import type {
   ModalConfig,
   ModalInstance,
@@ -297,8 +298,13 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
   const prefetchingRef = useRef<Set<string>>(new Set());
 
   /**
-   * Push a new modal onto the stack
-   * Returns the modal ID, or empty string if a modal with the same URL already exists
+   * Push a new modal onto the stack.
+   *
+   * Returns the modal ID, or empty string if a modal with the same URL already exists.
+   *
+   * Note: Duplicate prevention is URL-based. Two different components at the same
+   * URL cannot both be open simultaneously. This is by design since the URL
+   * represents the modal's identity in the browser history.
    */
   const pushModal = useCallback(
     (modalData: Omit<ModalInstance, 'id'>) => {
@@ -370,15 +376,44 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
   );
 
   /**
-   * Clear all modals from the stack
-   * Note: Does NOT call onClose callbacks. This is intentional because clearModals
-   * is typically called during navigation when we're already going somewhere else.
-   * Use popModal if you need onClose callbacks to fire.
+   * Clear all modals from the stack.
+   *
+   * By default, does NOT call onClose callbacks (intentional for navigation
+   * scenarios where we're already going somewhere else).
+   *
+   * @param options.fireOnClose - If true, calls each modal's onClose callback.
+   *   Use this when clearing modals programmatically outside of navigation.
    */
-  const clearModals = useCallback(() => {
-    setModals([]);
-    if (onStackChange) {
-      onStackChange([]);
+  const clearModals = useCallback((options?: { fireOnClose?: boolean }) => {
+    if (options?.fireOnClose) {
+      setModals((prev) => {
+        // Collect callbacks before clearing
+        const callbacks = prev
+          .map((m) => m.onClose)
+          .filter((cb): cb is () => void => typeof cb === 'function');
+
+        if (onStackChange) {
+          onStackChange([]);
+        }
+
+        // Fire callbacks after state update
+        setTimeout(() => {
+          callbacks.forEach((cb) => {
+            try {
+              cb();
+            } catch (error) {
+              console.error('Error in modal onClose callback:', error);
+            }
+          });
+        }, 0);
+
+        return [];
+      });
+    } else {
+      setModals([]);
+      if (onStackChange) {
+        onStackChange([]);
+      }
     }
   }, [onStackChange]);
 
@@ -443,7 +478,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
     const prefetchOptions: { cacheFor?: number } = {};
     if (options?.cacheFor !== undefined) prefetchOptions.cacheFor = options.cacheFor;
 
-    (router as any).prefetch?.(url, { preserveState: true }, prefetchOptions);
+    routerPrefetch(url, { preserveState: true }, prefetchOptions);
     prefetchingRef.current.delete(url);
   }, []);
 
@@ -458,9 +493,9 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
     if (!resolveComponent) return;
 
     // Listen for prefetch completions
-    const unsubscribe = router.on('prefetched', (event: any) => {
+    const unsubscribe = router.on('prefetched', (event: CustomEvent) => {
       // The response may be a JSON string or already parsed object
-      const rawResponse = event.detail?.response;
+      const rawResponse = (event.detail as Record<string, unknown>)?.response;
       const pageData = typeof rawResponse === 'string' ? JSON.parse(rawResponse) : rawResponse;
 
       const modalData = pageData?.props?._nb_modal;

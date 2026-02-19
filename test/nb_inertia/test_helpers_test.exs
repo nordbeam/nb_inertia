@@ -202,4 +202,107 @@ defmodule NbInertia.TestHelpersTest do
       assert assert_inertia_prop(conn, :total_count, 42) == true
     end
   end
+
+  describe "assert_inertia_modal/2" do
+    test "passes when response has modal headers", %{conn: conn} do
+      conn =
+        conn
+        |> Plug.Conn.put_resp_header("x-inertia-modal", "true")
+        |> Plug.Conn.put_resp_header("x-inertia-modal-base-url", "/users")
+
+      assert assert_inertia_modal(conn) == true
+    end
+
+    test "passes with base_url option", %{conn: conn} do
+      conn =
+        conn
+        |> Plug.Conn.put_resp_header("x-inertia-modal", "true")
+        |> Plug.Conn.put_resp_header("x-inertia-modal-base-url", "/users")
+
+      assert assert_inertia_modal(conn, base_url: "/users") == true
+    end
+
+    test "passes with config option", %{conn: conn} do
+      conn =
+        conn
+        |> Plug.Conn.put_resp_header("x-inertia-modal", "true")
+        |> Plug.Conn.put_resp_header("x-inertia-modal-config", Jason.encode!(%{"size" => "lg"}))
+
+      assert assert_inertia_modal(conn, config: %{size: "lg"}) == true
+    end
+
+    test "fails when not a modal response", %{conn: conn} do
+      assert_raise ExUnit.AssertionError, ~r/Expected response to be a modal response/, fn ->
+        assert_inertia_modal(conn)
+      end
+    end
+  end
+
+  describe "refute_inertia_modal/1" do
+    test "passes when not a modal response", %{conn: conn} do
+      assert refute_inertia_modal(conn) == true
+    end
+
+    test "fails when modal response", %{conn: conn} do
+      conn = Plug.Conn.put_resp_header(conn, "x-inertia-modal", "true")
+
+      assert_raise ExUnit.AssertionError, ~r/Expected response to NOT be a modal response/, fn ->
+        refute_inertia_modal(conn)
+      end
+    end
+  end
+
+  describe "assert_inertia_flash/2,3" do
+    test "asserts flash key is present", %{conn: conn} do
+      conn = Plug.Conn.put_private(conn, :nb_inertia_flash, %{"message" => "Hello!"})
+
+      assert assert_inertia_flash(conn, :message) == true
+      assert assert_inertia_flash(conn, "message") == true
+    end
+
+    test "asserts flash key with value", %{conn: conn} do
+      conn = Plug.Conn.put_private(conn, :nb_inertia_flash, %{"message" => "Success!"})
+
+      assert assert_inertia_flash(conn, :message, "Success!") == true
+    end
+
+    test "fails when flash key missing", %{conn: conn} do
+      conn = Plug.Conn.put_private(conn, :nb_inertia_flash, %{})
+
+      assert_raise ExUnit.AssertionError, ~r/Expected Inertia flash key/, fn ->
+        assert_inertia_flash(conn, :message)
+      end
+    end
+
+    test "fails when flash value doesn't match", %{conn: conn} do
+      conn = Plug.Conn.put_private(conn, :nb_inertia_flash, %{"message" => "Hello"})
+
+      assert_raise ExUnit.AssertionError, ~r/Expected Inertia flash :message to be/, fn ->
+        assert_inertia_flash(conn, :message, "Goodbye")
+      end
+    end
+  end
+
+  describe "refute_inertia_flash/2" do
+    test "passes when flash key not present", %{conn: conn} do
+      conn = Plug.Conn.put_private(conn, :nb_inertia_flash, %{})
+
+      assert refute_inertia_flash(conn, :error) == true
+    end
+
+    test "fails when flash key is present", %{conn: conn} do
+      conn = Plug.Conn.put_private(conn, :nb_inertia_flash, %{"error" => "Bad"})
+
+      assert_raise ExUnit.AssertionError, ~r/Expected Inertia flash key/, fn ->
+        refute_inertia_flash(conn, :error)
+      end
+    end
+  end
+
+  describe "with_modal_headers/1" do
+    test "adds modal request header", %{conn: conn} do
+      conn = with_modal_headers(conn)
+      assert Plug.Conn.get_req_header(conn, "x-inertia-modal-request") == ["true"]
+    end
+  end
 end

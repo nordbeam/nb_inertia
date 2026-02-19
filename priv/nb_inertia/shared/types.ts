@@ -87,6 +87,6 @@ export function isRouteResult(value: unknown): value is RouteResult {
   return (
     typeof obj.url === 'string' &&
     typeof obj.method === 'string' &&
-    ['get', 'post', 'put', 'patch', 'delete'].includes(obj.method)
+    ['get', 'post', 'put', 'patch', 'delete', 'head'].includes(obj.method)
   );
 }

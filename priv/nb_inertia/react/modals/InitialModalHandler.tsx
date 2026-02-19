@@ -122,11 +122,8 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
   const openModal = useCallback((modalOnBase: ModalOnBase) => {
     const url = modalOnBase.url;
 
-    console.log('[InitialModalHandler] openModal called:', { url, alreadyHandled: handledUrlsRef.current.has(url), modalsCount: modals.length });
-
     // Check if we've already handled this URL (prevents duplicates from multiple sources)
     if (handledUrlsRef.current.has(url)) {
-      console.log('[InitialModalHandler] URL already handled, skipping');
       return;
     }
 
@@ -134,8 +131,6 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
     const loadingModal = modals.find(
       (m) => m.loading && m.url === url
     );
-
-    console.log('[InitialModalHandler] loadingModal found:', !!loadingModal);
 
     // Mark as handled immediately to prevent race conditions
     handledUrlsRef.current.add(url);
@@ -211,7 +206,7 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
     });
 
     const unsubscribeNavigate = router.on('navigate', (event) => {
-      const modalOnBase = (event.detail.page.props as any)?._nb_modal as ModalOnBase | undefined;
+      const modalOnBase = (event.detail.page.props as Record<string, unknown>)?._nb_modal as ModalOnBase | undefined;
 
       if (!modalOnBase) {
         // No modal in this navigation - clear all modals and reset tracking

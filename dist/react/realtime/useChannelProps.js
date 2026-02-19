@@ -1,6 +1,6 @@
 import { useMemo as j } from "react";
 import { useChannel as w } from "./socket.js";
-import { useRealtimeProps as I } from "./useRealtimeProps.js";
+import I from "./useRealtimeProps.js";
 function R(b, y, h, P) {
   const m = I(), { props: d, setProp: o, setProps: l, reload: f } = m, g = j(() => {
     const i = {};

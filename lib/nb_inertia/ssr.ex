@@ -27,6 +27,11 @@ defmodule NbInertia.SSR do
           raise_on_failure: config_env() != :prod
         ]
 
+  ## Requirements
+
+  - **Vite 6+** is required for SSR. The SSR template uses Vite's Module Runner API
+    which is only available in Vite 6 and later.
+
   ## SSR Modes
 
   NbInertia.SSR automatically uses different rendering strategies based on the environment:
@@ -40,6 +45,11 @@ defmodule NbInertia.SSR do
     - Pros: Embedded runtime, no external server, faster cold starts
     - Cons: Requires rebuild to see changes
     - Setup: Build SSR bundle with `npm run build:ssr`
+
+  Note: SSR rendering is handled directly by the `NbInertia.SSR` GenServer,
+  which delegates to either the dev HTTP server or DenoRider based on the
+  environment. There is no worker pool — each render call goes through the
+  GenServer sequentially.
 
   ## Setup
 

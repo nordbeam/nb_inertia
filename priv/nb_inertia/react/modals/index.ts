@@ -87,6 +87,14 @@ export type { ClientModalLinkProps } from './ClientModalLink';
 export { ModalLink } from './ModalLink';
 export type { ModalLinkProps } from './ModalLink';
 
+// Pre-built modal UI components
+export { HeadlessModal } from './HeadlessModal';
+export type { HeadlessModalProps } from './HeadlessModal';
+export { ModalRenderer } from './ModalRenderer';
+export type { ModalRendererProps, ModalRenderContext } from './ModalRenderer';
+export { CloseButton } from './CloseButton';
+export type { CloseButtonProps } from './CloseButton';
+
 // Types and configuration
 export type {
   ModalConfig,
@@ -95,6 +103,8 @@ export type {
   ModalInstance,
   ModalStackContextValue,
   PrefetchedModal,
+  TypedModalProps,
+  TypedModalInstance,
 } from './types';
 
 export { DEFAULT_MODAL_CONFIG, mergeModalConfig } from './types';

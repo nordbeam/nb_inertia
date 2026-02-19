@@ -18,7 +18,7 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     ## Installation Steps
 
-    1. Adds `{:nb_inertia, "~> 0.1"}` to mix.exs dependencies
+    1. Adds `{:nb_inertia, "~> 0.4"}` to mix.exs dependencies
     2. Adds `{:inertia, "~> 2.5"}` to mix.exs dependencies
     3. Adds `{:nb_ts, "~> 0.1"}` when --typescript is used
     4. Sets up controller helpers (use NbInertia.Controller)
@@ -1667,7 +1667,7 @@ if Code.ensure_loaded?(Igniter) do
       NbInertia has been successfully installed!
 
       What was configured:
-      - Added {:nb_inertia, "~> 0.1"} and {:inertia, "~> 2.5"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}#{if with_flop, do: "\n- Added {:nb_flop, \"~> 0.1\"} and {:flop, \"~> 0.26\"} for pagination, sorting, and filtering", else: ""}
+      - Added {:nb_inertia, "~> 0.4"} and {:inertia, "~> 2.5"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}#{if with_flop, do: "\n- Added {:nb_flop, \"~> 0.1\"} and {:flop, \"~> 0.26\"} for pagination, sorting, and filtering", else: ""}
       - Set up controller helpers (use NbInertia.Controller)
       - Set up HTML helpers (import Inertia.HTML)
       - Added plug Inertia.Plug to the browser pipeline

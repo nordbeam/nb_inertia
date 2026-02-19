@@ -158,14 +158,20 @@ export interface ModalStackContextValue {
      */
     popModal: (id: string) => void;
     /**
-     * Clear all modals from the stack
+     * Clear all modals from the stack.
+     *
+     * By default does NOT fire onClose callbacks (designed for navigation).
+     * Pass `{ fireOnClose: true }` to invoke each modal's onClose.
      *
      * @example
      * ```tsx
-     * clearModals(); // Close all open modals
+     * clearModals(); // Close all, no callbacks
+     * clearModals({ fireOnClose: true }); // Close all with callbacks
      * ```
      */
-    clearModals: () => void;
+    clearModals: (options?: {
+        fireOnClose?: boolean;
+    }) => void;
     /**
      * Get a modal instance by ID
      *
@@ -266,4 +272,37 @@ export declare const DEFAULT_MODAL_CONFIG: {
  * @returns Merged configuration with defaults
  */
 export declare function mergeModalConfig(config?: ModalConfig): ModalConfig;
+/**
+ * Helper type for accessing typed modal props.
+ *
+ * Since the modal stack manages heterogeneous modals, ModalInstance.props
+ * is `Record<string, any>` internally. Use this type to narrow props in
+ * your modal components.
+ *
+ * @example
+ * ```tsx
+ * type UserModalProps = { user: User; canEdit: boolean };
+ *
+ * function UserModal({ user, canEdit }: TypedModalProps<UserModalProps>) {
+ *   // Props are fully typed here
+ * }
+ * ```
+ */
+export type TypedModalProps<TProps extends Record<string, unknown>> = TProps;
+/**
+ * A modal instance with typed props.
+ *
+ * Use this when you know the shape of a specific modal's props.
+ *
+ * @example
+ * ```tsx
+ * const modal = getModal(id) as TypedModalInstance<{ user: User }> | undefined;
+ * if (modal) {
+ *   console.log(modal.props.user.name); // Typed!
+ * }
+ * ```
+ */
+export type TypedModalInstance<TProps extends Record<string, unknown> = Record<string, unknown>> = Omit<ModalInstance, 'props'> & {
+    props: TProps;
+};
 //# sourceMappingURL=types.d.ts.map

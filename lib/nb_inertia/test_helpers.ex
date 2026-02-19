@@ -391,6 +391,212 @@ defmodule NbInertia.TestHelpers do
     get_inertia_props(conn)
   end
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Modal Assertions
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Asserts that the response is a modal response.
+
+  Checks for the `x-inertia-modal` response header set by `render_inertia_modal/4`.
+
+  ## Options
+
+    - `:base_url` - Assert that the modal's base URL matches (optional)
+    - `:config` - Assert that the modal config contains specific keys (optional)
+
+  ## Examples
+
+      conn = inertia_get(conn, ~p"/users/1")
+      assert_inertia_modal(conn)
+      assert_inertia_modal(conn, base_url: "/users")
+      assert_inertia_modal(conn, config: %{size: "lg"})
+  """
+  @spec assert_inertia_modal(Plug.Conn.t(), keyword()) :: true
+  def assert_inertia_modal(conn, opts \\ []) do
+    modal_header =
+      conn
+      |> Plug.Conn.get_resp_header("x-inertia-modal")
+      |> List.first()
+
+    assert modal_header == "true",
+           """
+           Expected response to be a modal response (x-inertia-modal: true),
+           but header was #{inspect(modal_header)}.
+
+           Response headers: #{inspect(conn.resp_headers)}
+           """
+
+    if base_url = Keyword.get(opts, :base_url) do
+      actual_base_url =
+        conn
+        |> Plug.Conn.get_resp_header("x-inertia-modal-base-url")
+        |> List.first()
+
+      assert actual_base_url == base_url,
+             """
+             Expected modal base URL to be #{inspect(base_url)},
+             but got #{inspect(actual_base_url)}.
+             """
+    end
+
+    if expected_config = Keyword.get(opts, :config) do
+      config_json =
+        conn
+        |> Plug.Conn.get_resp_header("x-inertia-modal-config")
+        |> List.first()
+
+      actual_config =
+        if config_json do
+          Jason.decode!(config_json)
+        else
+          %{}
+        end
+
+      for {key, value} <- expected_config do
+        str_key = to_string(key)
+
+        assert Map.get(actual_config, str_key) == value,
+               """
+               Expected modal config #{inspect(key)} to be #{inspect(value)},
+               but got #{inspect(Map.get(actual_config, str_key))}.
+
+               Full config: #{inspect(actual_config)}
+               """
+      end
+    end
+
+    true
+  end
+
+  @doc """
+  Refutes that the response is a modal response.
+
+  ## Examples
+
+      conn = inertia_get(conn, ~p"/users")
+      refute_inertia_modal(conn)
+  """
+  @spec refute_inertia_modal(Plug.Conn.t()) :: true
+  def refute_inertia_modal(conn) do
+    modal_header =
+      conn
+      |> Plug.Conn.get_resp_header("x-inertia-modal")
+      |> List.first()
+
+    refute modal_header == "true",
+           """
+           Expected response to NOT be a modal response,
+           but x-inertia-modal header was "true".
+           """
+
+    true
+  end
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Flash Assertions
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Asserts that specific flash data was set on the connection.
+
+  Checks `conn.private[:nb_inertia_flash]` for the given key.
+
+  ## Examples
+
+      conn =
+        conn
+        |> NbInertia.Flash.inertia_flash(:message, "Success!")
+
+      assert_inertia_flash(conn, :message, "Success!")
+      assert_inertia_flash(conn, "message", "Success!")
+  """
+  @spec assert_inertia_flash(Plug.Conn.t(), atom() | String.t(), any()) :: true
+  def assert_inertia_flash(conn, key, expected_value) do
+    flash = conn.private[:nb_inertia_flash] || %{}
+    str_key = to_string(key)
+
+    actual_value = Map.get(flash, str_key)
+
+    assert actual_value == expected_value,
+           """
+           Expected Inertia flash #{inspect(key)} to be #{inspect(expected_value)},
+           but got #{inspect(actual_value)}.
+
+           Flash data: #{inspect(flash)}
+           """
+
+    true
+  end
+
+  @doc """
+  Asserts that a flash key is present (regardless of value).
+
+  ## Examples
+
+      conn =
+        conn
+        |> NbInertia.Flash.inertia_flash(:message, "Hello!")
+
+      assert_inertia_flash(conn, :message)
+  """
+  @spec assert_inertia_flash(Plug.Conn.t(), atom() | String.t()) :: true
+  def assert_inertia_flash(conn, key) do
+    flash = conn.private[:nb_inertia_flash] || %{}
+    str_key = to_string(key)
+
+    assert Map.has_key?(flash, str_key),
+           """
+           Expected Inertia flash key #{inspect(key)} to be present.
+
+           Flash data: #{inspect(flash)}
+           """
+
+    true
+  end
+
+  @doc """
+  Refutes that a flash key is present.
+
+  ## Examples
+
+      refute_inertia_flash(conn, :error)
+  """
+  @spec refute_inertia_flash(Plug.Conn.t(), atom() | String.t()) :: true
+  def refute_inertia_flash(conn, key) do
+    flash = conn.private[:nb_inertia_flash] || %{}
+    str_key = to_string(key)
+
+    refute Map.has_key?(flash, str_key),
+           """
+           Expected Inertia flash key #{inspect(key)} to NOT be present.
+
+           Flash data: #{inspect(flash)}
+           """
+
+    true
+  end
+
+  @doc """
+  Adds modal request headers to a connection for testing.
+
+  Simulates a request from a ModalLink component.
+
+  ## Examples
+
+      conn =
+        build_conn()
+        |> with_inertia_headers()
+        |> with_modal_headers()
+        |> get(~p"/users/1")
+
+      assert_inertia_modal(conn)
+  """
+  @spec with_modal_headers(Plug.Conn.t()) :: Plug.Conn.t()
+  def with_modal_headers(conn) do
+    put_req_header(conn, "x-inertia-modal-request", "true")
+  end
+
   # Private helpers
 
   defp get_inertia_component(conn) do

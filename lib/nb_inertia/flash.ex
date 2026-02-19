@@ -220,14 +220,14 @@ defmodule NbInertia.Flash do
       Keyword.get(
         opts,
         :include_phoenix_flash,
-        Application.get_env(:nb_inertia, :include_phoenix_flash, true)
+        NbInertia.Config.get(:include_phoenix_flash, true)
       )
 
     camelize =
       Keyword.get(
         opts,
         :camelize,
-        Application.get_env(:nb_inertia, :camelize_flash, nil)
+        NbInertia.Config.get(:camelize_flash, nil)
       )
 
     # Get camelize setting from props if not explicitly set for flash

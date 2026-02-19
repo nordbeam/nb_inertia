@@ -15,6 +15,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { useModalStack } from './modalStack';
+import { routerPrefetch } from '../../shared/routerCompat.vue';
 import type { ModalConfig } from './types';
 import type { RouteResult } from '../../shared/types';
 import { isRouteResult } from '../../shared/types';
@@ -136,7 +137,7 @@ const prefetchModes = computed((): PrefetchMode[] => {
 // Prefetch function - only GET requests can be prefetched
 function doPrefetch() {
   if (finalMethod.value !== 'get') return;
-  (router as any).prefetch?.(finalHref.value, { preserveState: true }, {
+  routerPrefetch(finalHref.value, { preserveState: true }, {
     cacheFor: props.cacheFor,
     cacheTags: props.cacheTags,
   });

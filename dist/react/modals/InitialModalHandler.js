@@ -1,77 +1,75 @@
-import { useRef as u, useCallback as H, useEffect as m } from "react";
-import { usePage as I, router as p } from "@inertiajs/react";
-import { useModalStack as y } from "./modalStack.js";
-function k({ resolveComponent: f }) {
-  const { props: R } = I(), { pushModal: g, updateModal: M, clearModals: b, modals: i } = y(), a = u(!1), h = u(!1), t = u(null), l = u(/* @__PURE__ */ new Set()), s = H((n, r) => () => {
-    if (t.current = null, l.current.delete(n.url), !a.current && typeof window < "u") {
-      const e = r || n.baseUrl;
-      e && window.location.href !== e && window.history.replaceState({}, "", e);
+import { useRef as u, useCallback as m, useEffect as R } from "react";
+import { usePage as S, router as p } from "@inertiajs/react";
+import { useModalStack as _ } from "./modalStack.js";
+function y({ resolveComponent: d }) {
+  const { props: N } = S(), { pushModal: g, updateModal: b, clearModals: M, modals: i } = _(), s = u(!1), h = u(!1), o = u(null), c = u(/* @__PURE__ */ new Set()), a = m((r, e) => () => {
+    if (o.current = null, c.current.delete(r.url), !s.current && typeof window < "u") {
+      const n = e || r.baseUrl;
+      n && window.location.href !== n && window.history.replaceState({}, "", n);
     }
-  }, []), d = H((n) => {
-    const r = n.url;
-    if (console.log("[InitialModalHandler] openModal called:", { url: r, alreadyHandled: l.current.has(r), modalsCount: i.length }), l.current.has(r)) {
-      console.log("[InitialModalHandler] URL already handled, skipping");
+  }, []), f = m((r) => {
+    const e = r.url;
+    if (c.current.has(e))
       return;
-    }
-    const e = i.find(
-      (o) => o.loading && o.url === r
+    const n = i.find(
+      (t) => t.loading && t.url === e
     );
-    console.log("[InitialModalHandler] loadingModal found:", !!e), l.current.add(r), f(n.component).then((o) => {
-      if (e) {
+    c.current.add(e), d(r.component).then((t) => {
+      if (n) {
         if (!i.find(
-          (w) => w.id === e.id && w.loading
+          (w) => w.id === n.id && w.loading
         )) {
-          l.current.delete(r);
+          c.current.delete(e);
           return;
         }
-        const U = e.returnUrl;
-        M(e.id, {
-          component: o,
-          componentName: n.component,
-          props: n.props,
-          config: n.config || {},
-          baseUrl: n.baseUrl,
+        const U = n.returnUrl;
+        b(n.id, {
+          component: t,
+          componentName: r.component,
+          props: r.props,
+          config: r.config || {},
+          baseUrl: r.baseUrl,
           returnUrl: U,
           // Preserve the return URL
-          onClose: s(n, U),
+          onClose: a(r, U),
           loading: !1
-        }), t.current = n;
+        }), o.current = r;
       } else
-        t.current = n, g({
-          component: o,
-          componentName: n.component,
-          props: n.props,
-          url: n.url,
-          config: n.config || {},
-          baseUrl: n.baseUrl,
-          onClose: s(n)
+        o.current = r, g({
+          component: t,
+          componentName: r.component,
+          props: r.props,
+          url: r.url,
+          config: r.config || {},
+          baseUrl: r.baseUrl,
+          onClose: a(r)
         });
-    }).catch((o) => {
-      l.current.delete(r), console.error("[InitialModalHandler] Failed to resolve modal component:", n.component, o);
+    }).catch((t) => {
+      c.current.delete(e), console.error("[InitialModalHandler] Failed to resolve modal component:", r.component, t);
     });
-  }, [f, g, M, i, s]);
-  return m(() => {
-    const n = R._nb_modal;
-    n && !h.current && (h.current = !0, d(n));
-  }, []), m(() => {
-    const n = p.on("start", () => {
-      a.current = !0;
-    }), r = p.on("finish", () => {
-      a.current = !1;
-    }), e = p.on("navigate", (o) => {
-      const c = o.detail.page.props?._nb_modal;
-      if (!c) {
-        b(), t.current = null, l.current.clear();
+  }, [d, g, b, i, a]);
+  return R(() => {
+    const r = N._nb_modal;
+    r && !h.current && (h.current = !0, f(r));
+  }, []), R(() => {
+    const r = p.on("start", () => {
+      s.current = !0;
+    }), e = p.on("finish", () => {
+      s.current = !1;
+    }), n = p.on("navigate", (t) => {
+      const l = t.detail.page.props?._nb_modal;
+      if (!l) {
+        M(), o.current = null, c.current.clear();
         return;
       }
-      t.current && t.current.component === c.component && t.current.url === c.url || d(c);
+      o.current && o.current.component === l.component && o.current.url === l.url || f(l);
     });
     return () => {
-      n(), r(), e();
+      r(), e(), n();
     };
-  }, [d, b]), null;
+  }, [f, M]), null;
 }
 export {
-  k as InitialModalHandler,
-  k as default
+  y as InitialModalHandler,
+  y as default
 };

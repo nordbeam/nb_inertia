@@ -202,11 +202,23 @@ defmodule NbInertia.Realtime do
   end
 
   defp serialize_value({serializer, data}) when is_atom(serializer) do
-    serializer.serialize(data, [])
+    try do
+      serializer.serialize(data, [])
+    rescue
+      e ->
+        reraise "NbInertia.Realtime: serializer #{inspect(serializer)} failed on #{inspect(data)}: #{Exception.message(e)}",
+                __STACKTRACE__
+    end
   end
 
   defp serialize_value({serializer, data, opts}) when is_atom(serializer) and is_list(opts) do
-    serializer.serialize(data, opts)
+    try do
+      serializer.serialize(data, opts)
+    rescue
+      e ->
+        reraise "NbInertia.Realtime: serializer #{inspect(serializer)} failed on #{inspect(data)} with opts #{inspect(opts)}: #{Exception.message(e)}",
+                __STACKTRACE__
+    end
   end
 
   defp serialize_value(value), do: value

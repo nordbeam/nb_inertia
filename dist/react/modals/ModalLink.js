@@ -1,113 +1,109 @@
 import { jsx as K } from "react/jsx-runtime";
-import { useMemo as N, useCallback as d, useEffect as H, useRef as O } from "react";
-import { router as L } from "@inertiajs/react";
-import { useModalStack as q } from "./modalStack.js";
-function k(t) {
-  if (typeof t != "object" || t === null)
-    return !1;
-  const u = t;
-  return typeof u.url == "string" && typeof u.method == "string" && ["get", "post", "put", "patch", "delete", "head"].includes(u.method);
-}
-const z = () => null, Q = ({
-  href: t,
-  method: u,
+import { useMemo as N, useCallback as l, useEffect as j, useRef as H } from "react";
+import { router as O } from "@inertiajs/react";
+import { isRouteResult as b } from "../../shared/types.js";
+import { routerPrefetch as q } from "../../shared/routerCompat.js";
+import { useModalStack as z } from "./modalStack.js";
+const A = () => null, X = ({
+  href: s,
+  method: y,
   data: g,
   modalConfig: m,
   loadingComponent: h,
-  onClick: M,
-  prefetch: i,
-  cacheFor: f,
-  cacheTags: w,
-  children: x,
-  className: D,
-  ...r
+  onClick: p,
+  prefetch: r,
+  cacheFor: d,
+  cacheTags: M,
+  children: k,
+  className: x,
+  ...n
 }) => {
-  const { pushModal: y, modals: b, prefetchModal: v, getPrefetchedModal: S } = q(), o = k(t) ? t.url : t, a = (k(t) && !u ? t.method : u) || "get", s = N(() => i ? i === !0 ? ["hover"] : typeof i == "string" ? [i] : i : [], [i]), l = d(() => {
-    if (a === "get")
+  const { pushModal: w, modals: S, prefetchModal: v, getPrefetchedModal: L } = z(), t = b(s) ? s.url : s, f = (b(s) && !y ? s.method : y) || "get", i = N(() => r ? r === !0 ? ["hover"] : typeof r == "string" ? [r] : r : [], [r]), u = l(() => {
+    if (f === "get")
       if (v)
-        v(o, { cacheFor: f });
+        v(t, { cacheFor: d });
       else {
         const e = {};
-        f !== void 0 && (e.cacheFor = f), w !== void 0 && (e.cacheTags = w), L.prefetch?.(o, { preserveState: !0 }, e);
+        d !== void 0 && (e.cacheFor = d), M !== void 0 && (e.cacheTags = M), q(t, { preserveState: !0 }, e);
       }
-  }, [o, a, f, w, v]);
-  H(() => {
-    if (s.includes("mount")) {
-      const e = setTimeout(l, 0);
+  }, [t, f, d, M, v]);
+  j(() => {
+    if (i.includes("mount")) {
+      const e = setTimeout(u, 0);
       return () => clearTimeout(e);
     }
-  }, [s, l]);
-  const c = O(null), E = d(
+  }, [i, u]);
+  const a = H(null), D = l(
     (e) => {
-      r.onMouseEnter?.(e), s.includes("hover") && (c.current = setTimeout(l, 75));
+      n.onMouseEnter?.(e), i.includes("hover") && (a.current = setTimeout(u, 75));
     },
-    [s, l, r]
-  ), R = d(
+    [i, u, n]
+  ), E = l(
     (e) => {
-      r.onMouseLeave?.(e), c.current && (clearTimeout(c.current), c.current = null);
+      n.onMouseLeave?.(e), a.current && (clearTimeout(a.current), a.current = null);
     },
-    [r]
-  ), T = d(
+    [n]
+  ), R = l(
     (e) => {
-      r.onMouseDown?.(e), s.includes("click") && l();
+      n.onMouseDown?.(e), i.includes("click") && u();
     },
-    [s, l, r]
-  ), U = d(
+    [i, u, n]
+  ), T = l(
     (e) => {
-      if (e.ctrlKey || e.metaKey || e.shiftKey || (e.preventDefault(), M && M(e), b.find((j) => j.url === o)))
+      if (e.ctrlKey || e.metaKey || e.shiftKey || (e.preventDefault(), p && p(e), S.find((U) => U.url === t)))
         return;
-      const p = typeof window < "u" ? window.location.href : "", n = S?.(o);
-      if (n) {
-        y({
-          component: n.component,
-          componentName: n.data.component,
-          props: n.data.props,
-          url: n.data.url,
-          config: n.data.config || m || {},
-          baseUrl: n.data.baseUrl,
-          returnUrl: p,
+      const c = typeof window < "u" ? window.location.href : "", o = L?.(t);
+      if (o) {
+        w({
+          component: o.component,
+          componentName: o.data.component,
+          props: o.data.props,
+          url: o.data.url,
+          config: o.data.config || m || {},
+          baseUrl: o.data.baseUrl,
+          returnUrl: c,
           onClose: () => {
-            p && typeof window < "u" && window.history.replaceState({}, "", p);
+            c && typeof window < "u" && window.history.replaceState({}, "", c);
           }
-        }), typeof window < "u" && window.history.pushState({}, "", n.data.url);
+        }), typeof window < "u" && window.history.pushState({}, "", o.data.url);
         return;
       }
-      y({
-        component: z,
+      w({
+        component: A,
         componentName: "",
         props: {},
-        url: o,
+        url: t,
         config: m || {},
         baseUrl: "",
         // Will be updated by InitialModalHandler
-        returnUrl: p,
+        returnUrl: c,
         // Capture the return URL now so it's available when modal is updated
         loading: !0,
         loadingComponent: h
-      }), L.visit(o, {
-        method: a,
+      }), O.visit(t, {
+        method: f,
         data: g ?? {},
         preserveState: !0,
         preserveScroll: !0
       });
     },
-    [o, a, g, M, m, h, y, b, S]
+    [t, f, g, p, m, h, w, S, L]
   );
   return /* @__PURE__ */ K(
     "a",
     {
-      href: o,
-      className: D,
-      onClick: U,
-      onMouseEnter: E,
-      onMouseLeave: R,
-      onMouseDown: T,
-      ...r,
-      children: x
+      href: t,
+      className: x,
+      onClick: T,
+      onMouseEnter: D,
+      onMouseLeave: E,
+      onMouseDown: R,
+      ...n,
+      children: k
     }
   );
 };
 export {
-  Q as ModalLink,
-  Q as default
+  X as ModalLink,
+  X as default
 };

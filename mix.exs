@@ -51,13 +51,13 @@ defmodule NbInertia.MixProject do
       {:phoenix, "~> 1.7"},
       {:plug, "~> 1.14"},
       {:deno_rider, "~> 0.2", optional: true},
-      {:poolboy, "~> 1.5"},
 
       # Optional dependencies
       {:nb_serializer, github: "nordbeam/nb_serializer", optional: true},
       {:req, "~> 0.5", optional: true},
 
       # Development and test dependencies
+      {:wallaby, "~> 0.30", optional: true},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
       {:credo, "~> 1.7", optional: true, runtime: false},
@@ -112,7 +112,8 @@ defmodule NbInertia.MixProject do
           NbInertia.SSR.RenderError
         ],
         Testing: [
-          NbInertia.TestHelpers
+          NbInertia.TestHelpers,
+          NbInertia.WallabyHelpers
         ],
         Utilities: [
           NbInertia.ComponentNaming,

@@ -49,6 +49,10 @@
       "import": "./dist/react/Head.js",
       "types": "./dist/react/Head.d.ts"
     },
+    "./react/useFlash": {
+      "import": "./dist/react/useFlash.js",
+      "types": "./dist/react/useFlash.d.ts"
+    },
     "./react/modals": {
       "import": "./dist/react/modals/index.js",
       "types": "./dist/react/modals/index.d.ts"

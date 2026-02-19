@@ -196,7 +196,7 @@ export function useForm<TForm extends Record<string, any>>(
     // Use Inertia's built-in Precognition by passing (method, url, data)
     // This is the official Inertia v2.3+ pattern
     inertiaForm = useInertiaForm<TForm>(
-      precognitionRoute.method as any,
+      precognitionRoute.method as Method,
       precognitionRoute.url,
       data
     );
@@ -212,7 +212,7 @@ export function useForm<TForm extends Record<string, any>>(
 
   // Create bound form with enhanced submit
   const boundSubmit = (options?: BoundSubmitOptions) => {
-    return inertiaForm.submit(submitRoute!.method as any, submitRoute!.url, options);
+    return inertiaForm.submit(submitRoute!.method as Method, submitRoute!.url, options);
   };
 
   // For Precognition shorthand, the form already has validation methods
@@ -262,7 +262,7 @@ export function useFormWithPrecognition<TForm extends Record<string, any>>(
 ): BoundPrecognitiveFormType<TForm> | PrecognitiveFormType<TForm> {
   // Create form with Precognition enabled
   const inertiaForm = useInertiaForm<TForm>(
-    validationRoute.method as any,
+    validationRoute.method as Method,
     validationRoute.url,
     data
   );
@@ -274,7 +274,7 @@ export function useFormWithPrecognition<TForm extends Record<string, any>>(
 
   // Override submit to use the submit route
   const boundSubmit = (options?: BoundSubmitOptions) => {
-    return inertiaForm.submit(submitRoute.method as any, submitRoute.url, options);
+    return inertiaForm.submit(submitRoute.method as Method, submitRoute.url, options);
   };
 
   return {

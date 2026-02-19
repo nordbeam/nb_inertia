@@ -24,7 +24,8 @@
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { router } from '@inertiajs/react';
-import type { RouteResult } from '../../shared/types';
+import { isRouteResult, type RouteResult } from '../../shared/types';
+import { routerPrefetch } from '../../shared/routerCompat';
 import type { ModalConfig } from './types';
 import { useModalStack } from './modalStack';
 import type { ResolveComponentFn } from './modalStack';
@@ -128,23 +129,6 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
 }
 
 /**
- * Type guard to check if a value is a RouteResult object
- */
-function isRouteResult(value: unknown): value is RouteResult {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const obj = value as Record<string, unknown>;
-
-  return (
-    typeof obj.url === 'string' &&
-    typeof obj.method === 'string' &&
-    ['get', 'post', 'put', 'patch', 'delete', 'head'].includes(obj.method)
-  );
-}
-
-/**
  * ModalLink - Link component that opens pages in modals
  *
  * When clicked, this component:
@@ -222,7 +206,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
       const prefetchOptions: { cacheFor?: number; cacheTags?: string[] } = {};
       if (cacheFor !== undefined) prefetchOptions.cacheFor = cacheFor;
       if (cacheTags !== undefined) prefetchOptions.cacheTags = cacheTags;
-      (router as any).prefetch?.(finalHref, { preserveState: true }, prefetchOptions);
+      routerPrefetch(finalHref, { preserveState: true }, prefetchOptions);
     }
   }, [finalHref, finalMethod, cacheFor, cacheTags, prefetchModal]);
 
@@ -240,7 +224,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
   const handleMouseEnter = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>) => {
       // Call any existing onMouseEnter from anchorProps
-      (anchorProps as any).onMouseEnter?.(e);
+      anchorProps.onMouseEnter?.(e);
 
       if (prefetchModes.includes('hover')) {
         hoverTimeoutRef.current = setTimeout(doPrefetch, 75);
@@ -252,7 +236,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
   const handleMouseLeave = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>) => {
       // Call any existing onMouseLeave from anchorProps
-      (anchorProps as any).onMouseLeave?.(e);
+      anchorProps.onMouseLeave?.(e);
 
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
@@ -266,7 +250,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>) => {
       // Call any existing onMouseDown from anchorProps
-      (anchorProps as any).onMouseDown?.(e);
+      anchorProps.onMouseDown?.(e);
 
       if (prefetchModes.includes('click')) {
         doPrefetch();
