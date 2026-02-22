@@ -3,7 +3,7 @@ defmodule NbInertia.DslOptionsTest do
   Tests for DSL options being applied at runtime.
 
   This tests the fix for the bug where DSL options like `defer: true`, `lazy: true`,
-  `merge: true`, `optional: true` were only used for compile-time validation but
+  `merge: true`, `partial: true` were only used for compile-time validation but
   not actually applied to prop values at runtime.
   """
   use ExUnit.Case, async: true
@@ -39,14 +39,14 @@ defmodule NbInertia.DslOptionsTest do
       assert fun.() == [1, 2, 3]
     end
 
-    test "applies optional: true option" do
+    test "applies partial: true option" do
       conn = conn(:get, "/")
 
-      # Assign a prop with optional: true DSL option
-      conn = assign_raw_prop_with_dsl_opts(conn, :optional_data, "test", optional: true)
+      # Assign a prop with partial: true DSL option
+      conn = assign_raw_prop_with_dsl_opts(conn, :partial_data, "test", partial: true)
 
-      # The prop should be wrapped in {:optional, fn}
-      prop = conn.private[:inertia_shared][:optional_data]
+      # The prop should be wrapped in {:optional, fn} (Inertia.js internal)
+      prop = conn.private[:inertia_shared][:partial_data]
       assert {:optional, fun} = prop
       assert is_function(fun, 0)
       assert fun.() == "test"
@@ -122,11 +122,11 @@ defmodule NbInertia.DslOptionsTest do
       assert prop == "value"
     end
 
-    test "defer takes precedence over optional" do
+    test "defer takes precedence over partial" do
       conn = conn(:get, "/")
 
-      # Both defer and optional specified (defer should win)
-      conn = assign_raw_prop_with_dsl_opts(conn, :data, "value", defer: true, optional: true)
+      # Both defer and partial specified (defer should win)
+      conn = assign_raw_prop_with_dsl_opts(conn, :data, "value", defer: true, partial: true)
 
       prop = conn.private[:inertia_shared][:data]
       assert {:defer, {_fun, "default"}} = prop
@@ -223,10 +223,10 @@ defmodule NbInertia.DslOptionsTest do
       assert config.as == "heavy_data"
     end
 
-    test "once takes precedence over optional" do
+    test "once takes precedence over partial" do
       conn = conn(:get, "/")
 
-      conn = assign_raw_prop_with_dsl_opts(conn, :data, "value", once: true, optional: true)
+      conn = assign_raw_prop_with_dsl_opts(conn, :data, "value", once: true, partial: true)
 
       prop = conn.private[:inertia_shared][:data]
       assert {:once, _config} = prop
@@ -293,8 +293,8 @@ defmodule NbInertia.DslOptionsTest do
         prop(:deep_mergeable, :map, merge: :deep)
       end
 
-      inertia_page :test_optional do
-        prop(:optional_data, :map, optional: true)
+      inertia_page :test_partial do
+        prop(:partial_data, :map, partial: true)
         prop(:required_data, :string)
       end
 
@@ -336,14 +336,14 @@ defmodule NbInertia.DslOptionsTest do
       assert Keyword.get(deep_merge_prop.opts, :merge) == :deep
     end
 
-    test "optional option from DSL is stored correctly" do
-      config = TestController.inertia_page_config(:test_optional)
+    test "partial option from DSL is stored correctly" do
+      config = TestController.inertia_page_config(:test_partial)
 
-      optional_prop = Enum.find(config.props, &(&1.name == :optional_data))
-      assert Keyword.get(optional_prop.opts, :optional) == true
+      partial_prop = Enum.find(config.props, &(&1.name == :partial_data))
+      assert Keyword.get(partial_prop.opts, :partial) == true
 
       required_prop = Enum.find(config.props, &(&1.name == :required_data))
-      assert Keyword.get(required_prop.opts, :optional, false) == false
+      assert Keyword.get(required_prop.opts, :partial, false) == false
     end
 
     test "lazy option from DSL is stored correctly" do

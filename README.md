@@ -76,7 +76,7 @@ defmodule MyAppWeb.UserController do
   inertia_page :users_index do
     prop :users, :list
     prop :total_count, :integer
-    prop :filters, :map, optional: true
+    prop :filters, :map, partial: true
   end
 
   def index(conn, params) do
@@ -141,8 +141,8 @@ inertia_page :products_index do
   prop :users, list: UserSerializer   # TypeScript: users: User[]
 
   # Modifiers
-  prop :priority, enum: ["low", "high"], optional: true
-  prop :notes, list: :string, optional: true
+  prop :priority, enum: ["low", "high"], partial: true
+  prop :notes, list: :string, partial: true
   prop :metadata, :map, nullable: true
 end
 ```
@@ -195,12 +195,12 @@ When `nb_serializer` is available, you get additional functions:
 # Lazy evaluation - only serialize on partial reloads
 assign_serialized(conn, :posts, PostSerializer, posts, lazy: true)
 
-# Lazy function - automatically optional, only executes when requested
+# Lazy function - automatically partial, only executes when requested
 assign_serialized(conn, :expensive_data, DataSerializer, fn ->
   fetch_expensive_data()
 end)
 
-# Lazy function - automatically optional
+# Lazy function - automatically partial
 assign_serialized(conn, :themes, ThemeSerializer, fn ->
   Themes.list_all_with_status()
 end)
@@ -463,7 +463,7 @@ def index(conn, _params) do
   render_inertia(conn, :users_index,
     users: {UserSerializer, list_users()},
     pagination: {PaginationSerializer, pagination_data()},
-    # Lazy function - automatically optional, only executes when requested
+    # Lazy function - automatically partial, only executes when requested
     analytics: {AnalyticsSerializer, fn -> fetch_analytics() end},
     total_count: count_users()
   )
@@ -533,19 +533,19 @@ In development and test environments, NbInertia validates at compile time:
 
 ⚠️ **Note:** Validation is disabled in production for performance.
 
-### Optional Props
+### Partial Props
 
-Props can be marked as optional:
+Props can be marked as partial (excluded from initial page load, only sent on partial reloads):
 
 ```elixir
 inertia_page :users_show do
   prop :user, :map
-  prop :posts, :list, optional: true      # Can be omitted
-  prop :comments, :list, lazy: true       # Can be omitted
-  prop :analytics, :map, defer: true      # Can be omitted
+  prop :posts, :list, partial: true      # Can be omitted
+  prop :comments, :list, lazy: true      # Can be omitted
+  prop :analytics, :map, defer: true     # Can be omitted
 end
 
-# Valid - optional/lazy/defer props can be omitted
+# Valid - partial/lazy/defer props can be omitted
 render_inertia(conn, :users_show, user: user)
 ```
 

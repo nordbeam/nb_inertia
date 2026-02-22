@@ -94,16 +94,16 @@ defmodule NbInertia.UnifiedPropSyntaxTest do
       assert Keyword.get(list_value, :enum) == ["admin", "user", "guest"]
     end
 
-    test "supports optional modifier with list: :string" do
-      defmodule TestOptionalListController do
+    test "supports partial modifier with list: :string" do
+      defmodule TestPartialListController do
         use NbInertia.Controller
 
         inertia_page :test_page do
-          prop(:tags, list: :string, optional: true)
+          prop(:tags, list: :string, partial: true)
         end
       end
 
-      pages = TestOptionalListController.__inertia_pages__()
+      pages = TestPartialListController.__inertia_pages__()
       props = pages[:test_page].props
 
       assert length(props) == 1
@@ -111,7 +111,7 @@ defmodule NbInertia.UnifiedPropSyntaxTest do
 
       assert prop.name == :tags
       assert Keyword.get(prop.opts, :list) == :string
-      assert Keyword.get(prop.opts, :optional) == true
+      assert Keyword.get(prop.opts, :partial) == true
     end
 
     test "supports nullable modifier with enum" do

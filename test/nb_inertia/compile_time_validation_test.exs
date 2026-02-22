@@ -73,25 +73,25 @@ defmodule NbInertia.CompileTimeValidationTest do
     end
   end
 
-  describe "optional props" do
-    test "does not raise when optional props are missing" do
+  describe "partial props" do
+    test "does not raise when partial props are missing" do
       code = """
-      defmodule TestOptionalPropsMissing do
+      defmodule TestPartialPropsMissing do
         use NbInertia.Controller
 
         inertia_page :users_index do
           prop :users, :list
-          prop :filters, :map, optional: true
+          prop :filters, :map, partial: true
         end
 
         def index(conn, _params) do
-          # Only providing required prop, skipping optional
+          # Only providing required prop, skipping partial
           render_inertia(conn, :users_index, [users: []])
         end
       end
       """
 
-      # Should not raise - optional props are not required
+      # Should not raise - partial props are not required
       Code.compile_string(code)
     end
 
@@ -233,13 +233,13 @@ defmodule NbInertia.CompileTimeValidationTest do
       defmodule TestEmptyPropsAllowed do
         use NbInertia.Controller
 
-        # Page with optional props only
+        # Page with partial props only
         inertia_page :empty_page do
-          prop :data, :any, optional: true
+          prop :data, :any, partial: true
         end
 
         def show(conn, _params) do
-          # Empty props should be allowed when all props are optional
+          # Empty props should be allowed when all props are partial
           render_inertia(conn, :empty_page, [])
         end
       end

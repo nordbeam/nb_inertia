@@ -196,10 +196,10 @@ defmodule NbInertia.Controller do
       prop :users, list: UserSerializer  # List of serializers
 
       # Modifiers
-      prop :priority, enum: ["low", "high"], optional: true
-      prop :notes, list: :string, optional: true
+      prop :priority, enum: ["low", "high"], partial: true
+      prop :notes, list: :string, partial: true
       prop :posts, :list, lazy: true
-      prop :stats, :map, defer: true, optional: true
+      prop :stats, :map, defer: true, partial: true
       prop :flash, from: :assigns
   """
   defmacro prop(name, type_or_serializer \\ nil, opts \\ [])
@@ -207,6 +207,20 @@ defmodule NbInertia.Controller do
   # Handle prop with only name and options (no serializer/type)
   defmacro prop(name, opts, []) when is_list(opts) do
     quote bind_quoted: [name: name, opts: opts] do
+      # Normalize deprecated :optional to :partial for inertia_page props
+      opts =
+        if Keyword.get(opts, :optional, false) do
+          IO.warn(
+            "optional: true in inertia_page props is deprecated, use partial: true instead.\n" <>
+              "  optional: true excludes the prop from initial page load (Inertia partial reloads only).\n" <>
+              "  If you meant the prop value can be nil, use nullable: true instead."
+          )
+
+          opts |> Keyword.delete(:optional) |> Keyword.put(:partial, true)
+        else
+          opts
+        end
+
       prop_config = %{name: name, opts: opts}
 
       # Handle the :from option for shared props
@@ -223,6 +237,20 @@ defmodule NbInertia.Controller do
   # Handle prop with name, type/serializer, and options
   defmacro prop(name, type_or_serializer, opts) do
     quote bind_quoted: [name: name, type_or_serializer: type_or_serializer, opts: opts] do
+      # Normalize deprecated :optional to :partial for inertia_page props
+      opts =
+        if Keyword.get(opts, :optional, false) do
+          IO.warn(
+            "optional: true in inertia_page props is deprecated, use partial: true instead.\n" <>
+              "  optional: true excludes the prop from initial page load (Inertia partial reloads only).\n" <>
+              "  If you meant the prop value can be nil, use nullable: true instead."
+          )
+
+          opts |> Keyword.delete(:optional) |> Keyword.put(:partial, true)
+        else
+          opts
+        end
+
       prop_config =
         case type_or_serializer do
           type
@@ -971,11 +999,11 @@ defmodule NbInertia.Controller do
         provided_prop_names = Keyword.keys(props) |> MapSet.new()
         declared_prop_names = Enum.map(declared_props, & &1.name) |> MapSet.new()
 
-        # Find required props (exclude optional, lazy, defer, and from: :assigns)
+        # Find required props (exclude partial, lazy, defer, and from: :assigns)
         required_props =
           declared_props
           |> Enum.reject(fn prop ->
-            Keyword.get(prop.opts, :optional, false) ||
+            Keyword.get(prop.opts, :partial, false) ||
               Keyword.get(prop.opts, :lazy, false) ||
               Keyword.get(prop.opts, :defer, false) ||
               Keyword.get(prop.opts, :from, nil) == :assigns
@@ -994,7 +1022,7 @@ defmodule NbInertia.Controller do
 
             Missing props: #{missing_list}
 
-            Add the missing props to your render_inertia call or mark them as optional.
+            Add the missing props to your render_inertia call or mark them as partial.
             """,
             file: __CALLER__.file,
             line: __CALLER__.line
@@ -1246,7 +1274,7 @@ defmodule NbInertia.Controller do
   - Required props are missing
   - Undeclared props are provided
 
-  Optional props (with `optional: true`) are allowed to be omitted.
+  Partial props (with `partial: true`) are allowed to be omitted.
   """
   @spec validate_page_props!(module(), atom(), keyword()) :: :ok
   def validate_page_props!(module, page_name, provided_props) do
@@ -1257,11 +1285,11 @@ defmodule NbInertia.Controller do
     provided_prop_names = Keyword.keys(provided_props) |> MapSet.new()
     declared_prop_names = Enum.map(declared_props, & &1.name) |> MapSet.new()
 
-    # Find required props (not optional, lazy, or defer)
+    # Find required props (not partial, lazy, or defer)
     required_props =
       declared_props
       |> Enum.reject(fn prop ->
-        Keyword.get(prop.opts, :optional, false) ||
+        Keyword.get(prop.opts, :partial, false) ||
           Keyword.get(prop.opts, :lazy, false) ||
           Keyword.get(prop.opts, :defer, false)
       end)
@@ -1295,8 +1323,8 @@ defmodule NbInertia.Controller do
           #{format_missing_props(MapSet.to_list(missing_props))}  # Add these
         ])
 
-      Or mark them as optional in the page declaration:
-        prop #{Enum.at(MapSet.to_list(missing_props), 0)}, :type, optional: true
+      Or mark them as partial in the page declaration:
+        prop #{Enum.at(MapSet.to_list(missing_props), 0)}, :type, partial: true
 
       See: https://hexdocs.pm/nb_inertia/NbInertia.Controller.html#render_inertia/3
       """
@@ -1361,7 +1389,7 @@ defmodule NbInertia.Controller do
       opts_info =
         case prop do
           %{opts: opts} when is_list(opts) and opts != [] ->
-            relevant_opts = Keyword.take(opts, [:optional, :lazy, :defer])
+            relevant_opts = Keyword.take(opts, [:partial, :lazy, :defer])
 
             if relevant_opts == [] do
               ""
@@ -1520,7 +1548,7 @@ defmodule NbInertia.Controller do
     ## Options
 
       - `:lazy` - When `true`, only serializes on partial reloads (default: `false`)
-      - `:optional` - When `true`, excludes on first visit (default: `false`)
+      - `:partial` - When `true`, excludes on first visit (default: `false`)
       - `:defer` - When `true` or a string (group name), marks for deferred loading (default: `false`)
       - `:merge` - When `true`, marks for merging with existing client data (default: `false`)
       - `:merge` - When `:deep`, marks for deep merging
@@ -1529,7 +1557,7 @@ defmodule NbInertia.Controller do
     ## Lazy Function Evaluation
 
     You can pass a 0-arity function as the `data` parameter. Functions are automatically
-    treated as `optional: true` - they will only be executed when the prop is requested
+    treated as `partial: true` - they will only be executed when the prop is requested
     (e.g., on partial reloads). This is useful for expensive operations that should only
     run on demand.
 
@@ -1538,15 +1566,15 @@ defmodule NbInertia.Controller do
         # Eager evaluation - data computed immediately
         assign_serialized(conn, :user, UserSerializer, user)
 
-        # Lazy function - automatically optional, only executes when requested
+        # Lazy function - automatically partial, only executes when requested
         assign_serialized(conn, :themes, ThemeSerializer, fn ->
           Themes.expensive_fetch()
         end)
 
-        # Explicit optional: false to force immediate execution (not recommended)
+        # Explicit partial: false to force immediate execution (not recommended)
         assign_serialized(conn, :posts, PostSerializer, fn ->
           Posts.list_all()
-        end, optional: false)
+        end, partial: false)
 
         # Deferred loading with regular data
         assign_serialized(conn, :stats, StatsSerializer, stats, defer: true)
@@ -1559,12 +1587,12 @@ defmodule NbInertia.Controller do
             keyword()
           ) :: Plug.Conn.t()
     def assign_serialized(conn, key, serializer, data, options \\ []) do
-      # If data is a function, automatically treat as optional (lazy evaluation)
+      # If data is a function, automatically treat as partial (lazy evaluation)
       # Functions should only execute when prop is requested
       is_function_data? = is_function(data, 0)
 
       lazy? = Keyword.get(options, :lazy, false)
-      optional? = Keyword.get(options, :optional, is_function_data?)
+      partial? = Keyword.get(options, :partial, Keyword.get(options, :optional, is_function_data?))
       defer = Keyword.get(options, :defer, false)
       once = Keyword.get(options, :once, false)
       merge = Keyword.get(options, :merge, false)
@@ -1585,7 +1613,7 @@ defmodule NbInertia.Controller do
       end
 
       # Wrap based on options
-      # Priority: defer+once (defer_once) > once > defer > optional > lazy
+      # Priority: defer+once (defer_once) > once > defer > partial > lazy
       value =
         cond do
           # defer + once = defer_once (deferred loading with client caching)
@@ -1602,7 +1630,7 @@ defmodule NbInertia.Controller do
             once_opts = build_once_opts(once)
             NbInertia.CoreController.inertia_once(serialize_fn, once_opts)
 
-          optional? ->
+          partial? ->
             NbInertia.CoreController.inertia_optional(serialize_fn)
 
           is_binary(defer) ->
@@ -2142,7 +2170,7 @@ defmodule NbInertia.Controller do
   Assigns a raw (non-serialized) prop with DSL options applied.
 
   This function applies DSL-declared options (like `defer: true`, `lazy: true`,
-  `optional: true`, `merge: true`) to a raw prop value before assigning it.
+  `partial: true`, `merge: true`) to a raw prop value before assigning it.
 
   ## Parameters
 
@@ -2155,7 +2183,7 @@ defmodule NbInertia.Controller do
 
     - `:defer` - When `true` or a group name string, wraps with `inertia_defer`
     - `:lazy` - When `true`, wraps value in a function for lazy evaluation
-    - `:optional` - When `true`, wraps with `inertia_optional`
+    - `:partial` - When `true`, wraps with `inertia_optional`
     - `:merge` - When `true` or `:deep`, wraps with `inertia_merge` or `inertia_deep_merge`
 
   ## Examples
@@ -2177,14 +2205,14 @@ defmodule NbInertia.Controller do
     defer = Keyword.get(dsl_opts, :defer, false)
     once = Keyword.get(dsl_opts, :once, false)
     lazy? = Keyword.get(dsl_opts, :lazy, false)
-    optional? = Keyword.get(dsl_opts, :optional, false)
+    partial? = Keyword.get(dsl_opts, :partial, Keyword.get(dsl_opts, :optional, false))
     merge = Keyword.get(dsl_opts, :merge, false)
 
-    # Ensure value is a function for defer/once/optional/lazy
+    # Ensure value is a function for defer/once/partial/lazy
     value_fn = if is_function(value, 0), do: value, else: fn -> value end
 
     # Build the value with wrappers applied based on DSL options
-    # Priority: defer+once (defer_once) > once > defer > optional > lazy
+    # Priority: defer+once (defer_once) > once > defer > partial > lazy
     wrapped_value =
       cond do
         # defer + once = defer_once (deferred loading with client caching)
@@ -2208,8 +2236,8 @@ defmodule NbInertia.Controller do
         defer == true ->
           NbInertia.CoreController.inertia_defer(value_fn)
 
-        optional? ->
-          # Optional wraps in a function that's only called on partial reloads
+        partial? ->
+          # Partial wraps in a function that's only called on partial reloads
           NbInertia.CoreController.inertia_optional(value_fn)
 
         lazy? ->
