@@ -47,8 +47,9 @@ defmodule NbInertia.MixProject do
     [
       {:igniter, "~> 0.7", optional: true},
       # Required dependencies
-      {:inertia, "~> 2.0"},
       {:phoenix, "~> 1.7"},
+      {:phoenix_html, "~> 4.0"},
+      {:phoenix_live_view, "~> 1.0"},
       {:plug, "~> 1.14"},
       {:deno_rider, "~> 0.2", optional: true},
 

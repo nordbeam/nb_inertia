@@ -1592,7 +1592,10 @@ defmodule NbInertia.Controller do
       is_function_data? = is_function(data, 0)
 
       lazy? = Keyword.get(options, :lazy, false)
-      partial? = Keyword.get(options, :partial, Keyword.get(options, :optional, is_function_data?))
+
+      partial? =
+        Keyword.get(options, :partial, Keyword.get(options, :optional, is_function_data?))
+
       defer = Keyword.get(options, :defer, false)
       once = Keyword.get(options, :once, false)
       merge = Keyword.get(options, :merge, false)

@@ -6,7 +6,7 @@ defmodule NbInertia.CoreController do
   import Phoenix.Controller
   import Plug.Conn
 
-  alias Inertia.Errors
+  alias NbInertia.Errors
   alias NbInertia.SSR
   alias NbInertia.SSR.RenderError
 
@@ -478,7 +478,7 @@ defmodule NbInertia.CoreController do
 
   @doc """
   Assigns errors to the Inertia page data. This helper accepts any data that
-  implements the `Inertia.Errors` protocol. By default, this library implements
+  implements the `NbInertia.Errors` protocol. By default, this library implements
   error serializers for `Ecto.Changeset` and bare maps.
 
   If you are serializing your own errors maps, they should take the following shape:
@@ -905,7 +905,7 @@ defmodule NbInertia.CoreController do
 
   defp send_ssr_response(conn, head, body) do
     conn
-    |> put_view(Inertia.HTML)
+    |> put_view(NbInertia.HTML)
     |> compile_head(head)
     |> assign(:body, body)
     |> render(:inertia_ssr)
@@ -913,7 +913,7 @@ defmodule NbInertia.CoreController do
 
   defp send_csr_response(conn) do
     conn
-    |> put_view(Inertia.HTML)
+    |> put_view(NbInertia.HTML)
     |> render(:inertia_page, %{page: inertia_assigns(conn)})
   end
 
@@ -990,17 +990,14 @@ defmodule NbInertia.CoreController do
   end
 
   defp ssr_enabled_globally? do
-    Application.get_env(:inertia, :ssr, false)
+    NbInertia.Config.ssr_enabled?()
   end
 
   defp raise_on_ssr_failure? do
-    Application.get_env(:inertia, :raise_on_ssr_failure, true)
+    NbInertia.Config.raise_on_ssr_failure()
   end
 
-  # Checks if SSR failures should be logged
-  # Defaults to false in test environment, true otherwise
-  # Can be overridden via application config
   defp log_ssr_failures? do
-    Application.get_env(:inertia, :log_ssr_failures, Mix.env() != :test)
+    NbInertia.Config.log_ssr_failures()
   end
 end

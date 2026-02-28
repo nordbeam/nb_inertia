@@ -5,7 +5,8 @@ defmodule NbInertia.Modal.HttpClientTest do
 
   describe "extract_page_data_from_html/1" do
     test "extracts page data from single-quoted data-page attribute" do
-      html = ~s(<div id="app" data-page='{"component":"Users/Index","props":{"users":[]},"url":"/users","version":"1.0"}'></div>)
+      html =
+        ~s(<div id="app" data-page='{"component":"Users/Index","props":{"users":[]},"url":"/users","version":"1.0"}'></div>)
 
       assert {:ok, page_data} = HttpClient.extract_page_data_from_html(html)
       assert page_data["component"] == "Users/Index"
@@ -14,7 +15,8 @@ defmodule NbInertia.Modal.HttpClientTest do
     end
 
     test "extracts page data from double-quoted data-page attribute" do
-      html = ~s(<div id="app" data-page="{&quot;component&quot;:&quot;Users/Index&quot;,&quot;props&quot;:{},&quot;url&quot;:&quot;/users&quot;}"></div>)
+      html =
+        ~s(<div id="app" data-page="{&quot;component&quot;:&quot;Users/Index&quot;,&quot;props&quot;:{},&quot;url&quot;:&quot;/users&quot;}"></div>)
 
       assert {:ok, page_data} = HttpClient.extract_page_data_from_html(html)
       assert page_data["component"] == "Users/Index"
@@ -57,10 +59,14 @@ defmodule NbInertia.Modal.HttpClientTest do
 
   describe "inject_page_data_into_html/2" do
     test "replaces single-quoted data-page" do
-      original_html = ~s(<div id="app" data-page='{"component":"Old","props":{},"url":"/"}'></div>)
+      original_html =
+        ~s(<div id="app" data-page='{"component":"Old","props":{},"url":"/"}'></div>)
+
       new_page_data = %{"component" => "New", "props" => %{"name" => "test"}, "url" => "/new"}
 
-      assert {:ok, modified_html} = HttpClient.inject_page_data_into_html(original_html, new_page_data)
+      assert {:ok, modified_html} =
+               HttpClient.inject_page_data_into_html(original_html, new_page_data)
+
       assert modified_html =~ "data-page='"
       refute modified_html =~ "Old"
 
@@ -71,10 +77,14 @@ defmodule NbInertia.Modal.HttpClientTest do
     end
 
     test "replaces double-quoted data-page" do
-      original_html = ~s(<div id="app" data-page="{&quot;component&quot;:&quot;Old&quot;,&quot;props&quot;:{},&quot;url&quot;:&quot;/&quot;}"></div>)
+      original_html =
+        ~s(<div id="app" data-page="{&quot;component&quot;:&quot;Old&quot;,&quot;props&quot;:{},&quot;url&quot;:&quot;/&quot;}"></div>)
+
       new_page_data = %{"component" => "New", "props" => %{}, "url" => "/new"}
 
-      assert {:ok, modified_html} = HttpClient.inject_page_data_into_html(original_html, new_page_data)
+      assert {:ok, modified_html} =
+               HttpClient.inject_page_data_into_html(original_html, new_page_data)
+
       assert modified_html =~ "data-page=\""
     end
 
@@ -109,7 +119,10 @@ defmodule NbInertia.Modal.HttpClientTest do
 
       page_data = %{
         "component" => "Users/Index",
-        "props" => %{"users" => [%{"id" => 1, "name" => "Alice"}], "_nb_modal" => %{"component" => "Users/Show"}},
+        "props" => %{
+          "users" => [%{"id" => 1, "name" => "Alice"}],
+          "_nb_modal" => %{"component" => "Users/Show"}
+        },
         "url" => "/users/1"
       }
 

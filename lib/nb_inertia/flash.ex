@@ -30,7 +30,7 @@ defmodule NbInertia.Flash do
   ## Session Persistence
 
   Flash data is automatically persisted to the session on redirects and cleared
-  after being sent to the client. This is handled by `NbInertia.Plugs.Flash`.
+  after being sent to the client. This is handled by `NbInertia.Plug`.
 
   ## Frontend Access
 
@@ -153,7 +153,7 @@ defmodule NbInertia.Flash do
   @doc """
   Persist flash data to the session.
 
-  Called automatically by `NbInertia.Plugs.Flash` before redirects.
+  Called automatically by `NbInertia.Plug` before redirects.
   Flash data is stored in the session and retrieved on the next request.
   """
   @spec persist_to_session(Plug.Conn.t()) :: Plug.Conn.t()
@@ -170,7 +170,7 @@ defmodule NbInertia.Flash do
   @doc """
   Load flash data from the session.
 
-  Called automatically by `NbInertia.Plugs.Flash` at the start of requests.
+  Called automatically by `NbInertia.Plug` at the start of requests.
   The flash data is removed from the session after being loaded.
   """
   @spec load_from_session(Plug.Conn.t()) :: Plug.Conn.t()

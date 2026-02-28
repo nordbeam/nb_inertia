@@ -159,7 +159,7 @@ defmodule NbInertia do
         plug :accepts, ["html"]
         plug :fetch_session
         plug NbInertia.ParamsConverter  # Converts camelCase params to snake_case
-        plug Inertia.Plug
+        plug NbInertia.Plug
       end
 
   This ensures seamless bidirectional conversion:

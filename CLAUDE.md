@@ -207,4 +207,4 @@ Components use `isRouteResult()` type guard. All components are backward-compati
 mix nb_inertia.install --client-framework react --typescript
 ```
 
-Installs npm packages, configures Phoenix (`use NbInertia.Controller`, `plug Inertia.Plug`), sets up TypeScript with `@/*` path alias.
+Installs npm packages, configures Phoenix (`use NbInertia.Controller`, `plug NbInertia.Plug`), sets up TypeScript with `@/*` path alias.

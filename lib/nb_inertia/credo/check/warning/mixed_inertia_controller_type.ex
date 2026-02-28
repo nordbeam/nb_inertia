@@ -109,7 +109,8 @@ if Code.ensure_loaded?(Credo.Check) do
     end
 
     # Track @moduledoc and check for "Mixed controller"
-    defp traverse({:@, _, [{:moduledoc, _, [doc_content]}]} = ast, state) when is_binary(doc_content) do
+    defp traverse({:@, _, [{:moduledoc, _, [doc_content]}]} = ast, state)
+         when is_binary(doc_content) do
       is_mixed = String.contains?(doc_content, "Mixed controller")
       {ast, %{state | is_mixed_controller: is_mixed}}
     end

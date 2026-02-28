@@ -19,11 +19,10 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     ## Installation Steps
 
     1. Adds `{:nb_inertia, "~> 0.4"}` to mix.exs dependencies
-    2. Adds `{:inertia, "~> 2.5"}` to mix.exs dependencies
-    3. Adds `{:nb_ts, "~> 0.1"}` when --typescript is used
-    4. Sets up controller helpers (use NbInertia.Controller)
-    5. Sets up HTML helpers (import Inertia.HTML)
-    6. Adds `plug Inertia.Plug` to the browser pipeline
+    2. Adds `{:nb_ts, "~> 0.1"}` when --typescript is used
+    3. Sets up controller helpers (use NbInertia.Controller)
+    4. Sets up HTML helpers (import NbInertia.HTML)
+    5. Adds `plug NbInertia.Plug` to the browser pipeline
     7. Adds configuration to config/config.exs under :nb_inertia namespace
     8. Updates root layout template (with nb_vite support if detected)
     9. Configures asset bundler (esbuild by default, or skips if nb_vite is present)
@@ -182,8 +181,7 @@ if Code.ensure_loaded?(Igniter) do
       ssr_enabled = igniter.args.options[:ssr] || false
       typescript_enabled = igniter.args.options[:typescript] || false
 
-      # Add inertia dependency (nb_inertia is already added by igniter.install)
-      igniter = Igniter.Project.Deps.add_dep(igniter, {:inertia, "~> 2.5"})
+      # nb_inertia is already added by igniter.install, no additional deps needed
 
       # Add nb_ts if TypeScript is enabled and not already present
       igniter =
@@ -223,7 +221,7 @@ if Code.ensure_loaded?(Igniter) do
     def setup_html_helpers(igniter) do
       update_web_ex_helper(igniter, :html, fn zipper ->
         import_code = """
-            import Inertia.HTML
+            import NbInertia.HTML
         """
 
         with {:ok, zipper} <- move_to_last_import_or_alias(zipper) do
@@ -277,8 +275,7 @@ if Code.ensure_loaded?(Igniter) do
     @doc false
     def setup_router(igniter) do
       igniter
-      |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug NbInertia.Plugs.Flash")
-      |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug Inertia.Plug")
+      |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug NbInertia.Plug")
       |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug NbInertia.Plugs.ModalHeaders")
     end
 
@@ -1667,10 +1664,10 @@ if Code.ensure_loaded?(Igniter) do
       NbInertia has been successfully installed!
 
       What was configured:
-      - Added {:nb_inertia, "~> 0.4"} and {:inertia, "~> 2.5"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}#{if with_flop, do: "\n- Added {:nb_flop, \"~> 0.1\"} and {:flop, \"~> 0.26\"} for pagination, sorting, and filtering", else: ""}
+      - Added {:nb_inertia, "~> 0.4"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}#{if with_flop, do: "\n- Added {:nb_flop, \"~> 0.1\"} and {:flop, \"~> 0.26\"} for pagination, sorting, and filtering", else: ""}
       - Set up controller helpers (use NbInertia.Controller)
-      - Set up HTML helpers (import Inertia.HTML)
-      - Added plug Inertia.Plug to the browser pipeline
+      - Set up HTML helpers (import NbInertia.HTML)
+      - Added plug NbInertia.Plug to the browser pipeline
       - Updated root layout for Inertia.js
       #{bundler_info}
       - Package manager: #{pkg_manager}#{config_info}

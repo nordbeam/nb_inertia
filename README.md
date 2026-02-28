@@ -938,14 +938,14 @@ config :nb_inertia,
 ### How It Works
 
 1. `inertia_flash/2,3` stores flash data in `conn.private[:nb_inertia_flash]`
-2. On redirects, `NbInertia.Plugs.Flash` persists flash to the session
+2. On redirects, `NbInertia.Plug` persists flash to the session
 3. On the next request, flash is loaded from session and cleared
 4. Flash is sent as a top-level `flash` field in the Inertia response (not inside props)
 5. Frontend hooks access `page.flash` to display temporary data
 
 ### Setup
 
-The Flash plug is automatically added when using the installer. For manual setup:
+Flash handling is built into `NbInertia.Plug` — no separate plug needed. For manual setup:
 
 ```elixir
 # lib/my_app_web/router.ex
@@ -956,8 +956,7 @@ pipeline :browser do
   plug :put_root_layout, html: {MyAppWeb.Layouts, :root}
   plug :protect_from_forgery
   plug :put_secure_browser_headers
-  plug NbInertia.Plugs.Flash  # Add after session plugs
-  plug Inertia.Plug
+  plug NbInertia.Plug
 end
 ```
 
@@ -2040,7 +2039,7 @@ defmodule MyAppWeb.Router do
     plug :put_root_layout, html: {MyAppWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    plug Inertia.Plug
+    plug NbInertia.Plug
     plug :modal_headers  # Add this line
   end
 end

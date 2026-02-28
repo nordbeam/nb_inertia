@@ -151,16 +151,53 @@ defmodule NbInertia.Config do
   end
 
   @doc """
+  Returns whether SSR is enabled, resolving keyword list config.
+
+  Handles both boolean and keyword list formats:
+  - `ssr: true` → `true`
+  - `ssr: [enabled: true]` → `true`
+  - `ssr: false` → `false`
+
+  Defaults to `false`.
+  """
+  def ssr_enabled? do
+    case ssr() do
+      config when is_list(config) -> Keyword.get(config, :enabled, false)
+      config when is_boolean(config) -> config
+      _ -> false
+    end
+  end
+
+  @doc """
+  Returns whether SSR failures should be logged.
+
+  Defaults to `false` in test environment, `true` otherwise.
+  """
+  def log_ssr_failures do
+    get(:log_ssr_failures, get(:env) != :test)
+  end
+
+  @doc """
+  Returns the configured asset version.
+
+  Supports function, string, or nil values. Used as a fallback when the
+  version cannot be computed from static paths.
+  """
+  def version do
+    case get(:version) do
+      nil -> nil
+      fun when is_function(fun, 0) -> fun.()
+      version when is_binary(version) -> version
+      _ -> nil
+    end
+  end
+
+  @doc """
   Returns the SSR module to use for server-side rendering.
 
   Defaults to `NbInertia.SSR` (DenoRider-based).
 
-  You can configure this to use a different SSR implementation:
-
-      config :nb_inertia,
-        ssr_module: Inertia.SSR  # Use base inertia's NodeJS-based SSR
-
-  Or provide your own custom SSR module that implements `call/1`.
+  You can provide your own custom SSR module that implements `call/1`.
   """
   def ssr_module do
     get(:ssr_module, NbInertia.SSR)

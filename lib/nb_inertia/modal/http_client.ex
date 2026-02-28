@@ -159,12 +159,7 @@ defmodule NbInertia.Modal.HttpClient do
 
       _ ->
         # Fall back to application config
-        case Application.get_env(:inertia, :version) do
-          nil -> ""
-          fun when is_function(fun, 0) -> fun.()
-          version when is_binary(version) -> version
-          _ -> ""
-        end
+        NbInertia.Config.version() || ""
     end
   end
 

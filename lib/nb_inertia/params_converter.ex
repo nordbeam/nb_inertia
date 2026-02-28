@@ -17,7 +17,7 @@ defmodule NbInertia.ParamsConverter do
         plug :protect_from_forgery
         plug :put_secure_browser_headers
         plug NbInertia.ParamsConverter  # Add this line
-        plug Inertia.Plug
+        plug NbInertia.Plug
       end
 
   ## Configuration

@@ -67,9 +67,11 @@ defmodule NbInertia.RealtimeTest do
     test "raises descriptive error when serializer fails" do
       payload = %{user: {BrokenSerializer, %{id: 1}}}
 
-      assert_raise RuntimeError, ~r/NbInertia\.Realtime: serializer.*BrokenSerializer.*failed/, fn ->
-        Realtime.serialize_payload(payload)
-      end
+      assert_raise RuntimeError,
+                   ~r/NbInertia\.Realtime: serializer.*BrokenSerializer.*failed/,
+                   fn ->
+                     Realtime.serialize_payload(payload)
+                   end
     end
   end
 
@@ -94,7 +96,8 @@ defmodule NbInertia.RealtimeTest do
         message: {TestSerializer, %{id: 1, name: "hello"}}
       )
 
-      assert_received {:broadcast, "chat:1", "message_created", %{message: %{id: 1, name: "HELLO"}}}
+      assert_received {:broadcast, "chat:1", "message_created",
+                       %{message: %{id: 1, name: "HELLO"}}}
     end
   end
 
@@ -118,7 +121,7 @@ defmodule NbInertia.RealtimeTest do
       )
 
       assert_received {:broadcast_from, _pid, "chat:1", "message_created",
-                        %{message: %{id: 1, name: "WORLD"}}}
+                       %{message: %{id: 1, name: "WORLD"}}}
     end
   end
 

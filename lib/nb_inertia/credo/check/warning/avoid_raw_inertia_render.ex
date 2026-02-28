@@ -78,7 +78,8 @@ if Code.ensure_loaded?(Credo.Check) do
 
     # Match `Inertia.render_inertia(...)` (aliased)
     defp traverse(
-           {{:., meta, [{:__aliases__, _, [:Inertia]}, :render_inertia]}, _call_meta, _args} = ast,
+           {{:., meta, [{:__aliases__, _, [:Inertia]}, :render_inertia]}, _call_meta, _args} =
+             ast,
            issues,
            issue_meta
          ) do
