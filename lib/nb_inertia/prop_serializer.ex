@@ -106,7 +106,7 @@ defprotocol NbInertia.PropSerializer do
       {:ok, %{name: "Alice", ...}}
   """
   @spec serialize(t, opts :: keyword()) :: {:ok, any()} | {:error, term()}
-  def serialize(value, opts \\ [])
+  def serialize(value, opts)
 end
 
 # Explicit implementations for primitive types

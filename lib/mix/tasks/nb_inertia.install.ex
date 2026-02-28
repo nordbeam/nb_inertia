@@ -103,7 +103,6 @@ if Code.ensure_loaded?(Igniter) do
     @moduledoc __MODULE__.Docs.long_doc()
 
     use Igniter.Mix.Task
-    require Igniter.Code.Common
 
     @impl Igniter.Mix.Task
     def info(_argv, _parent) do
