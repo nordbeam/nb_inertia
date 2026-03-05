@@ -1,0 +1,21 @@
+# NbInertia — Helix injection config for ~TSX/~JSX sigils
+# Add to your ~/.config/helix/languages.toml
+
+[[language]]
+name = "elixir"
+
+[[language.grammar.injection]]
+language = "tsx"
+query = """
+((sigil (sigil_name) @_name (quoted_content) @injection.content)
+ (#eq? @_name "TSX")
+ (#set! injection.language "tsx"))
+"""
+
+[[language.grammar.injection]]
+language = "jsx"
+query = """
+((sigil (sigil_name) @_name (quoted_content) @injection.content)
+ (#eq? @_name "JSX")
+ (#set! injection.language "jsx"))
+"""

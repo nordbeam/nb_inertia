@@ -1,0 +1,28 @@
+{
+  "scopeName": "source.elixir.nb-inertia",
+  "injectionSelector": "L:source.elixir",
+  "patterns": [
+    {
+      "name": "meta.embedded.block.tsx",
+      "begin": "~TSX\"\"\"",
+      "end": "\"\"\"",
+      "contentName": "meta.embedded.block.tsx",
+      "patterns": [
+        {
+          "include": "source.tsx"
+        }
+      ]
+    },
+    {
+      "name": "meta.embedded.block.jsx",
+      "begin": "~JSX\"\"\"",
+      "end": "\"\"\"",
+      "contentName": "meta.embedded.block.jsx",
+      "patterns": [
+        {
+          "include": "source.jsx"
+        }
+      ]
+    }
+  ]
+}

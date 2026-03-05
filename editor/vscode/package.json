@@ -1,0 +1,28 @@
+{
+  "name": "nb-inertia-tsx",
+  "displayName": "NbInertia TSX Sigil Support",
+  "description": "Syntax highlighting for ~TSX/~JSX sigils in Elixir NbInertia.Page modules",
+  "version": "0.1.0",
+  "publisher": "nordbeam",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "grammars": [
+      {
+        "scopeName": "source.elixir.nb-inertia",
+        "path": "./syntaxes/nb-inertia.tmLanguage.json",
+        "injectTo": [
+          "source.elixir"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.tsx": "typescriptreact",
+          "meta.embedded.block.jsx": "javascriptreact"
+        }
+      }
+    ]
+  }
+}

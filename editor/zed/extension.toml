@@ -1,0 +1,8 @@
+id = "nb-inertia"
+name = "NbInertia TSX Sigil Support"
+description = "Syntax highlighting for ~TSX/~JSX sigils in Elixir NbInertia.Page modules"
+version = "0.1.0"
+authors = ["Nordbeam"]
+
+[language_servers.elixir]
+language = "elixir"
