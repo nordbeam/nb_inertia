@@ -17,6 +17,7 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 - **Real-Time Updates**: WebSocket integration via Phoenix Channels with declarative strategies
 - **Modal System**: Render pages as modals/slideovers without full page navigation
 - **Credo Checks**: 8 custom Credo checks for compile-time code quality validation
+- **Page Modules**: LiveView-style single-module-per-page pattern with `mount/2`, `action/3`, `~TSX` sigil, and colocated frontend components
 
 ## Installation
 
@@ -2175,6 +2176,166 @@ Enable in `.credo.exs`:
   ]
 }
 ```
+
+## Page Modules (NbInertia.Page)
+
+Page modules provide a LiveView-style pattern for defining Inertia pages. Each page is a
+self-contained module with `mount/2`, `action/3`, and optional `render/0` callbacks,
+replacing the traditional controller-based pattern with a more declarative approach.
+
+See the [full specification](SPEC_PAGE_MODULES.md) for complete details.
+
+### Quick Start
+
+Install with the `--pages` flag:
+
+```bash
+mix nb_inertia.install --client-framework react --typescript --pages
+```
+
+Or add Page module support to an existing installation manually:
+
+1. Add `import NbInertia.Router` to your router
+2. Add `:nb_inertia_extract` to your compilers in `mix.exs`
+3. Add `.nb_inertia/` to `.gitignore`
+
+### Basic Page
+
+```elixir
+# lib/my_app_web/inertia/users_page/index.ex
+defmodule MyAppWeb.UsersPage.Index do
+  use NbInertia.Page
+
+  prop :users, list(UserSerializer)
+  prop :total_count, :integer
+
+  def mount(_conn, _params) do
+    %{users: Accounts.list_users(), total_count: Accounts.count_users()}
+  end
+end
+```
+
+Router:
+
+```elixir
+import NbInertia.Router
+
+scope "/", MyAppWeb do
+  pipe_through :browser
+
+  inertia "/users", UsersPage.Index
+  inertia_resource "/posts", PostsPage
+end
+```
+
+### Page with Action (Mutations)
+
+```elixir
+defmodule MyAppWeb.UsersPage.New do
+  use NbInertia.Page
+
+  prop :roles, list(:string)
+
+  def mount(_conn, _params) do
+    %{roles: ~w(admin member guest)}
+  end
+
+  def action(conn, %{"user" => params}, :create) do
+    case Accounts.create_user(params) do
+      {:ok, user} ->
+        conn
+        |> put_flash(:info, "User created")
+        |> redirect(~p"/users/#{user}")
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+end
+```
+
+### Colocated Frontend with ~TSX Sigil
+
+Embed your React component directly in the Elixir module. The `~TSX` content is extracted
+to a real `.tsx` file at compile time with auto-generated type preamble.
+
+```elixir
+defmodule MyAppWeb.DashboardPage.Index do
+  use NbInertia.Page
+
+  prop :stats, :map
+  prop :recent_activity, list(:map)
+
+  def mount(_conn, _params) do
+    %{stats: Analytics.dashboard_stats(), recent_activity: Analytics.recent(10)}
+  end
+
+  def render do
+    ~TSX"""
+    import { Card } from '@/components/ui'
+
+    export default function Dashboard({ stats, recentActivity }: Props) {
+      return (
+        <div>
+          <Card title="Overview">
+            <p>Total users: {stats.totalUsers}</p>
+          </Card>
+        </div>
+      )
+    }
+    """
+  end
+end
+```
+
+### Declarative Real-Time Channels
+
+```elixir
+defmodule MyAppWeb.ChatPage.Show do
+  use NbInertia.Page
+
+  prop :room, RoomSerializer
+  prop :messages, list(MessageSerializer)
+
+  channel "chat:{room.id}" do
+    on "message_created", prop: :messages, strategy: :append
+    on "message_deleted", prop: :messages, strategy: :remove, key: :id
+  end
+
+  def mount(_conn, %{"id" => id}) do
+    room = Chat.get_room!(id)
+    %{room: room, messages: Chat.recent_messages(room)}
+  end
+end
+```
+
+### Modal Page
+
+```elixir
+defmodule MyAppWeb.UsersPage.Show do
+  use NbInertia.Page
+
+  prop :user, UserSerializer
+
+  modal base_url: "/users",
+        size: :lg,
+        position: :center
+
+  def mount(_conn, %{"id" => id}) do
+    %{user: Accounts.get_user!(id)}
+  end
+end
+```
+
+### Migrating from Controllers
+
+Use the migration task to generate Page module scaffolds from existing controllers:
+
+```bash
+mix nb_inertia.migrate_to_pages --controller MyAppWeb.UserController
+```
+
+Controller-based pages and Page modules coexist. Migrate incrementally, one controller at a time.
 
 ## Related Projects
 

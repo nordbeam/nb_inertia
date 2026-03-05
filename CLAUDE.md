@@ -201,10 +201,121 @@ Hooks: `useChannel<TEvents>`, `useRealtimeProps<T>` (with `setProp`/`setProps`/`
 
 Components use `isRouteResult()` type guard. All components are backward-compatible with plain strings.
 
+## Page Modules (NbInertia.Page)
+
+LiveView-style single-module-per-page pattern as an alternative to controller-based pages.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/nb_inertia/page.ex` | Core `use NbInertia.Page` macro, prop DSL, `__before_compile__` |
+| `lib/nb_inertia/page_controller.ex` | Thin dispatch controller: routes to Page module's `mount/2` or `action/3` |
+| `lib/nb_inertia/page/naming.ex` | Component name derivation from module name (e.g., `MyAppWeb.UsersPage.Index` -> `"Users/Index"`) |
+| `lib/nb_inertia/page/channel.ex` | Declarative `channel` macro for real-time bindings |
+| `lib/nb_inertia/router.ex` | Router macros: `inertia/2,3`, `inertia_resource/2,3,4`, `inertia_shared/1` |
+| `lib/nb_inertia/sigil.ex` | `~TSX` and `~JSX` sigils (no-ops in Elixir, extracted by Extractor) |
+| `lib/nb_inertia/extractor.ex` | TSX extraction: discovers Page modules with `render/0`, writes `.tsx` files |
+| `lib/nb_inertia/extractor/preamble.ex` | TypeScript preamble generation: `Props` interface from prop declarations |
+| `lib/mix/tasks/nb_inertia.extract.ex` | `mix nb_inertia.extract` task (manual extraction) |
+| `lib/mix/compilers/nb_inertia_extract.ex` | Mix compiler for auto-extraction on `mix compile` |
+| `lib/nb_inertia/page_test.ex` | Test helpers: `mount_page/2,3`, `action_page/4`, page-aware assertions |
+| `lib/mix/tasks/nb_inertia.migrate_to_pages.ex` | Migration task: generates Page modules from controller's `inertia_page` blocks |
+| `editor/` | IDE support: tree-sitter injections (nvim, helix, zed), VS Code extension |
+
+### Page Lifecycle
+
+```
+GET /users/:id/edit
+  -> Router dispatches to NbInertia.PageController
+  -> PageController calls Page.mount(conn, params)
+  -> mount/2 returns %{props} | conn | redirect
+  -> Props merged: mount return + shared props + flash + errors
+  -> Inertia JSON response or full HTML
+
+PATCH /users/:id
+  -> Router dispatches to NbInertia.PageController
+  -> PageController calls Page.action(conn, params, :update)
+  -> action/3 returns redirect | {:error, changeset} | {:error, map}
+```
+
+### Prop DSL
+
+Reused from `NbInertia.Controller` — same `prop`, `form_inputs`, `shared`, `modal` macros:
+
+```elixir
+prop :users, list(UserSerializer)
+prop :status, enum: ["active", "inactive"]
+prop :draft, :map, nullable: true, default: %{}
+prop :stats, :map, defer: true
+```
+
+### Router Macros
+
+```elixir
+import NbInertia.Router
+
+# Single page
+inertia "/", HomePage.Index
+inertia "/about", AboutPage.Index
+
+# Resource (generates index, show, new, edit, create, update, delete routes)
+inertia_resource "/users", UsersPage
+inertia_resource "/posts", PostsPage, only: [:index, :show]
+
+# Scoped shared props
+scope "/admin" do
+  inertia_shared AdminSharedProps
+  inertia_resource "/dashboard", Admin.DashboardPage
+end
+```
+
+### Test Helpers (NbInertia.PageTest)
+
+```elixir
+use NbInertia.PageTest
+
+# Direct mount testing
+props = mount_page(MyAppWeb.UsersPage.Index, conn)
+assert Map.has_key?(props, :users)
+
+# Action testing
+result = action_page(MyAppWeb.UsersPage.New, conn, params, :create)
+assert {:redirect, _} = result
+
+# Page-aware assertions
+assert_page_props(conn, [:users, :total_count])
+```
+
+### Credo Checks (Page-specific)
+
+| Check | Description |
+|-------|-------------|
+| `MissingMount` | Page module without `mount/2` |
+| `ActionWithoutMount` | Page has `action/3` but no `mount/2` |
+| `UnusedPropInMount` | Declared prop not returned by `mount/2` |
+| `UndeclaredPropInMount` | Prop returned by `mount/2` not declared |
+| `RenderWithoutProps` | `render/0` present but no props declared |
+| `MixedPageAndController` | Module uses both `NbInertia.Page` and `NbInertia.Controller` |
+| `ModalWithoutBaseUrl` | Modal declared without `base_url` |
+
 ## Installation
 
 ```bash
+# Standard installation
 mix nb_inertia.install --client-framework react --typescript
+
+# With Page module support
+mix nb_inertia.install --client-framework react --typescript --pages
 ```
+
+The `--pages` flag additionally:
+- Adds `import NbInertia.Router` to the router
+- Generates a sample Page module (`HomePage.Index`)
+- Adds `inertia "/"` route
+- Adds `.nb_inertia/` to `.gitignore`
+- Adds `:nb_inertia_extract` compiler to `mix.exs`
+- Configures `pages` section in `:nb_inertia` config
+- Adds `nbInertia()` Vite plugin (if nb_vite detected)
 
 Installs npm packages, configures Phoenix (`use NbInertia.Controller`, `plug NbInertia.Plug`), sets up TypeScript with `@/*` path alias.
