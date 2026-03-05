@@ -170,6 +170,9 @@ defmodule NbInertia.PageController do
   defp redirected?(_conn), do: false
 
   defp render_page(conn, component, page_module, props_map) do
+    # Apply shared props from inertia_shared modules (router-level)
+    conn = apply_shared_modules(conn)
+
     # Process props: handle serializer tuples, apply DSL options
     dsl_props = page_module.__inertia_props__()
     dsl_opts_map = build_dsl_opts_map(dsl_props)
@@ -185,6 +188,9 @@ defmodule NbInertia.PageController do
   end
 
   defp remount_with_errors(conn, params, page_module, component) do
+    # Apply shared props from inertia_shared modules (router-level)
+    conn = apply_shared_modules(conn)
+
     # Re-call mount/2 to get the base page props, then render with errors
     dsl_props = page_module.__inertia_props__()
     dsl_opts_map = build_dsl_opts_map(dsl_props)
@@ -248,6 +254,28 @@ defmodule NbInertia.PageController do
         end
       end
     end)
+  end
+
+  # Applies shared props from modules registered via `inertia_shared` in the router.
+  # Each shared module's `build_props/2` is called and its props are merged into
+  # `conn.private[:inertia_shared]` so they're included in the Inertia response.
+  defp apply_shared_modules(conn) do
+    case conn.private[:nb_inertia_shared_modules] do
+      nil ->
+        conn
+
+      [] ->
+        conn
+
+      modules when is_list(modules) ->
+        Enum.reduce(modules, conn, fn module, acc ->
+          shared_props = module.build_props(acc, [])
+
+          Enum.reduce(shared_props, acc, fn {key, value}, inner_acc ->
+            assign_prop(inner_acc, key, value)
+          end)
+        end)
+    end
   end
 
   defp process_and_assign_props(conn, props_map, dsl_opts_map) do
