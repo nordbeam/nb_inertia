@@ -305,6 +305,11 @@ defmodule NbInertia.PageController do
   end
 
   defp remount_with_errors(conn, params, page_module, component) do
+    # Preserve errors already assigned to the conn (from assign_errors in do_action).
+    # We need to save and restore them because apply_from_and_defaults may overwrite
+    # :errors with a default value (e.g., `prop :errors, :map, default: %{}`).
+    saved_errors = conn.private[:inertia_shared][:errors]
+
     # Apply shared props (router-level + page-level)
     conn = apply_all_shared_modules(conn, page_module)
 
@@ -320,14 +325,25 @@ defmodule NbInertia.PageController do
           page_props = returned_conn.private[:nb_inertia_page_props] || %{}
           page_props = apply_from_and_defaults(returned_conn, page_props, dsl_props)
           returned_conn = process_and_assign_props(returned_conn, page_props, dsl_opts_map)
+          returned_conn = restore_errors(returned_conn, saved_errors)
           NbInertia.Controller.do_render_inertia(returned_conn, component)
         end
 
       %{} = props_map ->
         props_map = apply_from_and_defaults(conn, props_map, dsl_props)
         conn = process_and_assign_props(conn, props_map, dsl_opts_map)
+        conn = restore_errors(conn, saved_errors)
         NbInertia.Controller.do_render_inertia(conn, component)
     end
+  end
+
+  # Restores previously saved errors onto the conn, ensuring they aren't
+  # overwritten by prop defaults during remount.
+  defp restore_errors(conn, nil), do: conn
+
+  defp restore_errors(conn, saved_errors) do
+    shared = conn.private[:inertia_shared] || %{}
+    put_private(conn, :inertia_shared, Map.put(shared, :errors, saved_errors))
   end
 
   defp build_dsl_opts_map(dsl_props) do
