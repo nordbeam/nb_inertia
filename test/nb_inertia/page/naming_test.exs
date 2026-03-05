@@ -64,5 +64,13 @@ defmodule NbInertia.Page.NamingTest do
     test "different Web prefix: AdminWeb.UsersPage.Index → Users/Index" do
       assert Naming.derive_component(AdminWeb.UsersPage.Index) == "Users/Index"
     end
+
+    test "DashboardPage with Index: Web.DashboardPage.Index → Dashboard/Index" do
+      assert Naming.derive_component(MyAppWeb.DashboardPage.Index) == "Dashboard/Index"
+    end
+
+    test "module without Web or Page: Dashboard → Dashboard" do
+      assert Naming.derive_component(MyAppWeb.Dashboard) == "Dashboard"
+    end
   end
 end

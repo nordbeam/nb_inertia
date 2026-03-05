@@ -175,6 +175,10 @@ defmodule NbInertia.PageController do
     dsl_props = page_module.__inertia_props__()
     dsl_opts_map = build_dsl_opts_map(dsl_props)
 
+    # Merge in `from:` props (pulled from conn.assigns) and `default:` values
+    # for any DSL-declared props not already provided by mount/2
+    props_map = apply_from_and_defaults(conn, props_map, dsl_props)
+
     conn = process_and_assign_props(conn, props_map, dsl_opts_map)
 
     # Delegate to CoreController for the actual Inertia response
@@ -183,21 +187,22 @@ defmodule NbInertia.PageController do
 
   defp remount_with_errors(conn, params, page_module, component) do
     # Re-call mount/2 to get the base page props, then render with errors
+    dsl_props = page_module.__inertia_props__()
+    dsl_opts_map = build_dsl_opts_map(dsl_props)
+
     case page_module.mount(conn, params) do
       %Plug.Conn{} = returned_conn ->
         if redirected?(returned_conn) do
           returned_conn
         else
           page_props = returned_conn.private[:nb_inertia_page_props] || %{}
-          dsl_props = page_module.__inertia_props__()
-          dsl_opts_map = build_dsl_opts_map(dsl_props)
+          page_props = apply_from_and_defaults(returned_conn, page_props, dsl_props)
           returned_conn = process_and_assign_props(returned_conn, page_props, dsl_opts_map)
           NbInertia.Controller.do_render_inertia(returned_conn, component)
         end
 
       %{} = props_map ->
-        dsl_props = page_module.__inertia_props__()
-        dsl_opts_map = build_dsl_opts_map(dsl_props)
+        props_map = apply_from_and_defaults(conn, props_map, dsl_props)
         conn = process_and_assign_props(conn, props_map, dsl_opts_map)
         NbInertia.Controller.do_render_inertia(conn, component)
     end
@@ -207,6 +212,43 @@ defmodule NbInertia.PageController do
     dsl_props
     |> Enum.map(fn prop -> {prop.name, prop[:opts] || []} end)
     |> Map.new()
+  end
+
+  # Applies `from:` and `default:` DSL options for props not returned by mount/2.
+  #
+  # - `from: :assigns` — pulls from `conn.assigns[prop_name]`
+  # - `from: :key_name` — pulls from `conn.assigns[:key_name]`
+  # - `default: value` — uses the default if the prop is not in the mount return
+  defp apply_from_and_defaults(conn, props_map, dsl_props) do
+    Enum.reduce(dsl_props, props_map, fn prop_config, acc ->
+      name = prop_config.name
+      opts = prop_config[:opts] || []
+
+      if Map.has_key?(acc, name) do
+        # Prop was explicitly provided by mount/2, don't override
+        acc
+      else
+        from = Keyword.get(opts, :from)
+        default = Keyword.get(opts, :default, :__no_default__)
+
+        cond do
+          # from: :assigns — pull from conn.assigns using the prop name as the key
+          from == :assigns ->
+            Map.put(acc, name, Map.get(conn.assigns, name))
+
+          # from: :other_key — pull from conn.assigns using the specified key
+          is_atom(from) and not is_nil(from) ->
+            Map.put(acc, name, Map.get(conn.assigns, from))
+
+          # default: value — use the default value
+          default != :__no_default__ ->
+            Map.put(acc, name, default)
+
+          true ->
+            acc
+        end
+      end
+    end)
   end
 
   defp process_and_assign_props(conn, props_map, dsl_opts_map) do
