@@ -1,4 +1,4 @@
-defmodule NbInertia.PageTest do
+defmodule NbInertia.PageModuleTest do
   use ExUnit.Case, async: true
 
   # ── Test Page Modules ──────────────────────────────
