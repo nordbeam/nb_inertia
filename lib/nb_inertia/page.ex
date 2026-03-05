@@ -145,6 +145,9 @@ defmodule NbInertia.Page do
   @doc false
   defmacro __using__(opts) do
     quote do
+      # Import ~TSX and ~JSX sigils for colocated frontend components
+      import NbInertia.Sigil, only: [sigil_TSX: 2, sigil_JSX: 2]
+
       # Import the prop/form DSL macros from Controller
       import NbInertia.Controller,
         only: [
