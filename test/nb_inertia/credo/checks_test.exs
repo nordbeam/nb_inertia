@@ -555,6 +555,49 @@ defmodule NbInertia.Credo.ChecksTest do
       issues = run_check(InconsistentOptionalProps, source)
       assert issues == []
     end
+
+    test "does not warn when nullable prop is set to nil" do
+      source = """
+      defmodule MyAppWeb.WorkflowController do
+        inertia_page :edit, component: "WorkflowEdit" do
+          prop(:workflow, WorkflowSerializer)
+          prop(:conflict, ConflictSerializer, nullable: true)
+        end
+
+        def edit(conn, _params) do
+          render_inertia(conn, :edit,
+            workflow: {WorkflowSerializer, workflow},
+            conflict: nil
+          )
+        end
+      end
+      """
+
+      issues = run_check(InconsistentOptionalProps, source)
+      assert issues == []
+    end
+
+    test "warns for non-nullable prop set to nil even when nullable props exist" do
+      source = """
+      defmodule MyAppWeb.WorkflowController do
+        inertia_page :edit, component: "WorkflowEdit" do
+          prop(:workflow, WorkflowSerializer)
+          prop(:conflict, ConflictSerializer, nullable: true)
+        end
+
+        def edit(conn, _params) do
+          render_inertia(conn, :edit,
+            workflow: nil,
+            conflict: nil
+          )
+        end
+      end
+      """
+
+      issues = run_check(InconsistentOptionalProps, source)
+      assert length(issues) == 1
+      assert hd(issues).message =~ ":workflow"
+    end
   end
 
   describe "MixedInertiaControllerType" do
