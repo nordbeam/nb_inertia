@@ -26,6 +26,17 @@ defmodule NbInertia.PageController do
   import Plug.Conn
   import NbInertia.CoreController
 
+  # Override Phoenix's action/2 dispatcher to correctly route to show/2 or do_action/2
+  # based on the Phoenix action name. Without this, our def action/2 below would shadow
+  # Phoenix's auto-generated dispatcher, causing all routes to hit action/2 instead of show/2.
+  def action(conn, _opts) do
+    case action_name(conn) do
+      :show -> show(conn, conn.params)
+      :action -> do_action(conn, conn.params)
+      other -> apply(__MODULE__, other, [conn, conn.params])
+    end
+  end
+
   @doc """
   Handles GET requests by calling the Page module's `mount/2` callback.
 
@@ -57,24 +68,8 @@ defmodule NbInertia.PageController do
     end
   end
 
-  @doc """
-  Handles POST/PATCH/PUT/DELETE requests by calling the Page module's `action/3` callback.
-
-  The verb atom is derived from the HTTP method:
-  - POST → `:create`
-  - PATCH → `:update`
-  - PUT → `:update`
-  - DELETE → `:delete`
-
-  Custom verbs can be set via `conn.private[:nb_inertia_action_verb]`.
-
-  ## action/3 Return Values
-
-  - `%Plug.Conn{}` — Redirect or modified conn, passes through
-  - `{:error, changeset}` — Converts errors via `NbInertia.Errors` protocol, re-mounts
-  - `{:error, %{field: [msgs]}}` — Assigns error map, re-mounts
-  """
-  def action(conn, params) do
+  @doc false
+  def do_action(conn, params) do
     page_module = get_page_module!(conn)
 
     unless page_module.__inertia_has_action__() do
