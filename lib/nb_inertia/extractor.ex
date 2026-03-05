@@ -88,12 +88,43 @@ defmodule NbInertia.Extractor do
         result
       end)
 
+    # Also generate companion channel config files for standalone pages (no render/0)
+    standalone_with_channels =
+      Enum.filter(modules, fn mod ->
+        has_page? = function_exported?(mod, :__inertia_page__, 0)
+
+        has_render? =
+          function_exported?(mod, :__inertia_has_render__, 0) && mod.__inertia_has_render__()
+
+        has_channel? =
+          function_exported?(mod, :__inertia_channel__, 0) && mod.__inertia_channel__() != nil
+
+        has_page? and not has_render? and has_channel?
+      end)
+
+    channel_results =
+      Enum.map(standalone_with_channels, fn mod ->
+        result = extract_channel_config(mod, opts)
+
+        if verbose? do
+          case result do
+            {:ok, path} -> IO.puts("  Channel config: #{path}")
+            {:skipped, path} -> IO.puts("  Channel unchanged: #{path}")
+            {:error, _mod, reason} -> IO.puts("  Channel error: #{inspect(mod)} — #{reason}")
+          end
+        end
+
+        result
+      end)
+
+    all_results = results ++ channel_results
+
     if verbose? do
-      {ok, skipped, errors} = count_results(results)
-      IO.puts("\nExtracted #{ok} page(s), #{skipped} unchanged, #{errors} error(s)")
+      {ok, skipped, errors} = count_results(all_results)
+      IO.puts("\nExtracted #{ok} file(s), #{skipped} unchanged, #{errors} error(s)")
     end
 
-    results
+    all_results
   end
 
   @doc """
@@ -132,6 +163,12 @@ defmodule NbInertia.Extractor do
       # 4. Get props for preamble
       props = module.__inertia_props__()
 
+      # 4b. Get channel config if available
+      channel_config = get_channel_config(module)
+
+      # 4c. Check if camelize_props is enabled
+      camelize? = get_camelize_props(module)
+
       # 5. Generate preamble (skip for JSX)
       preamble =
         if ext == ".tsx" and props != [] do
@@ -140,7 +177,9 @@ defmodule NbInertia.Extractor do
           Preamble.generate(props,
             module: module,
             source_path: source_path,
-            types_import_path: types_import_path
+            types_import_path: types_import_path,
+            channel: channel_config,
+            camelize_props: camelize?
           )
         else
           build_header_only(module, ext)
@@ -154,6 +193,48 @@ defmodule NbInertia.Extractor do
 
       # 8. Write (with incremental check)
       write_file(output_path, full_content, incremental?)
+    rescue
+      e ->
+        {:error, module, Exception.message(e)}
+    end
+  end
+
+  @doc """
+  Extracts a companion channel config file for a standalone Page module.
+
+  This is used when a module declares a `channel` but has no `render/0`
+  (standalone `.tsx` file pattern). The config is written to
+  `.nb_inertia/channels/<Component>.config.ts`.
+
+  ## Returns
+
+    * `{:ok, output_path}` - Successfully extracted
+    * `{:skipped, output_path}` - File unchanged (incremental mode)
+    * `{:error, module, reason}` - Extraction failed
+  """
+  @spec extract_channel_config(module(), keyword()) ::
+          {:ok, String.t()} | {:skipped, String.t()} | {:error, module(), term()}
+  def extract_channel_config(module, opts \\ []) do
+    output_dir = Keyword.get(opts, :output_dir, @default_output_dir)
+    incremental? = Keyword.get(opts, :incremental, true)
+
+    try do
+      component = module.__inertia_component__()
+      channel_config = module.__inertia_channel__()
+      camelize? = get_camelize_props(module)
+
+      # Generate channel config file
+      content =
+        Preamble.generate_channel_config(channel_config,
+          module: module,
+          camelize_props: camelize?
+        )
+
+      # Write to .nb_inertia/channels/<Component>.config.ts
+      channels_dir = Path.join(Path.dirname(output_dir), "channels")
+      output_path = Path.join(channels_dir, "#{component}.config.ts")
+
+      write_file(output_path, content, incremental?)
     rescue
       e ->
         {:error, module, Exception.message(e)}
@@ -239,6 +320,22 @@ defmodule NbInertia.Extractor do
 
       {:error, _} ->
         false
+    end
+  end
+
+  defp get_channel_config(module) do
+    if function_exported?(module, :__inertia_channel__, 0) do
+      module.__inertia_channel__()
+    else
+      nil
+    end
+  end
+
+  defp get_camelize_props(module) do
+    if function_exported?(module, :__inertia_options__, 0) do
+      module.__inertia_options__() |> Map.get(:camelize_props, false) |> Kernel.==(true)
+    else
+      false
     end
   end
 

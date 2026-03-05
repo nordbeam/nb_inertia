@@ -35,26 +35,32 @@ defmodule NbInertia.Extractor.Preamble do
     * `:module` - The source Elixir module (for the header comment)
     * `:source_path` - The source file path (for the header comment)
     * `:types_import_path` - The import path for types (default: `"@/types"`)
+    * `:channel` - Channel config map from `__inertia_channel__/0` (optional)
+    * `:camelize_props` - Whether to camelize prop names in channel config (default: `false`)
 
   ## Returns
 
   A string containing:
   1. Auto-generated header comment
   2. Import statements for serializer types (if any)
-  3. Props interface declaration
+  3. Channel imports and config (if channel is configured)
+  4. Props interface declaration
   """
   @spec generate(list(map()), keyword()) :: String.t()
   def generate(props, opts \\ []) do
     module = Keyword.get(opts, :module)
     source_path = Keyword.get(opts, :source_path)
     types_import_path = Keyword.get(opts, :types_import_path, "@/types")
+    channel_config = Keyword.get(opts, :channel)
+    camelize? = Keyword.get(opts, :camelize_props, false)
 
     header = build_header(module, source_path)
     imports = build_imports(props, types_import_path)
+    channel_section = build_channel_section(channel_config, camelize?)
     interface = build_interface(props)
 
     parts =
-      [header, imports, interface]
+      [header, imports, channel_section, interface]
       |> Enum.reject(&(&1 == ""))
 
     Enum.join(parts, "\n\n") <> "\n"
@@ -91,6 +97,39 @@ defmodule NbInertia.Extractor.Preamble do
     |> Enum.sort_by(fn {name, _mod} -> name end)
   end
 
+  @doc """
+  Generates a standalone channel config TypeScript file for modules without `render/0`.
+
+  This is used when a Page module declares a channel but uses a standalone
+  `.tsx` file instead of a colocated `~TSX` sigil.
+
+  ## Options
+
+    * `:module` - The source Elixir module (for the header comment)
+    * `:camelize_props` - Whether to camelize prop names (default: `false`)
+
+  ## Returns
+
+  A complete TypeScript file string with channel config and topic exports.
+  """
+  @spec generate_channel_config(map(), keyword()) :: String.t()
+  def generate_channel_config(channel_config, opts \\ []) do
+    module = Keyword.get(opts, :module)
+    camelize? = Keyword.get(opts, :camelize_props, false)
+
+    header =
+      if module do
+        "// AUTO-GENERATED channel config for #{inspect(module)}"
+      else
+        "// AUTO-GENERATED channel config — do not edit directly"
+      end
+
+    events_array = build_channel_events_array(channel_config.events, camelize?)
+    topic_export = "export const channelTopic = '#{channel_config.topic}'"
+
+    "#{header}\n\nexport const channelConfig = #{events_array}\n\n#{topic_export}\n"
+  end
+
   # ── Private Functions ──────────────────────────────────
 
   defp build_header(nil, _source_path),
@@ -115,6 +154,66 @@ defmodule NbInertia.Extractor.Preamble do
         type_names = Enum.map_join(imports, ", ", fn {name, _mod} -> name end)
         "import type { #{type_names} } from '#{types_import_path}'"
     end
+  end
+
+  defp build_channel_section(nil, _camelize?), do: ""
+
+  defp build_channel_section(channel_config, camelize?) do
+    imports =
+      "// AUTO-GENERATED channel configuration\n" <>
+        "import { useChannelProps } from '@nordbeam/nb-inertia/react/realtime/useChannelProps'\n" <>
+        "import { socket } from '@/lib/socket'"
+
+    events_array = build_channel_events_array(channel_config.events, camelize?)
+    config = "const __channelConfig = #{events_array}"
+
+    "#{imports}\n\n#{config}"
+  end
+
+  defp build_channel_events_array(events, camelize?) do
+    entries =
+      events
+      |> Enum.map(fn event -> build_channel_event_entry(event, camelize?) end)
+      |> Enum.join(",\n")
+
+    "[\n#{entries},\n] as const"
+  end
+
+  defp build_channel_event_entry(event, camelize?) do
+    prop_name =
+      if camelize? do
+        camelize_key(event.prop)
+      else
+        to_string(event.prop)
+      end
+
+    parts = [
+      "event: '#{event.event}'",
+      "prop: '#{prop_name}'",
+      "strategy: '#{event.strategy}'"
+    ]
+
+    parts =
+      if event.key do
+        parts ++ ["key: '#{event.key}'"]
+      else
+        parts
+      end
+
+    "  { #{Enum.join(parts, ", ")} }"
+  end
+
+  defp camelize_key(key) when is_atom(key), do: camelize_key(to_string(key))
+
+  defp camelize_key(key) when is_binary(key) do
+    key
+    |> String.split("_")
+    |> Enum.with_index()
+    |> Enum.map(fn
+      {word, 0} -> String.downcase(word)
+      {word, _} -> String.capitalize(word)
+    end)
+    |> Enum.join()
   end
 
   defp build_interface(props) do

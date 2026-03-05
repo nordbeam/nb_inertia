@@ -91,6 +91,20 @@ defmodule NbInertia.Page do
         |> props(%{user: Accounts.get_user!(id)})
       end
 
+  ## Real-Time Channels
+
+  Declare real-time channel bindings for automatic prop updates via Phoenix Channels:
+
+      channel "chat:{room.id}" do
+        on "message_created", prop: :messages, strategy: :append
+        on "message_deleted", prop: :messages, strategy: :remove, key: :id
+        on "user_joined",     prop: :active_users, strategy: :upsert, key: :id
+        on "typing",          prop: :typing_user, strategy: :replace
+      end
+
+  The topic string uses interpolation syntax (`{room.id}`) resolved on the frontend
+  from prop values. See `NbInertia.Page.Channel` for details.
+
   ## Precognition
 
   Use `precognition` macro in action/3 for real-time form validation:
@@ -236,6 +250,9 @@ defmodule NbInertia.Page do
           put_status: 2
         ]
 
+      # Import channel macros for real-time bindings
+      import NbInertia.Page.Channel, only: [channel: 2, on: 2]
+
       # Import the props/2 and modal_config/2 helpers from this module
       import NbInertia.Page, only: [props: 2, modal_config: 2, modal: 1, shared: 1]
 
@@ -257,6 +274,11 @@ defmodule NbInertia.Page do
       # Shared props modules and inline shared props
       Module.register_attribute(__MODULE__, :nb_page_shared_modules, accumulate: true)
       Module.register_attribute(__MODULE__, :nb_page_shared_inline, accumulate: false)
+
+      # Channel configuration
+      Module.register_attribute(__MODULE__, :nb_page_channel, accumulate: false)
+      Module.register_attribute(__MODULE__, :nb_page_channel_topic, accumulate: false)
+      Module.register_attribute(__MODULE__, :nb_page_channel_events, accumulate: true)
 
       # Store the use options
       Module.put_attribute(__MODULE__, :nb_page_opts, unquote(Macro.escape(opts)))
@@ -432,6 +454,7 @@ defmodule NbInertia.Page do
     modal_base_url = Module.get_attribute(env.module, :nb_page_modal_base_url)
     shared_modules = Module.get_attribute(env.module, :nb_page_shared_modules) |> Enum.reverse()
     shared_inline = Module.get_attribute(env.module, :nb_page_shared_inline)
+    channel_config = Module.get_attribute(env.module, :nb_page_channel)
 
     # Derive component name
     component =
@@ -455,6 +478,23 @@ defmodule NbInertia.Page do
 
     # Check if render/0 is defined
     has_render = Module.defines?(env.module, {:render, 0})
+
+    # Validate channel prop references
+    if channel_config do
+      prop_names = MapSet.new(props, & &1.name)
+
+      for event <- channel_config.events do
+        unless MapSet.member?(prop_names, event.prop) do
+          raise CompileError,
+            description:
+              "channel event #{inspect(event.event)} references prop #{inspect(event.prop)} " <>
+                "which is not declared in #{inspect(env.module)}. " <>
+                "Declared props: #{inspect(MapSet.to_list(prop_names))}",
+            file: env.file,
+            line: 0
+        end
+      end
+    end
 
     # Build options map
     options_map = %{
@@ -532,6 +572,11 @@ defmodule NbInertia.Page do
       @doc false
       def __inertia_shared_inline__ do
         unquote(Macro.escape(shared_inline))
+      end
+
+      @doc false
+      def __inertia_channel__ do
+        unquote(Macro.escape(channel_config))
       end
     end
   end
