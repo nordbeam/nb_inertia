@@ -60,6 +60,51 @@ defmodule NbInertia.Page do
         field :role, :string, optional: true
       end
 
+  ## Shared Props
+
+  Register shared props modules or inline shared props:
+
+      # Module-based
+      shared MyAppWeb.SharedProps
+
+      # Inline
+      shared do
+        prop :locale, :string
+      end
+
+  Page-level shared props are additive to router-level shared props and take
+  precedence when keys overlap.
+
+  ## Modal Support
+
+  Configure the page to be renderable as a modal:
+
+      modal base_url: "/users",
+            size: :lg,
+            position: :center
+
+  Dynamic base URL via mount/2:
+
+      def mount(conn, %{"id" => id}) do
+        conn
+        |> modal_config(base_url: ~p"/users/\#{id}")
+        |> props(%{user: Accounts.get_user!(id)})
+      end
+
+  ## Precognition
+
+  Use `precognition` macro in action/3 for real-time form validation:
+
+      def action(conn, %{"user" => params}, :create) do
+        changeset = Accounts.change_user(%User{}, params)
+        precognition conn, changeset do
+          case Accounts.create_user(params) do
+            {:ok, user} -> redirect(conn, ~p"/users/\#{user}")
+            {:error, changeset} -> {:error, changeset}
+          end
+        end
+      end
+
   ## mount/2 Return Values
 
       # Props map (most common)
@@ -143,6 +188,8 @@ defmodule NbInertia.Page do
           preserve_fragment: 2,
           camelize_props: 1,
           camelize_props: 2,
+          mark_shared_prop_keys: 2,
+          force_inertia_redirect: 1,
           render_inertia: 2,
           render_inertia: 3,
           render_inertia: 4
@@ -150,6 +197,27 @@ defmodule NbInertia.Page do
 
       # Import flash helpers
       import NbInertia.Flash, only: [inertia_flash: 2, inertia_flash: 3]
+
+      # Import precognition macros and helpers
+      import NbInertia.Plugs.Precognition,
+        only: [
+          precognition: 3,
+          precognition: 4,
+          precognition_request?: 1,
+          precognition_fields: 1,
+          validate_precognition: 2,
+          validate_precognition: 3,
+          send_precognition_response: 2
+        ]
+
+      # Import modal helpers from Redirector
+      import NbInertia.Modal.Redirector,
+        only: [
+          close_modal: 1,
+          redirect_modal: 2,
+          redirect_modal_success: 3,
+          redirect_modal_error: 3
+        ]
 
       # Import Phoenix.Controller for redirect, put_flash, etc.
       import Phoenix.Controller,
@@ -165,8 +233,8 @@ defmodule NbInertia.Page do
           put_status: 2
         ]
 
-      # Import the props/2 helper from this module
-      import NbInertia.Page, only: [props: 2]
+      # Import the props/2 and modal_config/2 helpers from this module
+      import NbInertia.Page, only: [props: 2, modal_config: 2, modal: 1, shared: 1]
 
       # Register module attributes for DSL accumulation
       # These match what Controller uses so the shared macros work
@@ -179,6 +247,14 @@ defmodule NbInertia.Page do
       # Page-specific attributes
       Module.register_attribute(__MODULE__, :nb_page_opts, accumulate: false)
 
+      # Modal configuration
+      Module.register_attribute(__MODULE__, :nb_page_modal, accumulate: false)
+      Module.register_attribute(__MODULE__, :nb_page_modal_base_url, accumulate: false)
+
+      # Shared props modules and inline shared props
+      Module.register_attribute(__MODULE__, :nb_page_shared_modules, accumulate: true)
+      Module.register_attribute(__MODULE__, :nb_page_shared_inline, accumulate: false)
+
       # Store the use options
       Module.put_attribute(__MODULE__, :nb_page_opts, unquote(Macro.escape(opts)))
 
@@ -189,6 +265,120 @@ defmodule NbInertia.Page do
 
       # Register before_compile to generate introspection functions
       @before_compile NbInertia.Page
+    end
+  end
+
+  @doc """
+  Declares modal configuration for this page.
+
+  When a page has modal config, it can be rendered as a modal overlay
+  via `ModalLink` on the frontend or direct URL access. The modal config
+  is used by the PageController to build the `NbInertia.Modal` struct.
+
+  ## Options
+
+    * `:base_url` - The URL of the page "behind" the modal (required for modal rendering).
+      Can be a string, a sigil `~p`, or a function that receives `conn.params`.
+    * `:size` - Modal size (`:sm`, `:md`, `:lg`, `:xl`, `:full`, or custom string)
+    * `:position` - Modal position (`:center`, `:top`, `:bottom`, `:left`, `:right`)
+    * `:slideover` - Boolean, render as slideover instead of centered modal
+    * `:close_button` - Boolean, show close button (default: true)
+    * `:close_explicitly` - Boolean, require explicit close (disable backdrop/ESC)
+
+  ## Examples
+
+      modal base_url: "/users",
+            size: :lg,
+            position: :center
+
+      # Slideover
+      modal slideover: true,
+            position: :right,
+            size: :lg,
+            base_url: "/users"
+
+      # Dynamic base URL via function
+      modal base_url: &"/users/\#{&1["id"]}",
+            size: :md
+  """
+  defmacro modal(opts) when is_list(opts) do
+    # Separate the base_url from other options since it might be a function
+    # capture that needs special handling at compile time.
+    {base_url_ast, rest_opts} = Keyword.pop(opts, :base_url)
+
+    # Store the base_url AST as escaped data so it can be re-injected
+    # in __before_compile__ without evaluation issues with anonymous functions.
+    escaped_base_url_ast =
+      if base_url_ast do
+        Macro.escape(base_url_ast)
+      else
+        nil
+      end
+
+    quote do
+      Module.put_attribute(
+        __MODULE__,
+        :nb_page_modal,
+        unquote(Macro.escape(rest_opts))
+      )
+
+      Module.put_attribute(
+        __MODULE__,
+        :nb_page_modal_base_url,
+        unquote(escaped_base_url_ast)
+      )
+    end
+  end
+
+  @doc """
+  Registers a shared props module or inline shared props for this page.
+
+  Shared props declared at the page level are additive to router-level shared
+  props (from `inertia_shared` in the router). Page-level shared props take
+  precedence when keys overlap.
+
+  ## Module-based shared props
+
+      shared MyAppWeb.SharedProps
+
+  The module must implement the `NbInertia.SharedProps.Behaviour`.
+
+  ## Inline shared props
+
+      shared do
+        prop :locale, :string
+        prop :feature_flags, :map
+      end
+
+  Multiple `shared` calls accumulate — all shared modules are applied
+  in the order they are declared.
+  """
+  defmacro shared(module_or_block)
+
+  # Handle shared module: shared MyModule
+  defmacro shared(module)
+           when is_atom(module) or (is_tuple(module) and elem(module, 0) == :__aliases__) do
+    quote do
+      Module.put_attribute(__MODULE__, :nb_page_shared_modules, unquote(module))
+    end
+  end
+
+  # Handle inline shared props: shared do ... end
+  defmacro shared(do: block) do
+    quote do
+      # Save current context
+      saved_page = Module.get_attribute(__MODULE__, :current_page)
+      Module.put_attribute(__MODULE__, :current_page, :__shared__)
+      Module.delete_attribute(__MODULE__, :current_props)
+
+      unquote(block)
+
+      shared_props = Module.get_attribute(__MODULE__, :current_props) |> Enum.reverse()
+      Module.put_attribute(__MODULE__, :nb_page_shared_inline, shared_props)
+
+      # Restore context
+      Module.delete_attribute(__MODULE__, :current_props)
+      Module.put_attribute(__MODULE__, :current_page, saved_page)
     end
   end
 
@@ -211,11 +401,34 @@ defmodule NbInertia.Page do
     Plug.Conn.put_private(conn, :nb_inertia_page_props, props_map)
   end
 
+  @doc """
+  Overrides module-level modal configuration per-request.
+
+  Use this in `mount/2` when the modal config depends on runtime values
+  (e.g., dynamic base_url from params).
+
+  ## Examples
+
+      def mount(conn, %{"id" => id}) do
+        conn
+        |> modal_config(base_url: ~p"/users/\#{id}", size: :xl)
+        |> props(%{user: Accounts.get_user!(id)})
+      end
+  """
+  @spec modal_config(Plug.Conn.t(), keyword()) :: Plug.Conn.t()
+  def modal_config(%Plug.Conn{} = conn, overrides) when is_list(overrides) do
+    Plug.Conn.put_private(conn, :nb_inertia_page_modal_overrides, overrides)
+  end
+
   @doc false
   defmacro __before_compile__(env) do
     opts = Module.get_attribute(env.module, :nb_page_opts) || []
     props = Module.get_attribute(env.module, :current_props) |> Enum.reverse()
     forms = Module.get_attribute(env.module, :current_page_forms) || %{}
+    modal_opts = Module.get_attribute(env.module, :nb_page_modal)
+    modal_base_url = Module.get_attribute(env.module, :nb_page_modal_base_url)
+    shared_modules = Module.get_attribute(env.module, :nb_page_shared_modules) |> Enum.reverse()
+    shared_inline = Module.get_attribute(env.module, :nb_page_shared_inline)
 
     # Derive component name
     component =
@@ -283,6 +496,39 @@ defmodule NbInertia.Page do
       @doc false
       def __inertia_options__ do
         unquote(Macro.escape(options_map))
+      end
+
+      @doc false
+      def __inertia_modal__ do
+        unquote(
+          if modal_opts do
+            # modal_base_url holds the AST for the base_url value.
+            # We inject it directly into the generated function code so that
+            # function captures like &"/users/#{&1["id"]}" are properly compiled.
+            static_opts = Macro.escape(modal_opts)
+
+            if modal_base_url do
+              # modal_base_url IS the AST — inject it directly
+              quote do
+                [{:base_url, unquote(modal_base_url)} | unquote(static_opts)]
+              end
+            else
+              static_opts
+            end
+          else
+            nil
+          end
+        )
+      end
+
+      @doc false
+      def __inertia_shared_modules__ do
+        unquote(Macro.escape(shared_modules))
+      end
+
+      @doc false
+      def __inertia_shared_inline__ do
+        unquote(Macro.escape(shared_inline))
       end
     end
   end
