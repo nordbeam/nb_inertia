@@ -80,7 +80,7 @@ defmodule NbInertia.Page.Naming do
 
         _ ->
           if String.ends_with?(segment, "Page") do
-            String.trim_trailing(segment, "Page")
+            String.replace_suffix(segment, "Page", "")
           else
             segment
           end

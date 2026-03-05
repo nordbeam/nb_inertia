@@ -166,8 +166,7 @@ defmodule NbInertia.PageController do
   defp method_to_verb("DELETE"), do: :delete
   defp method_to_verb(method), do: method |> String.downcase() |> String.to_atom()
 
-  defp redirected?(%Plug.Conn{state: :set}), do: true
-  defp redirected?(%Plug.Conn{status: status}) when status in 301..303, do: true
+  defp redirected?(%Plug.Conn{state: :set, status: status}) when status in 301..303, do: true
   defp redirected?(_conn), do: false
 
   defp render_page(conn, component, page_module, props_map) do
