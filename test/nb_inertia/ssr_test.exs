@@ -3,6 +3,11 @@ defmodule NbInertia.SSRTest do
 
   alias NbInertia.SSR
 
+  setup do
+    stop_process(NbInertia.SSR)
+    :ok
+  end
+
   describe "SSR module" do
     test "starts without crashing when SSR is disabled" do
       {:ok, pid} = SSR.start_link(enabled: false)
@@ -79,7 +84,7 @@ defmodule NbInertia.SSRTest do
         version: "1"
       }
 
-      assert {:error, "SSR is not enabled or not ready"} = GenServer.call(pid, {:render, page})
+      assert {:error, "SSR is not enabled"} = GenServer.call(pid, {:render, page})
       Process.exit(pid, :normal)
     end
 
@@ -270,6 +275,23 @@ defmodule NbInertia.SSRTest do
       after
         Application.put_env(:nb_inertia, :ssr, original_config)
       end
+    end
+  end
+
+  defp stop_process(name) do
+    case Process.whereis(name) do
+      nil ->
+        :ok
+
+      pid ->
+        Process.exit(pid, :normal)
+        ref = Process.monitor(pid)
+
+        receive do
+          {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+        after
+          1_000 -> :ok
+        end
     end
   end
 end

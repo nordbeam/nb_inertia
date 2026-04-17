@@ -217,7 +217,7 @@ defmodule NbInertia.SSR do
     * `{:error, reason}` - If rendering fails
   """
   def render(page) do
-    if ssr_enabled?() do
+    if Process.whereis(__MODULE__) do
       GenServer.call(__MODULE__, {:render, page}, 30_000)
     else
       {:error, "SSR is not enabled"}
@@ -353,17 +353,26 @@ defmodule NbInertia.SSR do
   def handle_call({:render, page}, _from, state) do
     state = maybe_mark_dev_server_ready(state)
 
-    if state.enabled and state.script_loaded do
-      result =
-        if state.dev_mode do
-          do_render_dev(page, state)
-        else
-          do_render_prod(page, state)
-        end
+    cond do
+      not state.enabled ->
+        {:reply, {:error, "SSR is not enabled"}, state}
 
-      {:reply, result, state}
-    else
-      {:reply, {:error, "SSR is not enabled or not ready"}, state}
+      state.dev_mode ->
+        result = do_render_dev(page, state)
+
+        next_state =
+          case result do
+            {:ok, _result} -> %{state | script_loaded: true}
+            _ -> state
+          end
+
+        {:reply, result, next_state}
+
+      state.script_loaded ->
+        {:reply, do_render_prod(page, state), state}
+
+      true ->
+        {:reply, {:error, "SSR is not enabled or not ready"}, state}
     end
   end
 
@@ -385,10 +394,10 @@ defmodule NbInertia.SSR do
           else
             Logger.warning(
               "SSR: Development server still not available after 30 seconds. " <>
-                "SSR will be disabled. Make sure 'npm run dev' is running."
+                "Will continue attempting SSR on incoming requests."
             )
 
-            {:noreply, %{state | enabled: false}}
+            {:noreply, state}
           end
       end
     else
