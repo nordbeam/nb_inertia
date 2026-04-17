@@ -150,12 +150,12 @@
     "@inertiajs/react": "^3.0.3",
     "@inertiajs/vue3": "^3.0.3",
     "@types/react": "^19.2.6",
-    "@vitejs/plugin-react": "^5.1.1",
+    "@vitejs/plugin-react": "^6.0.1",
     "phoenix": "^1.8.5",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "typescript": "^5.9.3",
-    "vite": "^7.2.2",
+    "vite": "^8.0.8",
     "vite-plugin-dts": "^4.5.4",
     "vue": "^3.5.30"
   }

@@ -737,7 +737,7 @@ if Code.ensure_loaded?(Igniter) do
       assets_dir = "assets"
 
       # Keep the React plugin aligned with nb_vite's current Vite major.
-      react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react@^5.1.0", else: ""
+      react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react@^6.0.1", else: ""
 
       # Pin the validated Inertia v3 beta + React 19 set used by nb_inertia itself.
       # Use GitHub for @nordbeam/nb-inertia (workspace conflict fixed in nb_vite by limiting workspaces to Phoenix packages only)
