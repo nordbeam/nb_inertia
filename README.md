@@ -23,7 +23,19 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 
 ### Quick Start (Recommended)
 
-Run the installer directly from GitHub:
+Install Igniter first. For an existing Phoenix project, add:
+
+```elixir
+{:igniter, "~> 0.7", only: [:dev, :test]}
+```
+
+If you prefer the archive workflow, the official Igniter docs also support:
+
+```bash
+mix archive.install hex igniter_new
+```
+
+Then run the installer:
 
 ```bash
 mix igniter.install nb_inertia@github:nordbeam/nb_inertia
@@ -41,6 +53,12 @@ This installs and configures:
 - Optional TypeScript type generation (with `--typescript`)
 - Mix aliases
 - Example files
+
+If `nb_inertia` is already present in your `mix.exs`, you can also run the task directly:
+
+```bash
+mix nb_inertia.install --typescript
+```
 
 ### Manual Installation
 

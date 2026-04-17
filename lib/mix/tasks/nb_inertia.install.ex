@@ -16,10 +16,18 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     This installer wraps and enhances the base Inertia.js library with additional
     features like declarative page DSL, type-safe props, and shared props.
 
-    ## Installation Steps
+    Prefer invoking this through Igniter:
 
-    1. Adds `{:nb_inertia, "~> 0.4"}` to mix.exs dependencies
-    2. Adds `{:nb_ts, "~> 0.1"}` when --typescript is used
+    ```bash
+    mix igniter.install nb_inertia --typescript
+    ```
+
+    If `nb_inertia` is already present in your `mix.exs`, you can run this task directly.
+
+    ## What This Installer Does
+
+    1. Adds or uses the existing `nb_inertia` dependency
+    2. Adds optional companion deps like `nb_ts` and `nb_flop` when requested
     3. Sets up controller helpers (use NbInertia.Controller)
     4. Sets up HTML helpers (import NbInertia.HTML)
     5. Adds `plug NbInertia.Plug` to the browser pipeline
@@ -108,40 +116,41 @@ if Code.ensure_loaded?(Igniter) do
 
     use Igniter.Mix.Task
 
+    @task_group :nb
+    @forwarded_child_flags ~w(--yes)
+    @schema [
+      client_framework: :string,
+      camelize_props: :boolean,
+      history_encrypt: :boolean,
+      typescript: :boolean,
+      ssr: :boolean,
+      with_flop: :boolean,
+      table: :boolean,
+      pages: :boolean,
+      yes: :boolean
+    ]
+    @defaults [client_framework: "react", with_flop: false, table: false, pages: false]
+
     @impl Igniter.Mix.Task
-    def info(_argv, _parent) do
+    def info(argv, _parent) do
+      options = installer_options(argv)
+
       %Igniter.Mix.Task.Info{
-        group: :nb,
-        schema: [
-          client_framework: :string,
-          camelize_props: :boolean,
-          history_encrypt: :boolean,
-          typescript: :boolean,
-          ssr: :boolean,
-          with_flop: :boolean,
-          table: :boolean,
-          pages: :boolean,
-          yes: :boolean
-        ],
+        group: @task_group,
+        schema: @schema,
         example: __MODULE__.Docs.example(),
-        defaults: [client_framework: "react", with_flop: false, table: false, pages: false],
+        defaults: @defaults,
         positional: [],
-        composes: ["deps.get"]
+        composes: composed_tasks(options),
+        adds_deps: optional_dependency_specs(options)
       }
     end
 
     @impl Igniter.Mix.Task
     def igniter(igniter) do
-      yes? = igniter.args.options[:yes] || false
-
       igniter
       |> Igniter.Project.Formatter.import_dep(:nb_inertia)
-      |> add_dependencies()
-      # Fetch and compile dependencies so nb_ts.install and nb_flop.install are available
-      |> Igniter.apply_and_fetch_dependencies(
-        operation: "installing nb_inertia dependencies",
-        yes: yes?
-      )
+      |> ensure_optional_dependencies_available()
       |> setup_controller_helpers()
       |> setup_html_helpers()
       |> setup_router()
@@ -155,10 +164,51 @@ if Code.ensure_loaded?(Igniter) do
       |> maybe_setup_nb_flop()
       |> create_sample_page()
       |> update_page_controller()
+      |> update_page_controller_test()
       |> create_lib_inertia()
+      |> maybe_update_inertia_imports()
       |> copy_modal_components()
       |> maybe_setup_pages()
       |> print_next_steps()
+    end
+
+    @doc false
+    def installer_options(argv) do
+      group = Igniter.Util.Info.group(%Igniter.Mix.Task.Info{group: @task_group}, task_name())
+
+      {options, _argv, _invalid} =
+        argv
+        |> Igniter.Util.Info.args_for_group(group)
+        |> OptionParser.parse(switches: @schema)
+
+      Keyword.merge(@defaults, options)
+    end
+
+    @doc false
+    def composed_tasks(options) do
+      []
+      |> maybe_add_composed_task(options[:typescript], "nb_ts.install")
+      |> maybe_add_composed_task(options[:with_flop], "nb_flop.install")
+    end
+
+    @doc false
+    def optional_dependency_specs(options, installed_deps \\ installed_project_deps()) do
+      []
+      |> maybe_add_optional_dep(
+        options[:typescript],
+        installed_deps,
+        {:nb_ts, github: "nordbeam/nb_ts"}
+      )
+      |> maybe_add_optional_dep(
+        options[:with_flop],
+        installed_deps,
+        {:nb_flop, github: "nordbeam/nb_flop"}
+      )
+      |> maybe_add_optional_dep(
+        options[:ssr] && dep_installed?(installed_deps, :nb_vite),
+        installed_deps,
+        {:deno_rider, "~> 0.2"}
+      )
     end
 
     @doc false
@@ -181,33 +231,23 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    @doc false
-    def add_dependencies(igniter) do
-      ssr_enabled = igniter.args.options[:ssr] || false
-      typescript_enabled = igniter.args.options[:typescript] || false
+    defp ensure_optional_dependencies_available(igniter) do
+      missing_specs =
+        igniter.args.options
+        |> optional_dependency_specs()
+        |> Enum.reject(fn spec -> dep_present?(igniter, dep_name(spec)) end)
 
-      # nb_inertia is already added by igniter.install, no additional deps needed
-
-      # Add nb_ts if TypeScript is enabled and not already present
-      igniter =
-        if typescript_enabled do
-          # Only add if not already present (nb_stack might have added it already)
-          case Igniter.Project.Deps.get_dep(igniter, :nb_ts) do
-            {:ok, _} ->
-              igniter
-
-            {:error, _} ->
-              Igniter.Project.Deps.add_dep(igniter, {:nb_ts, github: "nordbeam/nb_ts"})
-          end
-        else
-          igniter
-        end
-
-      # Only add deno_rider if SSR is enabled AND nb_vite is present
-      if ssr_enabled && using_nb_vite?(igniter) do
-        Igniter.Project.Deps.add_dep(igniter, {:deno_rider, "~> 0.2"})
+      if missing_specs == [] do
+        igniter
       else
         igniter
+        |> Enum.reduce(missing_specs, fn spec, igniter ->
+          Igniter.Project.Deps.add_dep(igniter, spec)
+        end)
+        |> Igniter.apply_and_fetch_dependencies(
+          operation: "installing nb_inertia dependencies",
+          yes: igniter.args.options[:yes] || false
+        )
       end
     end
 
@@ -554,7 +594,7 @@ if Code.ensure_loaded?(Igniter) do
               else
                 # Add React plugin import, configuration, and app.tsx to input
                 content
-                |> add_react_import_to_vite_config()
+                |> add_import_to_vite_config("import react from '@vitejs/plugin-react'")
                 |> add_react_plugin_to_vite_config()
                 |> add_app_to_vite_input(extension)
               end
@@ -568,25 +608,27 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    defp add_react_import_to_vite_config(content) do
+    defp add_import_to_vite_config(content, import_line) do
       # Add the import after other imports, before the export
-      if String.contains?(content, "import") do
-        # Find the last import and add react import after it
-        lines = String.split(content, "\n")
+      cond do
+        String.contains?(content, import_line) ->
+          content
 
-        {imports, rest} =
-          Enum.split_while(lines, fn line ->
-            String.starts_with?(String.trim(line), "import") or String.trim(line) == ""
-          end)
+        String.contains?(content, "import") ->
+          # Find the last import and add react import after it
+          lines = String.split(content, "\n")
 
-        # Add react import at the end of imports
-        react_import = "import react from '@vitejs/plugin-react'"
+          {imports, rest} =
+            Enum.split_while(lines, fn line ->
+              String.starts_with?(String.trim(line), "import") or String.trim(line) == ""
+            end)
 
-        # Rebuild content
-        Enum.join(imports ++ [react_import, ""] ++ rest, "\n")
-      else
-        # No imports found, add at the beginning
-        "import react from '@vitejs/plugin-react'\n\n" <> content
+          # Rebuild content
+          Enum.join(imports ++ [import_line, ""] ++ rest, "\n")
+
+        true ->
+          # No imports found, add at the beginning
+          import_line <> "\n\n" <> content
       end
     end
 
@@ -694,8 +736,8 @@ if Code.ensure_loaded?(Igniter) do
       pkg_manager = get_package_manager_command(igniter)
       assets_dir = "assets"
 
-      # Add @vitejs/plugin-react if using nb_vite
-      react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react", else: ""
+      # Keep the React plugin aligned with nb_vite's current Vite major.
+      react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react@^5.1.0", else: ""
 
       # Pin the validated Inertia v3 beta + React 19 set used by nb_inertia itself.
       # Use GitHub for @nordbeam/nb-inertia (workspace conflict fixed in nb_vite by limiting workspaces to Phoenix packages only)
@@ -890,7 +932,7 @@ if Code.ensure_loaded?(Igniter) do
       import React from "react";
       import axios from "axios";
 
-      import { createInertiaApp } from "@inertiajs/react";
+      import { createInertiaApp } from "@/lib/inertia";
       import { createRoot } from "react-dom/client";
 
       axios.defaults.xsrfHeaderName = "x-csrf-token";
@@ -927,9 +969,8 @@ if Code.ensure_loaded?(Igniter) do
         igniter
         |> create_ssr_entry_files()
         |> create_vite_plugins()
-        # Skip automatic vite.config transformation - too complex for regex
-        # Users will update vite.config.js manually following the instructions
-        # |> update_vite_config_for_ssr()
+        |> update_vite_config_for_ssr()
+        |> add_ssr_build_script()
         |> add_ssr_config()
         |> add_ssr_to_supervision_tree()
       else
@@ -997,10 +1038,230 @@ if Code.ensure_loaded?(Igniter) do
       Igniter.Project.Application.add_new_child(igniter, NbInertia.SSR)
     end
 
+    defp update_vite_config_for_ssr(igniter) do
+      vite_config_path = "assets/vite.config.js"
+      typescript = igniter.args.options[:typescript] || false
+      extension = if typescript, do: "tsx", else: "jsx"
+
+      if Igniter.exists?(igniter, vite_config_path) do
+        updated_igniter = Igniter.include_existing_file(igniter, vite_config_path)
+        source = Rewrite.source!(updated_igniter.rewrite, vite_config_path)
+        content = Rewrite.Source.get(source, :content)
+
+        case transform_vite_config_for_ssr(content, extension) do
+          {:ok, transformed_content} ->
+            Igniter.update_file(updated_igniter, vite_config_path, fn source ->
+              Rewrite.Source.update(source, :content, fn _ -> transformed_content end)
+            end)
+
+          :error ->
+            Igniter.add_warning(
+              updated_igniter,
+              """
+              Could not automatically update #{vite_config_path} for SSR.
+
+              Your Vite config appears to differ from the generated nb_vite format.
+              Review the NbInertia SSR notice for the expected config shape.
+              """
+            )
+        end
+      else
+        igniter
+      end
+    end
+
+    @doc false
+    def transform_vite_config_for_ssr(content, extension) when extension in ["tsx", "jsx"] do
+      with {:ok, wrapped_content} <- wrap_vite_config_for_ssr(content, extension) do
+        wrapped_content
+        |> add_import_to_vite_config(
+          "import nodePrefixPlugin from './vite-plugins/node-prefix-plugin.js'"
+        )
+        |> ensure_ssr_dev_config(extension)
+        |> normalize_ssr_entry_points(extension)
+        |> ensure_ssr_rollup_external()
+        |> then(&{:ok, &1})
+      end
+    end
+
+    defp wrap_vite_config_for_ssr(content, extension) do
+      if String.contains?(
+           content,
+           "const isSSR = isSsrBuild || process.env.BUILD_SSR === \"true\";"
+         ) do
+        {:ok, content}
+      else
+        if String.contains?(content, "export default defineConfig({") do
+          transformed_content =
+            content
+            |> String.replace(
+              "export default defineConfig({",
+              ssr_define_config_prefix(extension),
+              global: false
+            )
+            |> then(&Regex.replace(~r/\n\}\)\s*$/s, &1, ssr_define_config_suffix()))
+
+          {:ok, transformed_content}
+        else
+          :error
+        end
+      end
+    end
+
+    defp ensure_ssr_dev_config(content, extension) do
+      ssr_dev_block = ssr_dev_config_block(extension)
+
+      cond do
+        String.contains?(content, "ssrDev:") ->
+          Regex.replace(~r/ssrDev:\s*\{.*?\n\s*},?/s, content, ssr_dev_block, global: false)
+
+        String.contains?(content, "refresh: true,") ->
+          String.replace(content, "refresh: true,", "refresh: true,\n#{ssr_dev_block}",
+            global: false
+          )
+
+        true ->
+          content
+      end
+    end
+
+    defp normalize_ssr_entry_points(content, extension) do
+      content
+      |> String.replace("./js/ssr_dev.tsx", "./js/ssr.#{extension}")
+      |> String.replace("./js/ssr_dev.jsx", "./js/ssr.#{extension}")
+      |> then(
+        &Regex.replace(
+          ~r/input:\s*"js\/ssr_prod\.(tsx|jsx)"/,
+          &1,
+          "input: \"js/ssr_prod.#{extension}\"",
+          global: false
+        )
+      )
+    end
+
+    defp ensure_ssr_rollup_external(content) do
+      if String.contains?(content, "external: (id) => id.startsWith('node:')") do
+        content
+      else
+        Regex.replace(
+          ~r/(output:\s*\{.*?\n\s*\},)/s,
+          content,
+          "\\1\n        external: (id) => id.startsWith('node:'),",
+          global: false
+        )
+      end
+    end
+
+    defp ssr_define_config_prefix(extension) do
+      """
+      export default defineConfig(({ command, mode, isSsrBuild }) => {
+        const isSSR = isSsrBuild || process.env.BUILD_SSR === "true";
+
+        if (isSSR) {
+          return {
+      #{ssr_build_block(extension)}
+          };
+        }
+
+        return {
+      """
+    end
+
+    defp ssr_define_config_suffix do
+      """
+        };
+      })
+      """
+    end
+
+    defp ssr_build_block(extension) do
+      """
+            plugins: [
+              react({
+                babel: {
+                  plugins: ['babel-plugin-react-compiler'],
+                },
+              }),
+              nodePrefixPlugin(),
+            ],
+            build: {
+              ssr: true,
+              outDir: "../priv/static",
+              rollupOptions: {
+                input: "js/ssr_prod.#{extension}",
+                output: {
+                  format: "esm",
+                  entryFileNames: "ssr.js",
+                  footer: "globalThis.render = render;",
+                },
+                external: (id) => id.startsWith('node:'),
+              },
+            },
+            resolve: {
+              alias: {
+                "@": path.resolve(__dirname, "./js"),
+              },
+            },
+            ssr: {
+              noExternal: true,
+              target: "neutral",
+            },
+      """
+    end
+
+    defp ssr_dev_config_block(extension) do
+      """
+                  ssrDev: {
+                    enabled: true,
+                    path: '/ssr',
+                    healthPath: '/ssr-health',
+                    entryPoint: './js/ssr.#{extension}',
+                    hotFile: '../priv/ssr-hot',
+                  },
+      """
+    end
+
+    defp add_ssr_build_script(igniter) do
+      package_json_path = "assets/package.json"
+
+      if Igniter.exists?(igniter, package_json_path) do
+        igniter
+        |> Igniter.include_existing_file(package_json_path)
+        |> Igniter.update_file(package_json_path, fn source ->
+          content = Rewrite.Source.get(source, :content)
+
+          case Jason.decode(content) do
+            {:ok, json} ->
+              updated_json =
+                update_in(json, ["scripts"], fn
+                  nil ->
+                    %{"build:ssr" => "vite build --ssr"}
+
+                  scripts when is_map(scripts) ->
+                    Map.put(scripts, "build:ssr", "vite build --ssr")
+                end)
+
+              case Jason.encode(updated_json, pretty: true) do
+                {:ok, new_content} ->
+                  Rewrite.Source.update(source, :content, fn _ -> new_content <> "\n" end)
+
+                _ ->
+                  source
+              end
+
+            _ ->
+              source
+          end
+        end)
+      else
+        igniter
+      end
+    end
+
     defp ssr_dev_template() do
       ~S"""
       import ReactDOMServer from "react-dom/server";
-      import { createInertiaApp } from "@inertiajs/react";
+      import { createInertiaApp } from "@/lib/inertia";
 
       /**
        * Development SSR entry point with on-demand page loading
@@ -1053,7 +1314,7 @@ if Code.ensure_loaded?(Igniter) do
     defp ssr_prod_template() do
       ~S"""
       import ReactDOMServer from "react-dom/server";
-      import { createInertiaApp } from "@inertiajs/react";
+      import { createInertiaApp } from "@/lib/inertia";
 
       /**
        * Production SSR entry point with eager page loading
@@ -1089,7 +1350,7 @@ if Code.ensure_loaded?(Igniter) do
                 `• The file name doesn't match the component name\n` +
                 `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\n` +
                 `• The component name in your controller doesn't match the file path\n` +
-                `• The SSR bundle needs to be rebuilt (run: bun build:ssr)\n\n` +
+                `• The SSR bundle needs to be rebuilt (run your package manager's build:ssr script)\n\n` +
                 `Available pages (${availablePages.length}):\n` +
                 availablePages.map(p => `  - ${p}`).join('\n')
               );
@@ -1160,7 +1421,7 @@ if Code.ensure_loaded?(Igniter) do
 
       if typescript_enabled do
         # Compose the nb_ts installer instead of duplicating setup logic
-        Igniter.compose_task(igniter, "nb_ts.install", ["--output-dir", "assets/js/types"])
+        compose_installer_task(igniter, "nb_ts.install", ["--output-dir", "assets/js/types"])
       else
         igniter
       end
@@ -1172,21 +1433,11 @@ if Code.ensure_loaded?(Igniter) do
       with_table = igniter.args.options[:table] || false
 
       if with_flop do
-        # Only add nb_flop dependency if not already present
-        igniter =
-          case Igniter.Project.Deps.get_dep(igniter, :nb_flop) do
-            {:ok, _} ->
-              igniter
-
-            {:error, _} ->
-              Igniter.Project.Deps.add_dep(igniter, {:nb_flop, github: "nordbeam/nb_flop"})
-          end
-
         # Build args for nb_flop.install
         args = if with_table, do: ["--table"], else: []
 
         # Compose the nb_flop installer
-        Igniter.compose_task(igniter, "nb_flop.install", args)
+        compose_installer_task(igniter, "nb_flop.install", args)
       else
         igniter
       end
@@ -1305,6 +1556,38 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
+    def update_page_controller_test(igniter) do
+      test_path =
+        Path.join([
+          "test",
+          web_dir(igniter),
+          "controllers",
+          "page_controller_test.exs"
+        ])
+
+      if Igniter.exists?(igniter, test_path) do
+        igniter
+        |> Igniter.include_existing_file(test_path)
+        |> Igniter.update_file(test_path, fn source ->
+          Rewrite.Source.update(source, :content, fn
+            content when is_binary(content) ->
+              String.replace(
+                content,
+                ~S|assert html_response(conn, 200) =~ "Peace of mind from prototype to production"|,
+                ~S|assert html_response(conn, 200) =~ ~s(data-page="app")|,
+                global: false
+              )
+
+            content ->
+              content
+          end)
+        end)
+      else
+        igniter
+      end
+    end
+
+    @doc false
     def create_lib_inertia(igniter) do
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
@@ -1328,6 +1611,48 @@ if Code.ensure_loaded?(Igniter) do
 
         _ ->
           igniter
+      end
+    end
+
+    defp maybe_update_inertia_imports(igniter) do
+      client_framework = igniter.args.options[:client_framework]
+
+      source_package =
+        case client_framework do
+          "react" -> "@inertiajs/react"
+          "vue" -> "@inertiajs/vue3"
+          _ -> nil
+        end
+
+      if source_package do
+        [
+          "assets/js/**/*.js",
+          "assets/js/**/*.jsx",
+          "assets/js/**/*.ts",
+          "assets/js/**/*.tsx",
+          "assets/js/**/*.vue"
+        ]
+        |> Enum.flat_map(&Path.wildcard/1)
+        |> Enum.reject(&String.ends_with?(&1, "/lib/inertia.js"))
+        |> Enum.reject(&String.ends_with?(&1, "/lib/inertia.ts"))
+        |> Enum.uniq()
+        |> Enum.reduce(igniter, fn path, acc ->
+          acc
+          |> Igniter.include_existing_file(path)
+          |> Igniter.update_file(path, fn source ->
+            Rewrite.Source.update(source, :content, fn
+              content when is_binary(content) ->
+                content
+                |> String.replace("\"#{source_package}\"", "\"@/lib/inertia\"")
+                |> String.replace("'#{source_package}'", "'@/lib/inertia'")
+
+              content ->
+                content
+            end)
+          end)
+        end)
+      else
+        igniter
       end
     end
 
@@ -1395,7 +1720,7 @@ if Code.ensure_loaded?(Igniter) do
       export { Head } from '@nordbeam/nb-inertia/vue/Head';
 
       // Flash data composables
-      export { useFlash, useOnFlash } from '@nordbeam/nb-inertia/vue/useFlash';
+      export { useFlash } from '@nordbeam/nb-inertia/vue/useFlash';
 
       // Modal components
       export {
@@ -1818,61 +2143,12 @@ if Code.ensure_loaded?(Igniter) do
             • assets/js/ssr.#{if typescript, do: "tsx", else: "jsx"} - Main SSR entry (used by Vite)
             • assets/js/ssr_prod.#{if typescript, do: "tsx", else: "jsx"} - Production SSR for Deno (eager loading)
           - Created Vite plugin for Deno compatibility
+          - Updated assets/vite.config.js for SSR builds and dev SSR endpoint
+          - Added build:ssr script to assets/package.json
           - SSR enabled in nb_inertia config
 
-          MANUAL SETUP REQUIRED:
-
-          Note: Vite 6+ is required for SSR support.
-          nb_vite uses Vite's built-in Module Runner API (no vite-node needed).
-
-          1. Update your assets/vite.config.js to wrap the config in a function:
-
-             import nodePrefixPlugin from './vite-plugins/node-prefix-plugin.js'
-
-             export default defineConfig(({ command, mode, isSsrBuild }) => {
-               const isSSR = isSsrBuild || process.env.BUILD_SSR === "true";
-
-               if (isSSR) {
-                 return {
-                   plugins: [react(), nodePrefixPlugin()],
-                   build: {
-                     ssr: true,
-                     outDir: "../priv/static",
-                     rollupOptions: {
-                       input: "js/ssr_prod.#{if typescript, do: "tsx", else: "jsx"}",
-                       output: {
-                         format: "esm",
-                         entryFileNames: "ssr.js",
-                         footer: "globalThis.render = render;",
-                       },
-                       external: (id) => id.startsWith('node:'),
-                     },
-                   },
-                   resolve: { alias: { "@": path.resolve(__dirname, "./js") } },
-                   ssr: { noExternal: true, target: "neutral" },
-                 };
-               }
-
-               // Return your existing client config here...
-               return { /* your existing config */ };
-             });
-
-          2. Add ssrDev to your phoenix plugin:
-             phoenix({
-               ...existing options...,
-               ssrDev: {
-                 enabled: true,
-                 path: '/ssr',
-                 healthPath: '/ssr-health',
-                 entryPoint: './js/ssr.#{if typescript, do: "tsx", else: "jsx"}',
-                 hotFile: '../priv/ssr-hot',
-               },
-             })
-
-          3. Add build:ssr script to package.json:
-             "build:ssr": "vite build --ssr"
-
-          4. Build SSR bundle: #{pkg_manager} run build:ssr
+          Next steps:
+          - Build the production SSR bundle: #{pkg_manager} run build:ssr
 
           Development SSR is handled automatically by nb_vite ssrDev plugin.
           Production SSR uses DenoRider for optimal performance.
@@ -2055,6 +2331,65 @@ if Code.ensure_loaded?(Igniter) do
 
       Igniter.add_notice(igniter, next_steps)
     end
+
+    defp maybe_add_composed_task(tasks, true, task), do: tasks ++ [task]
+    defp maybe_add_composed_task(tasks, _, _task), do: tasks
+
+    defp maybe_add_optional_dep(specs, true, installed_deps, spec) do
+      if dep_installed?(installed_deps, dep_name(spec)) do
+        specs
+      else
+        specs ++ [spec]
+      end
+    end
+
+    defp maybe_add_optional_dep(specs, _, _installed_deps, _spec), do: specs
+
+    defp installed_project_deps do
+      Mix.Project.config()
+      |> Keyword.get(:deps, [])
+      |> Enum.map(&dep_name/1)
+    end
+
+    defp dep_present?(igniter, dep) do
+      case Igniter.Project.Deps.get_dep(igniter, dep) do
+        {:ok, _} -> true
+        _ -> false
+      end
+    end
+
+    defp dep_installed?(installed_deps, dep), do: dep in installed_deps
+
+    defp dep_name({dep, _, _}) when is_atom(dep), do: dep
+    defp dep_name({dep, _}) when is_atom(dep), do: dep
+
+    defp task_name do
+      Mix.Task.task_name(__MODULE__)
+    end
+
+    defp compose_installer_task(igniter, task, args) do
+      Igniter.compose_task(igniter, task, args ++ forwarded_global_argv(igniter.args.argv_flags))
+    end
+
+    @doc false
+    def forwarded_global_argv(argv_flags), do: do_forwarded_global_argv(argv_flags, [])
+
+    defp do_forwarded_global_argv([], acc), do: Enum.reverse(acc)
+
+    defp do_forwarded_global_argv([flag | rest], acc) when flag in @forwarded_child_flags do
+      do_forwarded_global_argv(rest, [flag | acc])
+    end
+
+    defp do_forwarded_global_argv([flag, value | rest], acc)
+         when is_binary(flag) and is_binary(value) do
+      if String.starts_with?(flag, "-") and not String.starts_with?(value, "-") do
+        do_forwarded_global_argv(rest, acc)
+      else
+        do_forwarded_global_argv([value | rest], acc)
+      end
+    end
+
+    defp do_forwarded_global_argv([_flag | rest], acc), do: do_forwarded_global_argv(rest, acc)
   end
 else
   defmodule Mix.Tasks.NbInertia.Install do
@@ -2068,9 +2403,13 @@ else
       Mix.shell().error("""
       The task 'nb_inertia.install' requires igniter. Please install igniter and try again.
 
-      Add to your mix.exs:
+      Add to your mix.exs for direct task usage:
 
-          {:igniter, "~> 0.5", only: [:dev]}
+          {:igniter, "~> 0.7", only: [:dev, :test]}
+
+      Or install Igniter first and use the preferred installer flow:
+
+          mix igniter.install nb_inertia
 
       Then run:
 

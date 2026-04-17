@@ -30,10 +30,10 @@ defmodule NbInertia.HTML do
   )
 
   def inertia_page(assigns) do
-    assigns = assign(assigns, :page_json, page_json(assigns.page))
+    assigns = Map.put(assigns, :page_json, page_json(assigns.page))
 
     ~H"""
-    <script data-page="app" type="application/json">{Phoenix.HTML.raw(@page_json)}</script>
+    <script data-page="app" type="application/json"><%= Phoenix.HTML.raw(@page_json) %></script>
     <div id="app"></div>
     """
   end
@@ -51,12 +51,12 @@ defmodule NbInertia.HTML do
   attr(:body, :string, required: true, doc: "The pre-rendered HTML body from SSR.")
 
   def inertia_ssr(assigns) do
-    assigns = assign(assigns, :page_json, page_json(assigns.page))
+    assigns = Map.put(assigns, :page_json, page_json(assigns.page))
 
     ~H"""
-    <script data-page="app" type="application/json">{Phoenix.HTML.raw(@page_json)}</script>
+    <script data-page="app" type="application/json"><%= Phoenix.HTML.raw(@page_json) %></script>
     <div data-server-rendered="true" id="app">
-      {Phoenix.HTML.raw(@body)}
+      <%= Phoenix.HTML.raw(@body) %>
     </div>
     """
   end
@@ -101,7 +101,7 @@ defmodule NbInertia.HTML do
 
   def inertia_head(assigns) do
     ~H"""
-    {Phoenix.HTML.raw(Enum.join(@content, "\n"))}
+    <%= Phoenix.HTML.raw(Enum.join(@content, "\n")) %>
     """
   end
 

@@ -563,7 +563,7 @@ else
 
       Add to your mix.exs:
 
-          {:igniter, "~> 0.5", only: [:dev]}
+          {:igniter, "~> 0.7", only: [:dev, :test]}
 
       Then run:
 

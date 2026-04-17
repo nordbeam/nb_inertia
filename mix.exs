@@ -83,7 +83,7 @@ defmodule NbInertia.MixProject do
         "Documentation" => "https://hexdocs.pm/nb_inertia"
       },
       maintainers: ["assim"],
-      files: ~w(lib .formatter.exs mix.exs README* LICENSE* CHANGELOG*)
+      files: ~w(lib priv .formatter.exs mix.exs README* LICENSE* CHANGELOG*)
     ]
   end
 
