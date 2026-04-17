@@ -90,14 +90,11 @@ if Code.ensure_loaded?(Credo.Check) do
     # Common Ecto/Context function patterns that return structs
     @struct_returning_functions ~w(get get! get_by get_by! one one! all preload load)a
     @repo_modules ~w(Repo)
+    @config_modules ~w(Application System)
 
     # Find props that look like unserialized complex data
     defp find_unserialzed_complex_props(props) do
       Enum.flat_map(props, fn
-        # Prop using dot notation: `widget.config`
-        {prop_name, {{:., _, _}, _, _}} when is_atom(prop_name) ->
-          [{prop_name, :dot_access}]
-
         # Already using serializer tuple: {Serializer, data} or {Serializer, data, opts}
         {_prop_name, {:{}, _, [{:__aliases__, _, _} | _]}} ->
           []
@@ -114,6 +111,10 @@ if Code.ensure_loaded?(Credo.Check) do
           module_name = List.last(module_parts)
 
           cond do
+            # Skip config/system module calls (Application.get_env, etc.)
+            to_string(module_name) in @config_modules ->
+              []
+
             # Direct Repo calls: Repo.get!(), Repo.one!()
             module_name in @repo_modules and func_name in @struct_returning_functions ->
               [{prop_name, :repo_call}]
@@ -132,6 +133,13 @@ if Code.ensure_loaded?(Credo.Check) do
             true ->
               []
           end
+
+        # Prop using dot notation on a variable: `widget.config`
+        # Must come after the function call pattern above to avoid false positives
+        # on Module.function() calls which also use dot syntax in the AST.
+        {prop_name, {{:., _, [{var, _, _ctx}, _field]}, _, _}}
+        when is_atom(prop_name) and is_atom(var) ->
+          [{prop_name, :dot_access}]
 
         _ ->
           []

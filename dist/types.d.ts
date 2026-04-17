@@ -46,16 +46,28 @@ export declare interface PageWithFlash<TProps = Record<string, unknown>> {
     component: string;
     props: TProps;
     url: string;
-    version: string;
+    version: string | number | null;
     flash: FlashData;
     encryptHistory?: boolean;
     clearHistory?: boolean;
+    preserveFragment?: boolean;
     mergeProps?: string[];
     deepMergeProps?: string[];
+    prependProps?: string[];
+    matchPropsOn?: string[];
     deferredProps?: Record<string, string[]>;
+    initialDeferredProps?: Record<string, string[]>;
     onceProps?: Record<string, {
         prop: string;
         expiresAt?: number;
+    }>;
+    sharedProps?: string[];
+    scrollProps?: Record<string, {
+        pageName: string;
+        previousPage: number | string | null;
+        nextPage: number | string | null;
+        currentPage: number | string | null;
+        reset?: boolean;
     }>;
 }
 
@@ -70,7 +82,8 @@ export declare interface PageWithFlash<TProps = Record<string, unknown>> {
  */
 export declare type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete';
+    component?: string | Record<string, string>;
 };
 
 export { }

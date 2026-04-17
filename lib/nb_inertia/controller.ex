@@ -884,19 +884,25 @@ defmodule NbInertia.Controller do
   end
 
   @doc false
-  defp validate_prop_collisions!(module, pages, inline_shared_props, _shared_modules) do
+  defp validate_prop_collisions!(module, pages, inline_shared_props, shared_modules) do
     # Get all shared prop names from inline shared props
     inline_shared_prop_names =
       inline_shared_props
       |> Enum.map(& &1.name)
       |> MapSet.new()
 
-    # Get all shared prop names from shared modules
-    # Note: At compile time, we can't easily introspect other modules
-    # So we'll document this limitation and only check inline shared props
-    # Users should ensure SharedProps modules don't collide manually
+    shared_module_prop_names =
+      shared_modules
+      |> Enum.flat_map(fn
+        %{module: shared_module} ->
+          shared_module_prop_names(shared_module)
 
-    shared_prop_names = inline_shared_prop_names
+        shared_module when is_atom(shared_module) ->
+          shared_module_prop_names(shared_module)
+      end)
+      |> MapSet.new()
+
+    shared_prop_names = MapSet.union(inline_shared_prop_names, shared_module_prop_names)
 
     # Check each page for collisions
     for {page_name, page_config} <- pages do
@@ -930,14 +936,22 @@ defmodule NbInertia.Controller do
           3. Or use namespacing in your prop names:
              Shared: :auth, :global
              Page: :users, :posts, :comments
-
-          Note: If using SharedProps modules, ensure those don't collide either.
           """,
           file: "#{inspect(module)}.ex"
       end
     end
 
     :ok
+  end
+
+  defp shared_module_prop_names(shared_module) do
+    if Code.ensure_loaded?(shared_module) and
+         function_exported?(shared_module, :__inertia_shared_props__, 0) do
+      shared_module.__inertia_shared_props__()
+      |> Enum.map(& &1.name)
+    else
+      []
+    end
   end
 
   @doc """
@@ -1058,16 +1072,16 @@ defmodule NbInertia.Controller do
 
       # Build a map of prop name -> DSL opts for quick lookup
       # inertia_page_config returns nil for undeclared pages
-      dsl_opts_map =
+      page_prop_configs =
         case inertia_page_config(page_ref) do
-          nil ->
-            %{}
-
-          page_config ->
-            page_config.props
-            |> Enum.map(fn prop -> {prop.name, prop.opts || []} end)
-            |> Map.new()
+          nil -> []
+          page_config -> page_config.props
         end
+
+      inline_shared_configs = inertia_shared_props()
+
+      dsl_opts_map =
+        NbInertia.PropRuntime.dsl_opts_map(page_prop_configs ++ inline_shared_configs)
 
       # Get registered shared modules
       shared_modules = __inertia_shared_modules__()
@@ -1075,84 +1089,29 @@ defmodule NbInertia.Controller do
       # Get current action name for conditional filtering
       action = Phoenix.Controller.action_name(conn_value)
 
-      # Filter and build props from shared modules that match conditions
-      shared_module_props =
-        shared_modules
-        |> Enum.filter(
-          &NbInertia.Controller.should_apply_shared_module?(&1, conn_value, action, __MODULE__)
-        )
-        |> Enum.reduce(%{}, fn module_config, acc ->
-          module = if is_atom(module_config), do: module_config, else: module_config.module
-          module_props = module.build_props(conn_value, [])
-          Map.merge(acc, module_props)
-        end)
-
-      # Get inline shared props and pull them from assigns
-      shared_props = inertia_shared_props()
-
-      shared_prop_assignments =
-        Enum.map(shared_props, fn prop_config ->
-          case prop_config do
-            %{from: :assigns, name: name} ->
-              data = Map.get(conn_value.assigns, name)
-              {name, data}
-
-            _ ->
-              nil
-          end
-        end)
-        |> Enum.reject(&is_nil/1)
-
       # Determine if we should use deep merge
       deep_merge? =
         Keyword.get(unquote(opts), :deep_merge, NbInertia.Config.deep_merge_shared_props())
 
-      # Combine shared props (module + inline) into a single map
-      all_shared_props =
-        if deep_merge? do
-          NbInertia.DeepMerge.deep_merge(
-            shared_module_props,
-            Enum.into(shared_prop_assignments, %{})
-          )
-        else
-          Map.merge(shared_module_props, Enum.into(shared_prop_assignments, %{}))
-        end
+      shared_props =
+        NbInertia.PropRuntime.resolve_shared_props(
+          conn_value,
+          shared_modules,
+          inline_shared_configs,
+          action: action,
+          controller_module: __MODULE__,
+          deep_merge: deep_merge?
+        )
+
+      # Track shared prop keys for the sharedProps metadata field
+      conn_value =
+        NbInertia.PropRuntime.mark_shared_prop_keys(conn_value, shared_props)
 
       # Combine shared props with provided page props
       all_props_map =
-        if deep_merge? do
-          NbInertia.DeepMerge.deep_merge(all_shared_props, Enum.into(props, %{}))
-        else
-          Map.merge(all_shared_props, Enum.into(props, %{}))
-        end
+        NbInertia.PropRuntime.merge_props(shared_props, Enum.into(props, %{}), deep_merge?)
 
-      # Convert back to keyword list and split into serialized/raw
-      all_props = Map.to_list(all_props_map)
-
-      {serialized_props, raw_props} =
-        Enum.split_with(all_props, fn {_key, value} ->
-          is_tuple(value) and tuple_size(value) >= 2 and is_atom(elem(value, 0))
-        end)
-
-      # Assign serialized props if any (and if nb_serializer is available)
-      # Merge DSL opts with any runtime opts provided in the tuple
-      conn_value =
-        if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
-          NbInertia.Controller.assign_serialized_props_with_dsl_opts(
-            conn_value,
-            serialized_props,
-            dsl_opts_map
-          )
-        else
-          conn_value
-        end
-
-      # Assign raw props with DSL opts applied
-      conn_value =
-        Enum.reduce(raw_props, conn_value, fn {key, value}, acc ->
-          dsl_opts = Map.get(dsl_opts_map, key, [])
-          NbInertia.Controller.assign_raw_prop_with_dsl_opts(acc, key, value, dsl_opts)
-        end)
+      conn_value = NbInertia.PropRuntime.assign_props(conn_value, all_props_map, dsl_opts_map)
 
       # Apply camelization if configured
       conn_value =
@@ -1196,48 +1155,28 @@ defmodule NbInertia.Controller do
 
           # Get registered shared modules
           shared_modules = __MODULE__.__inertia_shared_modules__()
+          inline_shared_configs = __MODULE__.inertia_shared_props()
 
           # Get current action name for conditional filtering
           action = Phoenix.Controller.action_name(conn_value)
 
-          # Filter and build props from shared modules that match conditions
-          shared_module_props =
-            shared_modules
-            |> Enum.filter(
-              &NbInertia.Controller.should_apply_shared_module?(
-                &1,
-                conn_value,
-                action,
-                __MODULE__
-              )
+          shared_props =
+            NbInertia.PropRuntime.resolve_shared_props(
+              conn_value,
+              shared_modules,
+              inline_shared_configs,
+              action: action,
+              controller_module: __MODULE__
             )
-            |> Enum.reduce(%{}, fn module_config, acc ->
-              module = if is_atom(module_config), do: module_config, else: module_config.module
-              module_props = module.build_props(conn_value, [])
-              Map.merge(acc, module_props)
-            end)
 
-          # Get inline shared props
-          shared_props = __MODULE__.inertia_shared_props()
+          conn_value = NbInertia.PropRuntime.mark_shared_prop_keys(conn_value, shared_props)
 
-          # Add inline shared props to conn
           conn_value =
-            Enum.reduce(shared_props, conn_value, fn prop_config, acc ->
-              case prop_config do
-                %{from: :assigns, name: name} ->
-                  data = Map.get(acc.assigns, name)
-                  NbInertia.CoreController.assign_prop(acc, name, data)
-
-                _ ->
-                  acc
-              end
-            end)
-
-          # Add shared module props
-          conn_value =
-            Enum.reduce(shared_module_props, conn_value, fn {key, value}, acc ->
-              NbInertia.CoreController.assign_prop(acc, key, value)
-            end)
+            NbInertia.PropRuntime.assign_props(
+              conn_value,
+              shared_props,
+              NbInertia.PropRuntime.dsl_opts_map(inline_shared_configs)
+            )
 
           # Apply camelization if configured
           conn_value =
@@ -1599,9 +1538,10 @@ defmodule NbInertia.Controller do
       defer = Keyword.get(options, :defer, false)
       once = Keyword.get(options, :once, false)
       merge = Keyword.get(options, :merge, false)
-      # Disable NbSerializer camelization since NbInertia handles it
-      # This prevents double-camelization and preserves {:preserve, key} tuples
-      serialization_opts = Keyword.merge([camelize: false], Keyword.get(options, :opts, []))
+      # Disable NbSerializer camelization since NbInertia handles it.
+      # Keep raw markers so resolve_props can skip camelization for raw: true fields.
+      serialization_opts =
+        Keyword.merge([camelize: false, keep_raw_markers: true], Keyword.get(options, :opts, []))
 
       # Build the serialization function
       serialize_fn = fn ->
@@ -2143,7 +2083,10 @@ defmodule NbInertia.Controller do
     if Code.ensure_loaded?(NbSerializer) do
       camelize = NbInertia.Config.camelize_props?()
 
-      case NbSerializer.serialize(serializer, data, camelize: camelize) do
+      case NbSerializer.serialize(serializer, data,
+             camelize: camelize,
+             keep_raw_markers: true
+           ) do
         {:ok, serialized} -> serialized
         {:error, _} -> data
       end
@@ -2156,7 +2099,9 @@ defmodule NbInertia.Controller do
        when is_atom(serializer) and is_list(opts) do
     if Code.ensure_loaded?(NbSerializer) do
       camelize = NbInertia.Config.camelize_props?()
-      serialization_opts = Keyword.merge([camelize: camelize], opts[:opts] || [])
+
+      serialization_opts =
+        Keyword.merge([camelize: camelize, keep_raw_markers: true], opts[:opts] || [])
 
       case NbSerializer.serialize(serializer, data, serialization_opts) do
         {:ok, serialized} -> serialized
@@ -2209,7 +2154,12 @@ defmodule NbInertia.Controller do
     once = Keyword.get(dsl_opts, :once, false)
     lazy? = Keyword.get(dsl_opts, :lazy, false)
     partial? = Keyword.get(dsl_opts, :partial, Keyword.get(dsl_opts, :optional, false))
+    scroll = Keyword.get(dsl_opts, :scroll, false)
+    prepend? = Keyword.get(dsl_opts, :prepend, false)
+    match_on = Keyword.get(dsl_opts, :match_on)
     merge = Keyword.get(dsl_opts, :merge, false)
+
+    validate_runtime_prop_modifier_combinations!(dsl_opts)
 
     # Ensure value is a function for defer/once/partial/lazy
     value_fn = if is_function(value, 0), do: value, else: fn -> value end
@@ -2252,16 +2202,89 @@ defmodule NbInertia.Controller do
           value
       end
 
-    # Apply merge wrapper if needed (can be combined with above)
     final_value =
-      case merge do
-        :deep -> NbInertia.CoreController.inertia_deep_merge(wrapped_value)
-        true -> NbInertia.CoreController.inertia_merge(wrapped_value)
-        false -> wrapped_value
-      end
+      wrapped_value
+      |> apply_scroll_dsl(scroll, dsl_opts)
+      |> apply_match_on_dsl(match_on, scroll)
+      |> apply_prepend_dsl(prepend?, scroll)
+      |> apply_merge_dsl(merge, match_on, prepend?, scroll)
 
     # Assign the prop
     NbInertia.CoreController.assign_prop(conn, key, final_value)
+  end
+
+  defp validate_runtime_prop_modifier_combinations!(dsl_opts) do
+    scroll = Keyword.get(dsl_opts, :scroll, false)
+    prepend? = Keyword.get(dsl_opts, :prepend, false)
+    match_on = Keyword.get(dsl_opts, :match_on)
+    merge = Keyword.get(dsl_opts, :merge, false)
+
+    cond do
+      scroll != false and merge in [true, :deep] ->
+        raise ArgumentError, "scroll cannot be combined with merge or merge: :deep"
+
+      prepend? and merge in [true, :deep] ->
+        raise ArgumentError, "prepend cannot be combined with merge or merge: :deep"
+
+      prepend? and not is_nil(match_on) and scroll == false ->
+        raise ArgumentError, "prepend and match_on require scroll: true or scroll: [...]"
+
+      not is_nil(match_on) and merge == :deep ->
+        raise ArgumentError, "match_on cannot be combined with merge: :deep"
+
+      true ->
+        :ok
+    end
+  end
+
+  defp apply_scroll_dsl(value, false, _dsl_opts), do: value
+
+  defp apply_scroll_dsl(value, true, dsl_opts) do
+    value
+    |> NbInertia.CoreController.inertia_scroll(scroll_opts_from_dsl(dsl_opts))
+  end
+
+  defp apply_scroll_dsl(value, scroll_opts, dsl_opts) when is_list(scroll_opts) do
+    value
+    |> NbInertia.CoreController.inertia_scroll(
+      scroll_opts_from_dsl(dsl_opts)
+      |> Keyword.merge(scroll_opts)
+    )
+  end
+
+  defp apply_match_on_dsl(value, nil, _scroll), do: value
+  defp apply_match_on_dsl(value, _match_on, scroll) when scroll != false, do: value
+
+  defp apply_match_on_dsl(value, match_on, _scroll) do
+    NbInertia.CoreController.inertia_match_merge(value, match_on)
+  end
+
+  defp apply_prepend_dsl(value, false, _scroll), do: value
+  defp apply_prepend_dsl(value, _prepend?, scroll) when scroll != false, do: value
+
+  defp apply_prepend_dsl(value, true, _scroll),
+    do: NbInertia.CoreController.inertia_prepend(value)
+
+  defp apply_merge_dsl(value, false, _match_on, _prepend?, _scroll), do: value
+
+  defp apply_merge_dsl(value, _merge, _match_on, _prepend?, scroll) when scroll != false,
+    do: value
+
+  defp apply_merge_dsl(value, _merge, _match_on, true, _scroll), do: value
+
+  defp apply_merge_dsl(value, true, nil, _prepend?, _scroll),
+    do: NbInertia.CoreController.inertia_merge(value)
+
+  defp apply_merge_dsl(value, true, _match_on, _prepend?, _scroll), do: value
+
+  defp apply_merge_dsl(value, :deep, _match_on, _prepend?, _scroll) do
+    NbInertia.CoreController.inertia_deep_merge(value)
+  end
+
+  defp scroll_opts_from_dsl(dsl_opts) do
+    []
+    |> maybe_add_opt(:prepend, if(Keyword.get(dsl_opts, :prepend, false), do: true, else: nil))
+    |> maybe_add_opt(:match_on, Keyword.get(dsl_opts, :match_on))
   end
 
   # Build once options from DSL, checking for both `once: [opts]` and separate keys

@@ -172,6 +172,10 @@ defmodule NbInertia do
   defdelegate inertia_optional(fun), to: NbInertia.CoreController
   defdelegate inertia_merge(value), to: NbInertia.CoreController
   defdelegate inertia_deep_merge(value), to: NbInertia.CoreController
+  defdelegate inertia_prepend(value), to: NbInertia.CoreController
+  defdelegate inertia_match_merge(value, id_field), to: NbInertia.CoreController
+  defdelegate inertia_scroll(value), to: NbInertia.CoreController
+  defdelegate inertia_scroll(value, opts), to: NbInertia.CoreController
   defdelegate inertia_defer(fun), to: NbInertia.CoreController
   defdelegate inertia_defer(fun, group), to: NbInertia.CoreController
   defdelegate inertia_always(value), to: NbInertia.CoreController
@@ -180,6 +184,9 @@ defmodule NbInertia do
   defdelegate encrypt_history(conn, true_or_false), to: NbInertia.CoreController
   defdelegate clear_history(conn), to: NbInertia.CoreController
   defdelegate clear_history(conn, true_or_false), to: NbInertia.CoreController
+  defdelegate preserve_fragment(conn), to: NbInertia.CoreController
+  defdelegate preserve_fragment(conn, true_or_false), to: NbInertia.CoreController
+  defdelegate mark_shared_prop_keys(conn, keys), to: NbInertia.CoreController
 
   @doc """
   Returns the version of NbInertia.

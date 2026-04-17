@@ -108,6 +108,3 @@ export type {
 } from './types';
 
 export { DEFAULT_MODAL_CONFIG, mergeModalConfig } from './types';
-
-// Modal backdrop preservation (axios interceptor)
-export { setupModalInterceptor, isModalInterceptorRegistered } from '../preserveBackdrop';

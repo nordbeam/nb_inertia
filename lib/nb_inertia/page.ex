@@ -479,6 +479,8 @@ defmodule NbInertia.Page do
     # Check if render/0 is defined
     has_render = Module.defines?(env.module, {:render, 0})
 
+    validate_shared_prop_collisions!(env, props, shared_inline, shared_modules)
+
     # Validate channel prop references
     if channel_config do
       prop_names = MapSet.new(props, & &1.name)
@@ -578,6 +580,55 @@ defmodule NbInertia.Page do
       def __inertia_channel__ do
         unquote(Macro.escape(channel_config))
       end
+    end
+  end
+
+  defp validate_shared_prop_collisions!(env, props, shared_inline, shared_modules) do
+    page_prop_names = MapSet.new(props, & &1.name)
+    inline_shared_prop_names = MapSet.new(shared_inline || [], & &1.name)
+
+    raise_shared_prop_collision!(
+      env,
+      MapSet.intersection(page_prop_names, inline_shared_prop_names),
+      "page props and inline shared props"
+    )
+
+    shared_module_prop_names =
+      shared_modules
+      |> Enum.flat_map(&shared_module_prop_names/1)
+      |> MapSet.new()
+
+    raise_shared_prop_collision!(
+      env,
+      MapSet.intersection(page_prop_names, shared_module_prop_names),
+      "page props and shared modules"
+    )
+
+    raise_shared_prop_collision!(
+      env,
+      MapSet.intersection(inline_shared_prop_names, shared_module_prop_names),
+      "inline shared props and shared modules"
+    )
+  end
+
+  defp shared_module_prop_names(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :__inertia_shared_props__, 0) do
+      module.__inertia_shared_props__()
+      |> Enum.map(& &1.name)
+    else
+      []
+    end
+  end
+
+  defp raise_shared_prop_collision!(env, collisions, context) do
+    if MapSet.size(collisions) > 0 do
+      collision_list = collisions |> MapSet.to_list() |> Enum.map_join(", ", &inspect/1)
+
+      raise CompileError,
+        description:
+          "Prop name collision detected between #{context} in #{inspect(env.module)}: #{collision_list}",
+        file: env.file,
+        line: 0
     end
   end
 end

@@ -278,6 +278,42 @@ defmodule NbInertia.CompileTimeValidationTest do
         Code.compile_string(code)
       end
     end
+
+    test "raises CompileError when shared props module collides with page prop" do
+      code = """
+      defmodule TestSharedModuleCollision.Shared.Auth do
+        use NbInertia.SharedProps
+
+        inertia_shared do
+          prop :current_user, :map
+        end
+
+        @impl NbInertia.SharedProps.Behaviour
+        def build_props(_conn, _opts) do
+          %{current_user: %{}}
+        end
+      end
+
+      defmodule TestSharedModuleCollision do
+        use NbInertia.Controller
+
+        inertia_shared(TestSharedModuleCollision.Shared.Auth)
+
+        inertia_page :users_index do
+          prop :users, :list
+          prop :current_user, :map
+        end
+
+        def index(conn, _params) do
+          render_inertia(conn, :users_index, [users: [], current_user: %{}])
+        end
+      end
+      """
+
+      assert_raise CompileError, ~r/Prop name collision.*:current_user/s, fn ->
+        Code.compile_string(code)
+      end
+    end
   end
 
   describe "page not found" do

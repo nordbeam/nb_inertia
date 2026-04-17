@@ -1,25 +1,6 @@
-/**
- * useRoutes Hook for Auto-Scoped Route Helpers
- *
- * Automatically injects a scope parameter (e.g., account subdomain) into route helpers,
- * eliminating the need for manual prop drilling throughout your application.
- *
- * @example
- * import { useRoutes } from '@nordbeam/nb-inertia/react/useRoutes';
- * import * as rawRoutes from './routes';
- *
- * function MyComponent() {
- *   const routes = useRoutes(rawRoutes, {
- *     scopeParam: 'account_subdomain',
- *     getScopeValue: (props) => props.currentScope?.account?.subdomain,
- *   });
- *
- *   // Subdomain automatically injected!
- *   router.visit(routes.spaces_index_path());
- *   router.visit(routes.space_path(space.id));
- * }
- */
-export interface UseRoutesOptions<TPageProps = Record<string, unknown>> {
+import { PageProps } from '@inertiajs/core';
+import { RouteResult } from '../shared/types';
+export interface UseRoutesOptions<TPageProps extends PageProps = PageProps> {
     /**
      * Name of the parameter to auto-inject (e.g., 'account_subdomain', 'tenant_id')
      */
@@ -37,15 +18,6 @@ export interface UseRoutesOptions<TPageProps = Record<string, unknown>> {
      * @default true
      */
     throwOnMissing?: boolean;
-}
-/**
- * Result returned by rich route helpers
- */
-export interface RouteResult {
-    /** Generated URL */
-    url: string;
-    /** HTTP method */
-    method: 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head' | 'options';
 }
 /**
  * Attributes for HTML form elements
@@ -73,8 +45,6 @@ export interface RouteHelperWithForm<TParams extends any[] = any[]> {
     put(...args: TParams): RouteResult;
     /** DELETE method variant */
     delete(...args: TParams): RouteResult;
-    /** HEAD method variant */
-    head(...args: TParams): RouteResult;
     /** URL-only variant - returns just the URL string */
     url(...args: TParams): string;
     /** Form helper - returns FormAttributes for use with HTML forms */
@@ -106,8 +76,6 @@ export interface RouteHelper<TParams extends any[] = any[]> {
     put(...args: TParams): RouteResult;
     /** DELETE method variant */
     delete(...args: TParams): RouteResult;
-    /** HEAD method variant */
-    head(...args: TParams): RouteResult;
     /** URL-only variant - returns just the URL string */
     url(...args: TParams): string;
 }
@@ -158,6 +126,6 @@ export type ScopedRoutes<TRoutes extends Record<string, any>> = {
  *   router.visit(routes.space_path(space.id));
  * }
  */
-export declare function useRoutes<TRoutes extends Record<string, any> = Record<string, any>, TPageProps = Record<string, unknown>>(routeHelpers: TRoutes, options: UseRoutesOptions<TPageProps>): ScopedRoutes<TRoutes>;
+export declare function useRoutes<TRoutes extends Record<string, any> = Record<string, any>, TPageProps extends PageProps = PageProps>(routeHelpers: TRoutes, options: UseRoutesOptions<TPageProps>): ScopedRoutes<TRoutes>;
 export default useRoutes;
 //# sourceMappingURL=useRoutes.d.ts.map

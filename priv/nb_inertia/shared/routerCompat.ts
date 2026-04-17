@@ -1,33 +1,23 @@
 /**
- * Router compatibility utilities for working with Inertia's internal APIs.
+ * Router compatibility utilities.
  *
- * Inertia's router.prefetch is not part of the public TypeScript API but is
- * available at runtime in Inertia v2. This module provides feature-detected
- * access to avoid `as any` casts throughout the codebase.
+ * In Inertia v3, router.prefetch is a first-class public API with full
+ * TypeScript types. This module provides a thin wrapper for consistent usage.
  */
 
 import { router } from '@inertiajs/react';
 
 /**
- * Safely call router.prefetch if available.
- *
- * Inertia v2 exposes prefetch on the router but it's not in the public
- * TypeScript types. This function does a runtime feature check before calling.
+ * Call router.prefetch with typed parameters.
  *
  * @param url - URL to prefetch
  * @param visitOptions - Inertia visit options (e.g. { preserveState: true })
  * @param prefetchOptions - Prefetch-specific options (e.g. { cacheFor: 30000 })
- * @returns true if prefetch was called, false if not available
  */
 export function routerPrefetch(
   url: string,
   visitOptions?: Record<string, unknown>,
   prefetchOptions?: Record<string, unknown>
-): boolean {
-  const r = router as Record<string, unknown>;
-  if (typeof r.prefetch === 'function') {
-    r.prefetch(url, visitOptions, prefetchOptions);
-    return true;
-  }
-  return false;
+): void {
+  (router as any).prefetch(url, visitOptions, prefetchOptions);
 }

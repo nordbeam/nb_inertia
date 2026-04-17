@@ -1,12 +1,17 @@
 /**
- * NbInertia Enhanced useForm Hook for React with Precognition Support
+ * NbInertia Enhanced useForm Hook for React
  *
  * Provides an enhanced Inertia.js useForm hook that supports:
- * 1. Route binding via RouteResult from nb_routes
- * 2. Precognition for real-time validation (via official Inertia.js v2.3+)
- * 3. RouteResult objects for validation endpoints
+ * 1. Route binding via RouteResult from nb_routes (delegates to v3 native)
+ * 2. Precognition for real-time validation (v3 native)
+ * 3. Convenience overload: useForm(data, route) swaps args for v3
  *
- * @example Basic route binding (no Precognition)
+ * In Inertia v3, useForm natively supports RouteResult (UrlMethodPair) objects
+ * as the first argument, returning a form with bound submit(). This wrapper
+ * preserves the nb_inertia API (data-first and route-first overloads) while
+ * delegating entirely to the native v3 implementation.
+ *
+ * @example Basic route binding
  * ```tsx
  * import { useForm } from '@nordbeam/nb-inertia/react/useForm';
  * import { update_user_path } from '@/routes';
@@ -15,37 +20,28 @@
  * form.submit(); // Automatically uses PATCH /users/1
  * ```
  *
- * @example With Precognition using RouteResult
+ * @example Precognition shorthand
  * ```tsx
  * import { useForm } from '@nordbeam/nb-inertia/react/useForm';
  * import { store_user_path } from '@/routes';
  *
- * const form = useForm({ name: '', email: '' })
- *   .withPrecognition(store_user_path.post());
- *
- * // Validate on blur
- * <input
- *   value={form.data.name}
- *   onChange={e => form.setData('name', e.target.value)}
- *   onBlur={() => form.validate('name')}
- * />
- * {form.invalid('name') && <span>{form.errors.name}</span>}
- * {form.validating && <span>Validating...</span>}
+ * const form = useForm(store_user_path.post(), { name: '', email: '' });
+ * form.validate('name'); // Validates against POST /users
+ * form.submit(); // Submits to POST /users
  * ```
  *
- * @example Shorthand: Precognition at creation time
+ * @example Standard (no binding)
  * ```tsx
- * // Same endpoint for validation and submission
- * const form = useForm(store_user_path.post(), { name: '', email: '' });
- * form.validate('email'); // Validates against POST /users
- * form.submit(); // Submits to POST /users
+ * const form = useForm({ name: '' });
+ * form.submit('post', '/users');
  * ```
  */
 
-import { useForm as useInertiaForm } from '@inertiajs/react';
-import type {
-  InertiaFormProps as InertiaFormPropsBase,
-  InertiaPrecognitiveFormProps as InertiaPrecognitiveFormPropsBase,
+import type { FormDataType, Method, UrlMethodPair } from '@inertiajs/core';
+import {
+  useForm as useInertiaForm,
+  type InertiaFormProps,
+  type InertiaPrecognitiveFormProps,
 } from '@inertiajs/react';
 import { type RouteResult, isRouteResult } from '../shared/types';
 
@@ -53,201 +49,119 @@ import { type RouteResult, isRouteResult } from '../shared/types';
 export type { RouteResult } from '../shared/types';
 export { isRouteResult } from '../shared/types';
 
+type FormDataArgument<TForm> = TForm | (() => TForm);
+type RouteResolver = () => UrlMethodPair;
+type RouteLike = RouteResult | RouteResolver;
+
+function isRouteLike(value: unknown): value is RouteLike {
+  return typeof value === 'function' || isRouteResult(value);
+}
+
 /**
- * HTTP methods supported by forms
+ * Create standard form with no initial data.
  */
-export type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
+export function useForm<TForm extends FormDataType<TForm>>(): InertiaFormProps<TForm>;
 
 /**
- * Submit options when form is bound to a route
+ * Create standard form with inline or lazy initial data.
  */
-export type BoundSubmitOptions = Omit<Parameters<ReturnType<typeof useInertiaForm>['submit']>[2], never>;
+export function useForm<TForm extends FormDataType<TForm>>(
+  data: FormDataArgument<TForm>
+): InertiaFormProps<TForm>;
 
 /**
- * Arguments for withPrecognition method
- * Supports: (method, url) | (RouteResult) | (() => RouteResult)
+ * Create standard form with remember key support.
  */
-export type WithPrecognitionArgs =
-  | [Method | (() => Method), string | (() => string)]
-  | [RouteResult | (() => RouteResult)];
+export function useForm<TForm extends FormDataType<TForm>>(
+  rememberKey: string,
+  data: FormDataArgument<TForm>
+): InertiaFormProps<TForm>;
 
 /**
- * Form type when NOT bound to a route (standard Inertia form)
+ * Create a precognitive form from explicit method, URL, and data.
  */
-export type UnboundFormType<TForm extends object> = ReturnType<typeof useInertiaForm<TForm>>;
+export function useForm<TForm extends FormDataType<TForm>>(
+  method: Method | (() => Method),
+  url: string | (() => string),
+  data: FormDataArgument<TForm>
+): InertiaPrecognitiveFormProps<TForm>;
 
 /**
- * Form type when bound to a route
- * - submit() takes no method/url arguments
- * - All other methods work the same
+ * Create a precognitive form from a route result or lazy route resolver.
  */
-export type BoundFormType<TForm extends object> = Omit<UnboundFormType<TForm>, 'submit'> & {
-  /**
-   * Submit the form using the bound route's URL and method
-   * @param options - Optional visit options (preserveState, preserveScroll, etc.)
-   */
-  submit(options?: BoundSubmitOptions): void;
-};
+export function useForm<TForm extends FormDataType<TForm>>(
+  route: UrlMethodPair | RouteResolver,
+  data: FormDataArgument<TForm>
+): InertiaPrecognitiveFormProps<TForm>;
 
 /**
- * Form type with Precognition enabled (has validation methods)
- * This matches the official Inertia Precognitive form type
+ * Convenience overload that preserves nb_inertia's historic data-first route binding API.
  */
-export type PrecognitiveFormType<TForm extends object> = InertiaPrecognitiveFormPropsBase<TForm>;
+export function useForm<TForm extends FormDataType<TForm>>(
+  data: FormDataArgument<TForm>,
+  route: RouteLike
+): InertiaPrecognitiveFormProps<TForm>;
 
 /**
- * Form type with both route binding AND Precognition
- * - submit() uses bound route
- * - Has all validation methods (validate, touch, invalid, valid, etc.)
- */
-export type BoundPrecognitiveFormType<TForm extends object> = Omit<PrecognitiveFormType<TForm>, 'submit'> & {
-  /**
-   * Submit the form using the bound route's URL and method
-   * @param options - Optional visit options
-   */
-  submit(options?: BoundSubmitOptions): void;
-};
-
-// ============================================================================
-// Overload signatures for useForm
-// ============================================================================
-
-/**
- * Create form with Precognition enabled at creation time using RouteResult
+ * Implementation — delegates entirely to Inertia v3's native useForm.
  *
- * @example
- * ```tsx
- * const form = useForm(store_user_path.post(), { name: '', email: '' });
- * form.validate('email');
- * form.submit(); // Uses POST /users
- * ```
- */
-export function useForm<TForm extends Record<string, any>>(
-  route: RouteResult,
-  data: TForm
-): BoundPrecognitiveFormType<TForm>;
-
-/**
- * Create form with route binding (no Precognition)
+ * v3's useForm(urlMethodPair, data) natively returns a form with bound
+ * submit(), so no manual binding or spread is needed.
  *
- * @example
- * ```tsx
- * const form = useForm({ name: '' }, update_user_path.patch(1));
- * form.submit(); // Uses PATCH /users/1
- * ```
+ * Note: v3 features like optimistic() are automatically available since
+ * the return type is inferred from the native useForm hook.
  */
-export function useForm<TForm extends Record<string, any>>(
-  data: TForm,
-  route: RouteResult
-): BoundFormType<TForm>;
-
-/**
- * Create standard form (no binding, no Precognition)
- *
- * @example
- * ```tsx
- * const form = useForm({ name: '' });
- * form.submit('post', '/users');
- *
- * // Or enable Precognition later:
- * const precogForm = form.withPrecognition('post', '/validate');
- * ```
- */
-export function useForm<TForm extends Record<string, any>>(
-  data: TForm
-): UnboundFormType<TForm>;
-
-/**
- * Implementation
- */
-export function useForm<TForm extends Record<string, any>>(
-  dataOrRoute: TForm | RouteResult,
-  routeOrData?: RouteResult | TForm
-): UnboundFormType<TForm> | BoundFormType<TForm> | BoundPrecognitiveFormType<TForm> {
-  // Determine which overload was called
-  const isPrecognitionShorthand = isRouteResult(dataOrRoute);
-  const isRouteBinding = routeOrData !== undefined && isRouteResult(routeOrData);
-
-  // Extract data and route based on call pattern
-  let data: TForm;
-  let submitRoute: RouteResult | undefined;
-  let precognitionRoute: RouteResult | undefined;
-
-  if (isPrecognitionShorthand) {
-    // Pattern: useForm(route, data) - Precognition shorthand
-    // Route is used for BOTH validation AND submission
-    precognitionRoute = dataOrRoute as RouteResult;
-    submitRoute = dataOrRoute as RouteResult;
-    data = routeOrData as TForm;
-  } else if (isRouteBinding) {
-    // Pattern: useForm(data, route) - Route binding only
-    data = dataOrRoute as TForm;
-    submitRoute = routeOrData as RouteResult;
-  } else {
-    // Pattern: useForm(data) - Standard form
-    data = dataOrRoute as TForm;
+export function useForm<TForm extends FormDataType<TForm>>(
+  ...args:
+    | []
+    | [FormDataArgument<TForm>]
+    | [string, FormDataArgument<TForm>]
+    | [Method | (() => Method), string | (() => string), FormDataArgument<TForm>]
+    | [UrlMethodPair | RouteResolver, FormDataArgument<TForm>]
+    | [FormDataArgument<TForm>, RouteLike]
+): InertiaFormProps<TForm> | InertiaPrecognitiveFormProps<TForm> {
+  if (args.length === 0) {
+    return useInertiaForm<TForm>();
   }
 
-  // Create the base Inertia form
-  // If we have a precognition route, pass it in the Inertia-compatible format
-  let inertiaForm: ReturnType<typeof useInertiaForm<TForm>>;
-
-  if (precognitionRoute) {
-    // Use Inertia's built-in Precognition by passing (method, url, data)
-    // This is the official Inertia v2.3+ pattern
-    inertiaForm = useInertiaForm<TForm>(
-      precognitionRoute.method as Method,
-      precognitionRoute.url,
-      data
-    );
-  } else {
-    // Standard form without Precognition at creation time
-    inertiaForm = useInertiaForm<TForm>(data);
+  if (args.length === 3) {
+    const [method, url, data] = args;
+    return useInertiaForm<TForm>(method, url, data);
   }
 
-  // If no submit route binding needed, return as-is (with or without Precognition)
-  if (!submitRoute) {
-    return inertiaForm;
+  if (args.length === 2) {
+    const [first, second] = args;
+
+    if (typeof first === 'string' && !isRouteLike(second)) {
+      return useInertiaForm<TForm>(first, second);
+    }
+
+    if (isRouteLike(first)) {
+      return useInertiaForm<TForm>(first, second as FormDataArgument<TForm>);
+    }
+
+    if (typeof first !== 'string' && isRouteLike(second)) {
+      return useInertiaForm<TForm>(second, first as FormDataArgument<TForm>);
+    }
   }
 
-  // Create bound form with enhanced submit
-  const boundSubmit = (options?: BoundSubmitOptions) => {
-    return inertiaForm.submit(submitRoute!.method as Method, submitRoute!.url, options);
-  };
-
-  // For Precognition shorthand, the form already has validation methods
-  // We just need to override submit
-  if (precognitionRoute) {
-    // Form has Precognition methods, override submit for route binding
-    return {
-      ...inertiaForm,
-      submit: boundSubmit,
-    } as BoundPrecognitiveFormType<TForm>;
-  }
-
-  // Route binding only (no Precognition)
-  return {
-    ...inertiaForm,
-    submit: boundSubmit,
-  } as BoundFormType<TForm>;
+  return useInertiaForm<TForm>(args[0] as FormDataArgument<TForm>);
 }
 
 // ============================================================================
-// Helper: Enhance withPrecognition to accept RouteResult
+// Helper: Separate validation and submission endpoints
 // ============================================================================
 
 /**
- * Create an enhanced form with Precognition that accepts RouteResult
+ * Create a form with Precognition using separate validation and submission routes.
  *
- * This is useful when you want to add Precognition to an existing form
- * or when you want different validation and submission endpoints.
+ * This is useful when your validation endpoint differs from the submission endpoint.
  *
  * @example
  * ```tsx
  * import { useFormWithPrecognition } from '@nordbeam/nb-inertia/react/useForm';
  * import { validate_user_path, store_user_path } from '@/routes';
  *
- * // Different validation and submission endpoints
  * const form = useFormWithPrecognition(
  *   { name: '', email: '' },
  *   validate_user_path.post(),   // Validation endpoint
@@ -255,32 +169,33 @@ export function useForm<TForm extends Record<string, any>>(
  * );
  * ```
  */
-export function useFormWithPrecognition<TForm extends Record<string, any>>(
-  data: TForm,
+export function useFormWithPrecognition<TForm extends FormDataType<TForm>>(
+  data: FormDataArgument<TForm>,
   validationRoute: RouteResult,
   submitRoute?: RouteResult
-): BoundPrecognitiveFormType<TForm> | PrecognitiveFormType<TForm> {
-  // Create form with Precognition enabled
-  const inertiaForm = useInertiaForm<TForm>(
-    validationRoute.method as Method,
-    validationRoute.url,
-    data
-  );
+): InertiaPrecognitiveFormProps<TForm> {
+  // v3's useForm natively supports precognition when route is provided
+  const form = useInertiaForm<TForm>(validationRoute, data);
 
-  // If no separate submit route, return as-is
-  if (!submitRoute) {
-    return inertiaForm as PrecognitiveFormType<TForm>;
+  // If same route or no separate submit route, return as-is
+  if (
+    !submitRoute ||
+    (submitRoute.url === validationRoute.url && submitRoute.method === validationRoute.method)
+  ) {
+    return form;
   }
 
-  // Override submit to use the submit route
-  const boundSubmit = (options?: BoundSubmitOptions) => {
-    return inertiaForm.submit(submitRoute.method as Method, submitRoute.url, options);
-  };
-
-  return {
-    ...inertiaForm,
-    submit: boundSubmit,
-  } as BoundPrecognitiveFormType<TForm>;
+  // Different submit route: wrap submit to use the submission endpoint
+  // Use Proxy to avoid breaking v3's form internals (may be class/proxy)
+  return new Proxy(form, {
+    get(target, prop, receiver) {
+      if (prop === 'submit') {
+        return (options?: any) =>
+          target.submit(submitRoute.method, submitRoute.url, options);
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as InertiaPrecognitiveFormProps<TForm>;
 }
 
 export default useForm;

@@ -1,29 +1,26 @@
-import { ModalPageProvider as r, ModalStackProvider as a, useIsInModal as t, useModal as d, useModalPageContext as l, useModalStack as M } from "./modalStack.js";
-import { default as f } from "./usePage.js";
-import { InitialModalHandler as n } from "./InitialModalHandler.js";
-import { ClientModalLink as x } from "./ClientModalLink.js";
+import { ModalPageProvider as r, ModalStackProvider as a, useIsInModal as d, useModal as l, useModalPageContext as t, useModalStack as M } from "./modalStack.js";
+import { usePage as m } from "./usePage.js";
+import { InitialModalHandler as x } from "./InitialModalHandler.js";
+import { ClientModalLink as s } from "./ClientModalLink.js";
 import { ModalLink as u } from "./ModalLink.js";
-import { HeadlessModal as I } from "./HeadlessModal.js";
-import { ModalRenderer as P } from "./ModalRenderer.js";
-import { CloseButton as k } from "./CloseButton.js";
+import { HeadlessModal as C } from "./HeadlessModal.js";
+import { ModalRenderer as k } from "./ModalRenderer.js";
+import { CloseButton as L } from "./CloseButton.js";
 import { DEFAULT_MODAL_CONFIG as v, mergeModalConfig as A } from "./types.js";
-import { isModalInterceptorRegistered as F, default as H } from "../preserveBackdrop.js";
 export {
-  x as ClientModalLink,
-  k as CloseButton,
+  s as ClientModalLink,
+  L as CloseButton,
   v as DEFAULT_MODAL_CONFIG,
-  I as HeadlessModal,
-  n as InitialModalHandler,
+  C as HeadlessModal,
+  x as InitialModalHandler,
   u as ModalLink,
   r as ModalPageProvider,
-  P as ModalRenderer,
+  k as ModalRenderer,
   a as ModalStackProvider,
-  F as isModalInterceptorRegistered,
   A as mergeModalConfig,
-  H as setupModalInterceptor,
-  t as useIsInModal,
-  d as useModal,
-  l as useModalPageContext,
+  d as useIsInModal,
+  l as useModal,
+  t as useModalPageContext,
   M as useModalStack,
-  f as usePage
+  m as usePage
 };

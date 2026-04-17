@@ -22,7 +22,8 @@ defmodule NbInertia.SSRIntegrationTest do
       // Simple render function that returns HTML
       async function render(page) {
         // Simulate what createInertiaApp would return
-        const html = `<div id="app" data-page='${JSON.stringify(page)}'>
+        const json = JSON.stringify(page).replace(/\\//g, '\\\\/');
+        const html = `<script data-page="app" type="application/json">${json}</script><div id="app" data-server-rendered="true">
           <h1>${page.component}</h1>
           <div>${JSON.stringify(page.props)}</div>
         </div>`;

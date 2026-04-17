@@ -1,41 +1,14 @@
-/**
- * Enhanced usePage hook for nb_inertia modals
- *
- * This hook extends Inertia's usePage to work correctly inside modals.
- * When called inside a modal context, it returns the modal's page object
- * instead of the backdrop page's props.
- *
- * IMPORTANT: Import this from '@nordbeam/nb-inertia/react/modals' to ensure
- * it uses the same context as the modal components.
- *
- * @example
- * ```tsx
- * // Import from @/lib/inertia (which re-exports from nb_inertia/modals)
- * import { usePage } from '@/lib/inertia';
- *
- * function MyComponent() {
- *   // Works in both normal pages AND inside modals
- *   const { props } = usePage<MyPageProps>();
- *   return <div>{props.user.name}</div>;
- * }
- * ```
- */
+import { Page as InertiaPage, PageProps, SharedPageProps } from '@inertiajs/core';
 /**
  * Page object structure (matches Inertia's Page type)
  */
-export interface Page<TProps = Record<string, any>> {
-    component: string;
-    props: TProps;
-    url: string;
-    version: string | null;
-    scrollRegions: Array<{
+export type Page<TProps extends PageProps = PageProps> = Omit<InertiaPage<TProps & SharedPageProps>, 'version'> & {
+    version: string | number | null;
+    scrollRegions?: Array<{
         top: number;
         left: number;
     }>;
-    rememberedState: Record<string, unknown>;
-    clearHistory: boolean;
-    encryptHistory: boolean;
-}
+};
 /**
  * Enhanced usePage hook
  *
@@ -47,6 +20,6 @@ export interface Page<TProps = Record<string, any>> {
  *
  * @returns The current page object with props
  */
-export declare function usePage<TProps = Record<string, any>>(): Page<TProps>;
+export declare function usePage<TProps extends PageProps = PageProps>(): Page<TProps>;
 export default usePage;
 //# sourceMappingURL=usePage.d.ts.map

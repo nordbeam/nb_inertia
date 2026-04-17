@@ -35,14 +35,14 @@ export interface PresenceState<T = unknown> {
 /**
  * Options for usePresence hook
  */
-export interface PresenceOptions extends ChannelOptions {
+export type PresenceOptions = Omit<ChannelOptions, 'onJoin'> & {
     /** Callback when presence syncs */
     onSync?: () => void;
     /** Callback when a user joins */
     onJoin?: (id: string, current: unknown, newPres: unknown) => void;
     /** Callback when a user leaves */
     onLeave?: (id: string, current: unknown, leftPres: unknown) => void;
-}
+};
 /**
  * Socket configuration options
  */

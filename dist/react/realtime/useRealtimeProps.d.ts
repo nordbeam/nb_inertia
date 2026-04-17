@@ -1,40 +1,9 @@
-/**
- * NbInertia Realtime Props Hook for React
- *
- * Provides optimistic prop updates for Inertia.js pages with WebSocket integration.
- * Updates are instant and automatically sync with server state on navigation.
- *
- * @example
- * import { useRealtimeProps } from '@/lib/realtime';
- * import { useChannel } from '@/lib/socket';
- *
- * function ChatRoom() {
- *   const { props, setProp } = useRealtimeProps<ChatRoomProps>();
- *
- *   useChannel(socket, `chat:${props.room.id}`, {
- *     message_created: ({ message }) => {
- *       setProp('messages', msgs => [...msgs, message]);
- *     }
- *   });
- *
- *   return <div>{props.messages.map(m => <Message key={m.id} {...m} />)}</div>;
- * }
- */
-/**
- * Reload options for useRealtimeProps
- */
-export interface ReloadOptions {
-    /** Only reload these specific props */
-    only?: string[];
-    /** Preserve scroll position */
-    preserveScroll?: boolean;
-    /** Preserve component state */
-    preserveState?: boolean;
-}
+import { PageProps, ReloadOptions as InertiaReloadOptions } from '@inertiajs/core';
+export type ReloadOptions = InertiaReloadOptions;
 /**
  * Return type for useRealtimeProps hook
  */
-export interface UseRealtimePropsReturn<T extends Record<string, unknown>> {
+export interface UseRealtimePropsReturn<T extends PageProps> {
     /** Current props (server + optimistic updates) */
     props: T;
     /** Update a single prop */
@@ -99,6 +68,6 @@ export interface UseRealtimePropsReturn<T extends Record<string, unknown>> {
  * // Full reload
  * reload();
  */
-export declare function useRealtimeProps<T extends Record<string, unknown> = Record<string, unknown>>(): UseRealtimePropsReturn<T>;
+export declare function useRealtimeProps<T extends PageProps = PageProps>(): UseRealtimePropsReturn<T>;
 export default useRealtimeProps;
 //# sourceMappingURL=useRealtimeProps.d.ts.map

@@ -1,3 +1,5 @@
+import { PageProps } from '@inertiajs/core';
+import { ReloadOptions as ReloadOptions_2 } from '@inertiajs/core';
 import { Socket } from 'phoenix';
 
 /**
@@ -27,7 +29,7 @@ declare interface ChannelOptions {
 /**
  * Custom event handler with helpers
  */
-export declare type CustomEventHandler<TProps, TEvent> = (event: TEvent, helpers: {
+export declare type CustomEventHandler<TProps extends Record<string, unknown>, TEvent> = (event: TEvent, helpers: {
     props: TProps;
     setProp: UseRealtimePropsReturn<TProps>['setProp'];
     setProps: UseRealtimePropsReturn<TProps>['setProps'];
@@ -66,39 +68,7 @@ export declare interface PrependStrategy<TItem, TEvent> {
     transform: (event: TEvent) => TItem;
 }
 
-/**
- * NbInertia Realtime Props Hook for React
- *
- * Provides optimistic prop updates for Inertia.js pages with WebSocket integration.
- * Updates are instant and automatically sync with server state on navigation.
- *
- * @example
- * import { useRealtimeProps } from '@/lib/realtime';
- * import { useChannel } from '@/lib/socket';
- *
- * function ChatRoom() {
- *   const { props, setProp } = useRealtimeProps<ChatRoomProps>();
- *
- *   useChannel(socket, `chat:${props.room.id}`, {
- *     message_created: ({ message }) => {
- *       setProp('messages', msgs => [...msgs, message]);
- *     }
- *   });
- *
- *   return <div>{props.messages.map(m => <Message key={m.id} {...m} />)}</div>;
- * }
- */
-/**
- * Reload options for useRealtimeProps
- */
-declare interface ReloadOptions {
-    /** Only reload these specific props */
-    only?: string[];
-    /** Preserve scroll position */
-    preserveScroll?: boolean;
-    /** Preserve component state */
-    preserveState?: boolean;
-}
+declare type ReloadOptions = ReloadOptions_2;
 
 /**
  * Reload prop(s) from server
@@ -251,7 +221,7 @@ export declare interface UseChannelPropsReturn<T extends Record<string, unknown>
 /**
  * Return type for useRealtimeProps hook
  */
-declare interface UseRealtimePropsReturn<T extends Record<string, unknown>> {
+declare interface UseRealtimePropsReturn<T extends PageProps> {
     /** Current props (server + optimistic updates) */
     props: T;
     /** Update a single prop */

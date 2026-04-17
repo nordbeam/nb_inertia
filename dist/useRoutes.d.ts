@@ -1,3 +1,5 @@
+import { PageProps } from '@inertiajs/core';
+
 /**
  * Attributes for HTML form elements
  */
@@ -30,8 +32,6 @@ export declare interface RouteHelper<TParams extends any[] = any[]> {
     put(...args: TParams): RouteResult;
     /** DELETE method variant */
     delete(...args: TParams): RouteResult;
-    /** HEAD method variant */
-    head(...args: TParams): RouteResult;
     /** URL-only variant - returns just the URL string */
     url(...args: TParams): string;
 }
@@ -53,8 +53,6 @@ export declare interface RouteHelperWithForm<TParams extends any[] = any[]> {
     put(...args: TParams): RouteResult;
     /** DELETE method variant */
     delete(...args: TParams): RouteResult;
-    /** HEAD method variant */
-    head(...args: TParams): RouteResult;
     /** URL-only variant - returns just the URL string */
     url(...args: TParams): string;
     /** Form helper - returns FormAttributes for use with HTML forms */
@@ -71,14 +69,19 @@ export declare interface RouteHelperWithForm<TParams extends any[] = any[]> {
 }
 
 /**
- * Result returned by rich route helpers
+ * RouteResult type from nb_routes rich mode
+ *
+ * Rich mode route helpers return objects with both url and method,
+ * allowing components to automatically use the correct HTTP method.
+ *
+ * NOTE: This type matches @inertiajs/core's UrlMethodPair type exactly.
+ * The official Inertia.js router and Link components already support this pattern.
  */
-export declare interface RouteResult {
-    /** Generated URL */
+declare type RouteResult = {
     url: string;
-    /** HTTP method */
-    method: 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head' | 'options';
-}
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete';
+    component?: string | Record<string, string>;
+};
 
 /**
  * Transform a route helper to remove the scope parameter (first parameter)
@@ -125,32 +128,11 @@ export declare type ScopedRoutes<TRoutes extends Record<string, any>> = {
  *   router.visit(routes.space_path(space.id));
  * }
  */
-declare function useRoutes<TRoutes extends Record<string, any> = Record<string, any>, TPageProps = Record<string, unknown>>(routeHelpers: TRoutes, options: UseRoutesOptions<TPageProps>): ScopedRoutes<TRoutes>;
+declare function useRoutes<TRoutes extends Record<string, any> = Record<string, any>, TPageProps extends PageProps = PageProps>(routeHelpers: TRoutes, options: UseRoutesOptions<TPageProps>): ScopedRoutes<TRoutes>;
 export default useRoutes;
 export { useRoutes }
 
-/**
- * useRoutes Hook for Auto-Scoped Route Helpers
- *
- * Automatically injects a scope parameter (e.g., account subdomain) into route helpers,
- * eliminating the need for manual prop drilling throughout your application.
- *
- * @example
- * import { useRoutes } from '@nordbeam/nb-inertia/react/useRoutes';
- * import * as rawRoutes from './routes';
- *
- * function MyComponent() {
- *   const routes = useRoutes(rawRoutes, {
- *     scopeParam: 'account_subdomain',
- *     getScopeValue: (props) => props.currentScope?.account?.subdomain,
- *   });
- *
- *   // Subdomain automatically injected!
- *   router.visit(routes.spaces_index_path());
- *   router.visit(routes.space_path(space.id));
- * }
- */
-export declare interface UseRoutesOptions<TPageProps = Record<string, unknown>> {
+export declare interface UseRoutesOptions<TPageProps extends PageProps = PageProps> {
     /**
      * Name of the parameter to auto-inject (e.g., 'account_subdomain', 'tenant_id')
      */

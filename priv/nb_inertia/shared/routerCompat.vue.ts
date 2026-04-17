@@ -7,19 +7,16 @@
 import { router } from '@inertiajs/vue3';
 
 /**
- * Safely call router.prefetch if available.
+ * Call router.prefetch with typed parameters.
  *
- * @see routerCompat.ts for full documentation
+ * @param url - URL to prefetch
+ * @param visitOptions - Inertia visit options (e.g. { preserveState: true })
+ * @param prefetchOptions - Prefetch-specific options (e.g. { cacheFor: 30000 })
  */
 export function routerPrefetch(
   url: string,
   visitOptions?: Record<string, unknown>,
   prefetchOptions?: Record<string, unknown>
-): boolean {
-  const r = router as Record<string, unknown>;
-  if (typeof r.prefetch === 'function') {
-    r.prefetch(url, visitOptions, prefetchOptions);
-    return true;
-  }
-  return false;
+): void {
+  (router as any).prefetch(url, visitOptions, prefetchOptions);
 }

@@ -4,10 +4,12 @@
  * @see routerCompat.ts for the React version
  */
 /**
- * Safely call router.prefetch if available.
+ * Call router.prefetch with typed parameters.
  *
- * @see routerCompat.ts for full documentation
+ * @param url - URL to prefetch
+ * @param visitOptions - Inertia visit options (e.g. { preserveState: true })
+ * @param prefetchOptions - Prefetch-specific options (e.g. { cacheFor: 30000 })
  */
-export declare function routerPrefetch(url: string, visitOptions?: Record<string, unknown>, prefetchOptions?: Record<string, unknown>): boolean;
+export declare function routerPrefetch(url: string, visitOptions?: Record<string, unknown>, prefetchOptions?: Record<string, unknown>): void;
 
 export { }

@@ -22,10 +22,12 @@ const Q = ({
       props: n,
       url: u,
       version: "1.0",
+      flash: {},
       scrollRegions: [],
       rememberedState: {},
       clearHistory: !1,
-      encryptHistory: !1
+      encryptHistory: !1,
+      preserveFragment: !1
     }),
     [c, n, u]
   );
@@ -90,10 +92,10 @@ const Q = ({
         });
       }, 0), [];
     }) : (i([]), n && n([]));
-  }, [n]), I = d(
+  }, [n]), F = d(
     (t) => p.find((r) => r.id === t),
     [p]
-  ), N = d(
+  ), I = d(
     (t, r) => {
       i((o) => {
         const s = o.map(
@@ -103,7 +105,7 @@ const Q = ({
       });
     },
     [n]
-  ), F = d((t) => {
+  ), N = d((t) => {
     const r = f.current.get(t);
     if (!r) return;
     if (Date.now() - r.timestamp > 3e4) {
@@ -154,11 +156,11 @@ const Q = ({
     pushModal: E,
     popModal: U,
     clearModals: D,
-    getModal: I,
-    updateModal: N,
+    getModal: F,
+    updateModal: I,
     resolveComponent: u,
     prefetchModal: u ? O : void 0,
-    getPrefetchedModal: F
+    getPrefetchedModal: N
   };
   return /* @__PURE__ */ g(y.Provider, { value: A, children: c });
 };

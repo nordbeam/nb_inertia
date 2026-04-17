@@ -697,10 +697,10 @@ if Code.ensure_loaded?(Igniter) do
       # Add @vitejs/plugin-react if using nb_vite
       react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react", else: ""
 
-      # Core packages + @radix-ui/react-visually-hidden for modal accessibility
+      # Pin the validated Inertia v3 beta + React 19 set used by nb_inertia itself.
       # Use GitHub for @nordbeam/nb-inertia (workspace conflict fixed in nb_vite by limiting workspaces to Phoenix packages only)
       base_packages =
-        "@inertiajs/react github:nordbeam/nb_inertia react react-dom axios @radix-ui/react-visually-hidden"
+        "@inertiajs/react@^3.0.3 github:nordbeam/nb_inertia react@^19.0.0 react-dom@^19.0.0 axios @radix-ui/react-visually-hidden"
 
       install_cmd =
         case pkg_manager do
@@ -724,8 +724,10 @@ if Code.ensure_loaded?(Igniter) do
       pkg_manager = get_package_manager_command(igniter)
       assets_dir = "assets"
 
+      # Pin the validated Inertia v3 beta set used by nb_inertia itself.
       # Use GitHub for @nordbeam/nb-inertia - see comment in React version
-      base_packages = "@inertiajs/vue3 github:nordbeam/nb_inertia vue vue-loader axios"
+      base_packages =
+        "@inertiajs/vue3@^3.0.3 github:nordbeam/nb_inertia vue@^3.0.0 vue-loader axios"
 
       install_cmd =
         case pkg_manager do
@@ -1344,9 +1346,11 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));           // Works with RouteResult objects
       //   <Link href={user_path(1)}>User</Link> // Works with RouteResult objects
 
-      export { router } from '@nordbeam/nb-inertia/react/router';
-      export { Link } from '@nordbeam/nb-inertia/react/Link';
       export { useForm } from '@nordbeam/nb-inertia/react/useForm';
+      export { useHttp } from '@nordbeam/nb-inertia/react/useHttp';
+      export { useRoutes } from '@nordbeam/nb-inertia/react/useRoutes';
+      export { usePage } from '@nordbeam/nb-inertia/react/usePage';
+      export { Head } from '@nordbeam/nb-inertia/react/Head';
 
       // Flash data hooks
       export { useFlash } from '@nordbeam/nb-inertia/react/useFlash';
@@ -1385,9 +1389,10 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));              // Works with RouteResult objects
       //   <Link :href="user_path(1)">User</Link>   // Works with RouteResult objects
 
-      export { router } from '@nordbeam/nb-inertia/vue/router';
-      export { default as Link } from '@nordbeam/nb-inertia/vue/Link';
       export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
+      export { useHttp } from '@nordbeam/nb-inertia/vue/useHttp';
+      export { usePage } from '@nordbeam/nb-inertia/vue/usePage';
+      export { Head } from '@nordbeam/nb-inertia/vue/Head';
 
       // Flash data composables
       export { useFlash, useOnFlash } from '@nordbeam/nb-inertia/vue/useFlash';

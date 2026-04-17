@@ -18,8 +18,10 @@ defmodule NbInertia.HTML do
   @doc """
   Renders the Inertia page container for client-side rendering.
 
-  Outputs a `<div id="app">` with the page data encoded as a `data-page` JSON attribute,
-  which the Inertia.js client reads to mount the initial page component.
+  Outputs the Inertia v3 bootstrap markup:
+
+  - a `<script type="application/json" data-page="app">` containing the initial page object
+  - an empty `<div id="app">` mounting point for the client application
   """
   @doc type: :component
   attr(:page, :map,
@@ -28,26 +30,32 @@ defmodule NbInertia.HTML do
   )
 
   def inertia_page(assigns) do
+    assigns = assign(assigns, :page_json, page_json(assigns.page))
+
     ~H"""
-    <div id="app" data-page={json_library().encode!(@page)}></div>
+    <script data-page="app" type="application/json">{Phoenix.HTML.raw(@page_json)}</script>
+    <div id="app"></div>
     """
   end
 
   @doc """
   Renders the Inertia page container for server-side rendering.
 
-  Outputs a `<div id="app">` containing both the pre-rendered HTML body and the
-  page data as a `data-page` attribute. This allows the client to hydrate the
-  server-rendered markup while having access to the full page data for subsequent
-  navigation.
+  Outputs the Inertia v3 SSR bootstrap markup:
+
+  - a `<script type="application/json" data-page="app">` containing the initial page object
+  - a `<div id="app" data-server-rendered="true">` containing the prerendered HTML body
   """
   @doc type: :component
   attr(:page, :map, required: true, doc: "The Inertia page object.")
   attr(:body, :string, required: true, doc: "The pre-rendered HTML body from SSR.")
 
   def inertia_ssr(assigns) do
+    assigns = assign(assigns, :page_json, page_json(assigns.page))
+
     ~H"""
-    <div id="app" data-page={json_library().encode!(@page)}>
+    <script data-page="app" type="application/json">{Phoenix.HTML.raw(@page_json)}</script>
+    <div data-server-rendered="true" id="app">
       {Phoenix.HTML.raw(@body)}
     </div>
     """
@@ -99,5 +107,11 @@ defmodule NbInertia.HTML do
 
   defp json_library do
     Phoenix.json_library()
+  end
+
+  defp page_json(page) do
+    page
+    |> json_library().encode!()
+    |> String.replace("/", "\\/")
   end
 end

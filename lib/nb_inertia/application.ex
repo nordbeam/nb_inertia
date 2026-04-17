@@ -26,6 +26,10 @@ defmodule NbInertia.Application do
     # Validate configuration at startup
     NbInertia.Config.validate!()
 
+    if Code.ensure_loaded?(Wallaby.Browser) do
+      Code.ensure_loaded?(NbInertia.WallabyHelpers)
+    end
+
     # Only start DenoRider if SSR is enabled and DenoRider is available
     ssr_enabled = NbInertia.Config.ssr_enabled?()
     deno_rider_available = Code.ensure_loaded?(DenoRider)

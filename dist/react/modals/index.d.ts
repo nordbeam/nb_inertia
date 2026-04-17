@@ -70,5 +70,4 @@ export { CloseButton } from './CloseButton';
 export type { CloseButtonProps } from './CloseButton';
 export type { ModalConfig, ModalSize, ModalPosition, ModalInstance, ModalStackContextValue, PrefetchedModal, TypedModalProps, TypedModalInstance, } from './types';
 export { DEFAULT_MODAL_CONFIG, mergeModalConfig } from './types';
-export { setupModalInterceptor, isModalInterceptorRegistered } from '../preserveBackdrop';
 //# sourceMappingURL=index.d.ts.map

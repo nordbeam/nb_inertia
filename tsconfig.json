@@ -10,6 +10,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": true,
+    "types": ["vite/client"],
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist",

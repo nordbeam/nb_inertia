@@ -1,8 +1,7 @@
 import { router as o } from "@inertiajs/vue3";
-function u(e, t, f) {
-  const r = o;
-  return typeof r.prefetch == "function" ? (r.prefetch(e, t, f), !0) : !1;
+function c(r, e, t) {
+  o.prefetch(r, e, t);
 }
 export {
-  u as routerPrefetch
+  c as routerPrefetch
 };

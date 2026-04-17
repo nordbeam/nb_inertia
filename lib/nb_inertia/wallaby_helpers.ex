@@ -62,6 +62,10 @@ if Code.ensure_loaded?(Wallaby.Browser) do
 
     @js_get_page_data """
     return (function() {
+      var script = document.querySelector('script[data-page="app"][type="application/json"]');
+      if (script && script.textContent) {
+        try { return JSON.parse(script.textContent); } catch(e) {}
+      }
       var el = document.getElementById('app');
       if (!el) return null;
       var raw = el.dataset.page || el.getAttribute('data-page');
@@ -74,6 +78,10 @@ if Code.ensure_loaded?(Wallaby.Browser) do
 
     @js_get_component """
     return (function() {
+      var script = document.querySelector('script[data-page="app"][type="application/json"]');
+      if (script && script.textContent) {
+        try { return JSON.parse(script.textContent).component; } catch(e) {}
+      }
       var el = document.getElementById('app');
       if (!el) return null;
       var raw = el.dataset.page || el.getAttribute('data-page');
@@ -86,6 +94,10 @@ if Code.ensure_loaded?(Wallaby.Browser) do
 
     @js_get_props """
     return (function() {
+      var script = document.querySelector('script[data-page="app"][type="application/json"]');
+      if (script && script.textContent) {
+        try { return JSON.parse(script.textContent).props; } catch(e) {}
+      }
       var el = document.getElementById('app');
       if (!el) return null;
       var raw = el.dataset.page || el.getAttribute('data-page');
@@ -98,9 +110,13 @@ if Code.ensure_loaded?(Wallaby.Browser) do
 
     @js_get_prop """
     return (function(path) {
-      var el = document.getElementById('app');
-      if (!el) return null;
-      var raw = el.dataset.page || el.getAttribute('data-page');
+      var script = document.querySelector('script[data-page="app"][type="application/json"]');
+      var raw = script && script.textContent;
+      if (!raw) {
+        var el = document.getElementById('app');
+        if (!el) return null;
+        raw = el.dataset.page || el.getAttribute('data-page');
+      }
       if (!raw) return null;
       var data;
       try { data = JSON.parse(raw); } catch(e) { return null; }
@@ -117,9 +133,13 @@ if Code.ensure_loaded?(Wallaby.Browser) do
 
     @js_get_flash """
     return (function() {
-      var el = document.getElementById('app');
-      if (!el) return null;
-      var raw = el.dataset.page || el.getAttribute('data-page');
+      var script = document.querySelector('script[data-page="app"][type="application/json"]');
+      var raw = script && script.textContent;
+      if (!raw) {
+        var el = document.getElementById('app');
+        if (!el) return null;
+        raw = el.dataset.page || el.getAttribute('data-page');
+      }
       if (!raw) return null;
       try {
         var data = JSON.parse(raw);
@@ -215,7 +235,7 @@ if Code.ensure_loaded?(Wallaby.Browser) do
     end
 
     @doc """
-    Waits until the Inertia app has mounted (the `#app[data-page]` element exists).
+    Waits until the Inertia app has mounted and the initial page data script exists.
 
     Uses Wallaby's built-in retry mechanism via `assert_has`.
 
@@ -227,7 +247,7 @@ if Code.ensure_loaded?(Wallaby.Browser) do
     """
     @spec wait_for_inertia(Wallaby.Session.t()) :: Wallaby.Session.t()
     def wait_for_inertia(session) do
-      Browser.assert_has(session, Query.css("#app[data-page]"))
+      Browser.assert_has(session, Query.css("script[data-page='app'][type='application/json']"))
     end
 
     # ─────────────────────────────────────────────────────────────────────────

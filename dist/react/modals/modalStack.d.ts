@@ -7,7 +7,8 @@ export interface ModalPageObject {
     component: string;
     props: Record<string, any>;
     url: string;
-    version?: string;
+    version?: string | number | null;
+    flash?: Record<string, unknown>;
     scrollRegions?: Array<{
         top: number;
         left: number;
@@ -15,6 +16,7 @@ export interface ModalPageObject {
     rememberedState?: Record<string, unknown>;
     clearHistory?: boolean;
     encryptHistory?: boolean;
+    preserveFragment?: boolean;
 }
 /**
  * Hook to check if we're inside a modal context

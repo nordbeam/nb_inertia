@@ -1,99 +1,45 @@
-import { useForm as useInertiaForm, InertiaPrecognitiveFormProps as InertiaPrecognitiveFormPropsBase } from '@inertiajs/react';
+import { FormDataType, Method, UrlMethodPair } from '@inertiajs/core';
+import { InertiaFormProps, InertiaPrecognitiveFormProps } from '@inertiajs/react';
 import { RouteResult } from '../shared/types';
 export type { RouteResult } from '../shared/types';
 export { isRouteResult } from '../shared/types';
+type FormDataArgument<TForm> = TForm | (() => TForm);
+type RouteResolver = () => UrlMethodPair;
+type RouteLike = RouteResult | RouteResolver;
 /**
- * HTTP methods supported by forms
+ * Create standard form with no initial data.
  */
-export type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
+export declare function useForm<TForm extends FormDataType<TForm>>(): InertiaFormProps<TForm>;
 /**
- * Submit options when form is bound to a route
+ * Create standard form with inline or lazy initial data.
  */
-export type BoundSubmitOptions = Omit<Parameters<ReturnType<typeof useInertiaForm>['submit']>[2], never>;
+export declare function useForm<TForm extends FormDataType<TForm>>(data: FormDataArgument<TForm>): InertiaFormProps<TForm>;
 /**
- * Arguments for withPrecognition method
- * Supports: (method, url) | (RouteResult) | (() => RouteResult)
+ * Create standard form with remember key support.
  */
-export type WithPrecognitionArgs = [Method | (() => Method), string | (() => string)] | [RouteResult | (() => RouteResult)];
+export declare function useForm<TForm extends FormDataType<TForm>>(rememberKey: string, data: FormDataArgument<TForm>): InertiaFormProps<TForm>;
 /**
- * Form type when NOT bound to a route (standard Inertia form)
+ * Create a precognitive form from explicit method, URL, and data.
  */
-export type UnboundFormType<TForm extends object> = ReturnType<typeof useInertiaForm<TForm>>;
+export declare function useForm<TForm extends FormDataType<TForm>>(method: Method | (() => Method), url: string | (() => string), data: FormDataArgument<TForm>): InertiaPrecognitiveFormProps<TForm>;
 /**
- * Form type when bound to a route
- * - submit() takes no method/url arguments
- * - All other methods work the same
+ * Create a precognitive form from a route result or lazy route resolver.
  */
-export type BoundFormType<TForm extends object> = Omit<UnboundFormType<TForm>, 'submit'> & {
-    /**
-     * Submit the form using the bound route's URL and method
-     * @param options - Optional visit options (preserveState, preserveScroll, etc.)
-     */
-    submit(options?: BoundSubmitOptions): void;
-};
+export declare function useForm<TForm extends FormDataType<TForm>>(route: UrlMethodPair | RouteResolver, data: FormDataArgument<TForm>): InertiaPrecognitiveFormProps<TForm>;
 /**
- * Form type with Precognition enabled (has validation methods)
- * This matches the official Inertia Precognitive form type
+ * Convenience overload that preserves nb_inertia's historic data-first route binding API.
  */
-export type PrecognitiveFormType<TForm extends object> = InertiaPrecognitiveFormPropsBase<TForm>;
+export declare function useForm<TForm extends FormDataType<TForm>>(data: FormDataArgument<TForm>, route: RouteLike): InertiaPrecognitiveFormProps<TForm>;
 /**
- * Form type with both route binding AND Precognition
- * - submit() uses bound route
- * - Has all validation methods (validate, touch, invalid, valid, etc.)
- */
-export type BoundPrecognitiveFormType<TForm extends object> = Omit<PrecognitiveFormType<TForm>, 'submit'> & {
-    /**
-     * Submit the form using the bound route's URL and method
-     * @param options - Optional visit options
-     */
-    submit(options?: BoundSubmitOptions): void;
-};
-/**
- * Create form with Precognition enabled at creation time using RouteResult
+ * Create a form with Precognition using separate validation and submission routes.
  *
- * @example
- * ```tsx
- * const form = useForm(store_user_path.post(), { name: '', email: '' });
- * form.validate('email');
- * form.submit(); // Uses POST /users
- * ```
- */
-export declare function useForm<TForm extends Record<string, any>>(route: RouteResult, data: TForm): BoundPrecognitiveFormType<TForm>;
-/**
- * Create form with route binding (no Precognition)
- *
- * @example
- * ```tsx
- * const form = useForm({ name: '' }, update_user_path.patch(1));
- * form.submit(); // Uses PATCH /users/1
- * ```
- */
-export declare function useForm<TForm extends Record<string, any>>(data: TForm, route: RouteResult): BoundFormType<TForm>;
-/**
- * Create standard form (no binding, no Precognition)
- *
- * @example
- * ```tsx
- * const form = useForm({ name: '' });
- * form.submit('post', '/users');
- *
- * // Or enable Precognition later:
- * const precogForm = form.withPrecognition('post', '/validate');
- * ```
- */
-export declare function useForm<TForm extends Record<string, any>>(data: TForm): UnboundFormType<TForm>;
-/**
- * Create an enhanced form with Precognition that accepts RouteResult
- *
- * This is useful when you want to add Precognition to an existing form
- * or when you want different validation and submission endpoints.
+ * This is useful when your validation endpoint differs from the submission endpoint.
  *
  * @example
  * ```tsx
  * import { useFormWithPrecognition } from '@nordbeam/nb-inertia/react/useForm';
  * import { validate_user_path, store_user_path } from '@/routes';
  *
- * // Different validation and submission endpoints
  * const form = useFormWithPrecognition(
  *   { name: '', email: '' },
  *   validate_user_path.post(),   // Validation endpoint
@@ -101,6 +47,6 @@ export declare function useForm<TForm extends Record<string, any>>(data: TForm):
  * );
  * ```
  */
-export declare function useFormWithPrecognition<TForm extends Record<string, any>>(data: TForm, validationRoute: RouteResult, submitRoute?: RouteResult): BoundPrecognitiveFormType<TForm> | PrecognitiveFormType<TForm>;
+export declare function useFormWithPrecognition<TForm extends FormDataType<TForm>>(data: FormDataArgument<TForm>, validationRoute: RouteResult, submitRoute?: RouteResult): InertiaPrecognitiveFormProps<TForm>;
 export default useForm;
 //# sourceMappingURL=useForm.d.ts.map

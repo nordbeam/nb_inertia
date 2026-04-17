@@ -70,7 +70,7 @@ export interface DeclarativeEventConfig<TProps, TItem, TEvent> {
 /**
  * Custom event handler with helpers
  */
-export type CustomEventHandler<TProps, TEvent> = (event: TEvent, helpers: {
+export type CustomEventHandler<TProps extends Record<string, unknown>, TEvent> = (event: TEvent, helpers: {
     props: TProps;
     setProp: UseRealtimePropsReturn<TProps>['setProp'];
     setProps: UseRealtimePropsReturn<TProps>['setProps'];

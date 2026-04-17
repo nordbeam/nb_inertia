@@ -1,4 +1,4 @@
-import { usePage as f } from "@inertiajs/react";
+import { usePage as f } from "./usePage.js";
 import { useMemo as p } from "react";
 function l(e, a) {
   const n = (...o) => e(a, ...o);

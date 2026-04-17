@@ -4,9 +4,9 @@ defmodule NbInertia.Modal.HttpClientTest do
   alias NbInertia.Modal.HttpClient
 
   describe "extract_page_data_from_html/1" do
-    test "extracts page data from single-quoted data-page attribute" do
+    test "extracts page data from Inertia v3 script tag" do
       html =
-        ~s(<div id="app" data-page='{"component":"Users/Index","props":{"users":[]},"url":"/users","version":"1.0"}'></div>)
+        ~s(<script data-page="app" type="application/json">{"component":"Users/Index","props":{"users":[]},"url":"/users","version":"1.0"}</script><div id="app"></div>)
 
       assert {:ok, page_data} = HttpClient.extract_page_data_from_html(html)
       assert page_data["component"] == "Users/Index"
@@ -14,7 +14,7 @@ defmodule NbInertia.Modal.HttpClientTest do
       assert page_data["url"] == "/users"
     end
 
-    test "extracts page data from double-quoted data-page attribute" do
+    test "extracts page data from legacy double-quoted data-page attribute" do
       html =
         ~s(<div id="app" data-page="{&quot;component&quot;:&quot;Users/Index&quot;,&quot;props&quot;:{},&quot;url&quot;:&quot;/users&quot;}"></div>)
 
@@ -23,14 +23,14 @@ defmodule NbInertia.Modal.HttpClientTest do
       assert page_data["url"] == "/users"
     end
 
-    test "returns error when no data-page attribute found" do
+    test "returns error when no embedded page data is found" do
       html = ~s(<div id="app">Hello</div>)
 
-      assert {:error, "No data-page attribute found in HTML"} =
+      assert {:error, "No Inertia page data found in HTML"} =
                HttpClient.extract_page_data_from_html(html)
     end
 
-    test "handles HTML entities in data-page" do
+    test "handles HTML entities in legacy data-page markup" do
       json = Jason.encode!(%{component: "Test", props: %{html: "<b>bold</b>"}, url: "/"})
       encoded = HttpClient.encode_html_entities(json)
       html = ~s(<div data-page='#{encoded}'></div>)
@@ -45,7 +45,8 @@ defmodule NbInertia.Modal.HttpClientTest do
       <html>
       <head><title>Test</title></head>
       <body>
-        <div id="app" data-page='{"component":"Dashboard","props":{"count":42},"url":"/dashboard","version":"1.0"}'></div>
+        <script data-page="app" type="application/json">{"component":"Dashboard","props":{"count":42},"url":"/dashboard","version":"1.0"}</script>
+        <div id="app"></div>
         <script src="/app.js"></script>
       </body>
       </html>
@@ -58,16 +59,16 @@ defmodule NbInertia.Modal.HttpClientTest do
   end
 
   describe "inject_page_data_into_html/2" do
-    test "replaces single-quoted data-page" do
+    test "replaces Inertia v3 script page data" do
       original_html =
-        ~s(<div id="app" data-page='{"component":"Old","props":{},"url":"/"}'></div>)
+        ~s(<script data-page="app" type="application/json">{"component":"Old","props":{},"url":"/"}</script><div id="app"></div>)
 
       new_page_data = %{"component" => "New", "props" => %{"name" => "test"}, "url" => "/new"}
 
       assert {:ok, modified_html} =
                HttpClient.inject_page_data_into_html(original_html, new_page_data)
 
-      assert modified_html =~ "data-page='"
+      assert modified_html =~ ~s(script data-page="app" type="application/json")
       refute modified_html =~ "Old"
 
       # Verify we can extract the injected data back
@@ -76,7 +77,7 @@ defmodule NbInertia.Modal.HttpClientTest do
       assert extracted["props"]["name"] == "test"
     end
 
-    test "replaces double-quoted data-page" do
+    test "replaces legacy double-quoted data-page" do
       original_html =
         ~s(<div id="app" data-page="{&quot;component&quot;:&quot;Old&quot;,&quot;props&quot;:{},&quot;url&quot;:&quot;/&quot;}"></div>)
 
@@ -88,11 +89,11 @@ defmodule NbInertia.Modal.HttpClientTest do
       assert modified_html =~ "data-page=\""
     end
 
-    test "returns error when no data-page found" do
-      html = ~s(<div id="app">No data-page here</div>)
+    test "returns error when no embedded page data is found" do
+      html = ~s(<div id="app">No page data here</div>)
       page_data = %{"component" => "Test"}
 
-      assert {:error, "No data-page attribute found in HTML"} =
+      assert {:error, "No Inertia page data found in HTML"} =
                HttpClient.inject_page_data_into_html(html, page_data)
     end
 
@@ -101,7 +102,8 @@ defmodule NbInertia.Modal.HttpClientTest do
       <html>
       <head><link rel="stylesheet" href="/app.css"></head>
       <body>
-        <div id="app" data-page='{"component":"Old","props":{},"url":"/"}'></div>
+        <script data-page="app" type="application/json">{"component":"Old","props":{},"url":"/"}</script>
+        <div id="app"></div>
         <script src="/app.js"></script>
       </body>
       </html>
@@ -115,7 +117,8 @@ defmodule NbInertia.Modal.HttpClientTest do
     end
 
     test "roundtrip: inject then extract" do
-      html = ~s(<div id="app" data-page='{"component":"Start","props":{},"url":"/"}'></div>)
+      html =
+        ~s(<script data-page="app" type="application/json">{"component":"Start","props":{},"url":"/"}</script><div id="app"></div>)
 
       page_data = %{
         "component" => "Users/Index",

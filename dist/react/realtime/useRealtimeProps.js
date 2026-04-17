@@ -1,60 +1,59 @@
-import { useState as O, useMemo as u, useEffect as v, useCallback as n } from "react";
-import { usePage as g, router as b } from "@inertiajs/react";
-function j() {
-  const { props: t } = g(), [o, r] = O({}), p = u(
-    () => JSON.stringify(t),
-    [t]
+import { useState as d, useMemo as u, useEffect as g, useCallback as i } from "react";
+import { usePage as y, router as b } from "@inertiajs/react";
+function k() {
+  const s = y().props, [r, n] = d({}), p = u(
+    () => JSON.stringify(s),
+    [s]
   );
-  v(() => {
-    r({});
+  g(() => {
+    n({});
   }, [p]);
-  const l = u(
-    () => ({ ...t, ...o }),
-    [t, o]
+  const f = u(
+    () => ({ ...s, ...r }),
+    [s, r]
   ), a = u(
-    () => Object.keys(o).length > 0,
-    [o]
-  ), f = n(
-    (e, s) => {
-      r((c) => {
-        const i = { ...t, ...c }, y = typeof s == "function" ? s(i[e]) : s;
-        return { ...c, [e]: y };
+    () => Object.keys(r).length > 0,
+    [r]
+  ), m = i(
+    (t, o) => {
+      n((e) => {
+        const c = { ...s, ...e }, S = typeof o == "function" ? o(c[t]) : o;
+        return { ...e, [t]: S };
       });
     },
-    [t]
-  ), m = n(
-    (e) => {
-      r((s) => {
-        const c = { ...t, ...s }, i = typeof e == "function" ? e(c) : e;
-        return { ...s, ...i };
+    [s]
+  ), l = i(
+    (t) => {
+      n((o) => {
+        const e = { ...s, ...o }, c = typeof t == "function" ? t(e) : t;
+        return { ...o, ...c };
       });
     },
-    [t]
-  ), S = n(
-    (e = {}) => {
+    [s]
+  ), O = i(
+    (t = {}) => {
+      const { onSuccess: o, ...e } = t;
       b.reload({
-        only: e.only,
-        preserveScroll: e.preserveScroll ?? !0,
-        preserveState: e.preserveState ?? !0,
-        onSuccess: () => {
-          r({});
+        ...e,
+        onSuccess: (c) => {
+          n({}), o?.(c);
         }
       });
     },
     []
-  ), P = n(() => {
-    r({});
+  ), P = i(() => {
+    n({});
   }, []);
   return {
-    props: l,
-    setProp: f,
-    setProps: m,
-    reload: S,
+    props: f,
+    setProp: m,
+    setProps: l,
+    reload: O,
     resetOptimistic: P,
     hasOptimisticUpdates: a
   };
 }
 export {
-  j as default,
-  j as useRealtimeProps
+  k as default,
+  k as useRealtimeProps
 };

@@ -53,14 +53,14 @@ export { Presence }
 /**
  * Options for usePresence hook
  */
-export declare interface PresenceOptions extends ChannelOptions {
+export declare type PresenceOptions = Omit<ChannelOptions, 'onJoin'> & {
     /** Callback when presence syncs */
     onSync?: () => void;
     /** Callback when a user joins */
     onJoin?: (id: string, current: unknown, newPres: unknown) => void;
     /** Callback when a user leaves */
     onLeave?: (id: string, current: unknown, leftPres: unknown) => void;
-}
+};
 
 /**
  * Presence state structure from Phoenix Presence

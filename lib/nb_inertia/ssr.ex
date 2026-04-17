@@ -65,7 +65,8 @@ defmodule NbInertia.SSR do
         return await createInertiaApp({
           page,
           render: ReactDOMServer.renderToString,
-          resolve: async (name) => {
+          // Inertia v3: resolve receives (name, props)
+          resolve: async (name, _props) => {
             return await import(`./pages/${name}.jsx`);
           },
           setup: ({ App, props }) => <App {...props} />,

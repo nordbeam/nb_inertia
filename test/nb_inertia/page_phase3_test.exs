@@ -1,6 +1,9 @@
 defmodule NbInertia.PagePhase3Test do
   use ExUnit.Case, async: true
 
+  import Plug.Conn
+  import Plug.Test
+
   # ══════════════════════════════════════════════════════════
   # Test Page Modules — Modal Support
   # ══════════════════════════════════════════════════════════
@@ -175,6 +178,39 @@ defmodule NbInertia.PagePhase3Test do
     end
   end
 
+  defmodule RuntimeInlineSharedPage do
+    use NbInertia.Page, component: "Test/RuntimeInlineShared"
+
+    shared do
+      prop(:locale, :string, from: :assigns)
+      prop(:api_version, :string, default: "v1")
+    end
+
+    prop(:items, :list)
+
+    def mount(_conn, _params) do
+      %{items: ["a", "b"]}
+    end
+  end
+
+  defmodule RuntimeSharedModalPage do
+    use NbInertia.Page, component: "Test/RuntimeSharedModal"
+
+    modal(base_url: "/users", size: :md)
+
+    shared(NbInertia.PagePhase3Test.MockSharedProps)
+
+    shared do
+      prop(:locale, :string, from: :assigns)
+    end
+
+    prop(:items, :list)
+
+    def mount(_conn, _params) do
+      %{items: ["a", "b"]}
+    end
+  end
+
   defmodule NoSharedPage do
     use NbInertia.Page, component: "Test/NoShared"
 
@@ -183,6 +219,59 @@ defmodule NbInertia.PagePhase3Test do
     def mount(_conn, _params) do
       %{data: "hello"}
     end
+  end
+
+  defp inertia_conn(page_module, assigns) do
+    version =
+      conn(:get, "/")
+      |> init_test_session(%{})
+      |> assign(:flash, %{})
+      |> NbInertia.Plug.call([])
+      |> then(& &1.private[:inertia_version])
+
+    conn =
+      conn(:get, "/")
+      |> init_test_session(%{})
+      |> assign(:flash, %{})
+      |> put_private(:phoenix_action, :show)
+      |> put_private(:phoenix_controller, NbInertia.PageController)
+      |> put_private(:nb_inertia_page_module, page_module)
+
+    conn =
+      Enum.reduce(assigns, conn, fn {key, value}, acc ->
+        assign(acc, key, value)
+      end)
+
+    conn
+    |> put_req_header("x-inertia", "true")
+    |> put_req_header("x-inertia-version", version)
+    |> NbInertia.Plug.call([])
+  end
+
+  defmodule ModalBaseEndpoint do
+    import Plug.Conn
+
+    def init(opts), do: opts
+
+    def call(conn, _opts) do
+      page =
+        Jason.encode!(%{
+          component: "Users/Index",
+          props: %{users: []},
+          url: conn.request_path,
+          version: "test-version"
+        })
+
+      conn
+      |> put_resp_content_type("application/json")
+      |> send_resp(200, page)
+    end
+  end
+
+  defp modal_inertia_conn(page_module, assigns) do
+    page_module
+    |> inertia_conn(assigns)
+    |> put_private(:phoenix_endpoint, ModalBaseEndpoint)
   end
 
   # ══════════════════════════════════════════════════════════
@@ -416,6 +505,34 @@ defmodule NbInertia.PagePhase3Test do
     test "returns nil when no inline shared props" do
       assert NoSharedPage.__inertia_shared_inline__() == nil
     end
+
+    test "inline shared props are applied at runtime when declared with sources" do
+      conn =
+        RuntimeInlineSharedPage
+        |> inertia_conn(locale: "en")
+        |> NbInertia.PageController.show(%{})
+
+      page = Jason.decode!(conn.resp_body)
+
+      assert page["props"]["items"] == ["a", "b"]
+      assert page["props"]["locale"] == "en"
+      assert page["props"]["apiVersion"] == "v1"
+      assert Enum.sort(page["sharedProps"]) == Enum.sort(["apiVersion", "locale"])
+    end
+
+    test "shared props are included in modal responses" do
+      conn =
+        RuntimeSharedModalPage
+        |> modal_inertia_conn(locale: "fr")
+        |> NbInertia.PageController.show(%{})
+
+      page = Jason.decode!(conn.resp_body)
+      modal_props = get_in(page, ["props", "_nb_modal", "props"])
+
+      assert modal_props["items"] == ["a", "b"]
+      assert modal_props["locale"] == "fr"
+      assert modal_props["theme"] == "default"
+    end
   end
 
   describe "__inertia_shared_inline__/0" do
@@ -425,6 +542,30 @@ defmodule NbInertia.PagePhase3Test do
 
     test "returns nil when not declared" do
       assert NoSharedPage.__inertia_shared_inline__() == nil
+    end
+  end
+
+  describe "shared prop collision validation" do
+    test "raises when inline shared props collide with page props" do
+      code = """
+      defmodule TestInlineSharedPropCollision do
+        use NbInertia.Page
+
+        shared do
+          prop :locale, :string, from: :assigns
+        end
+
+        prop :locale, :string
+
+        def mount(_conn, _params) do
+          %{locale: "en"}
+        end
+      end
+      """
+
+      assert_raise CompileError, ~r/Prop name collision detected/, fn ->
+        Code.compile_string(code)
+      end
     end
   end
 

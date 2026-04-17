@@ -1,39 +1,37 @@
-import { useForm as m } from "@inertiajs/react";
-import { isRouteResult as f } from "../shared/types.js";
-function h(i, n) {
-  const r = f(i), u = n !== void 0 && f(n);
-  let e, t, s;
-  r ? (s = i, t = i, e = n) : u ? (e = i, t = n) : e = i;
-  let o;
-  if (s ? o = m(
-    s.method,
-    s.url,
-    e
-  ) : o = m(e), !t)
-    return o;
-  const l = (b) => o.submit(t.method, t.url, b);
-  return s ? {
-    ...o,
-    submit: l
-  } : {
-    ...o,
-    submit: l
-  };
+import { useForm as n } from "@inertiajs/react";
+import { isRouteResult as s } from "../shared/types.js";
+function o(e) {
+  return typeof e == "function" || s(e);
 }
-function F(i, n, r) {
-  const u = m(
-    n.method,
-    n.url,
-    i
-  );
-  return r ? {
-    ...u,
-    submit: (t) => u.submit(r.method, r.url, t)
-  } : u;
+function d(...e) {
+  if (e.length === 0)
+    return n();
+  if (e.length === 3) {
+    const [t, r, f] = e;
+    return n(t, r, f);
+  }
+  if (e.length === 2) {
+    const [t, r] = e;
+    if (typeof t == "string" && !o(r))
+      return n(t, r);
+    if (o(t))
+      return n(t, r);
+    if (typeof t != "string" && o(r))
+      return n(r, t);
+  }
+  return n(e[0]);
+}
+function p(e, t, r) {
+  const f = n(t, e);
+  return !r || r.url === t.url && r.method === t.method ? f : new Proxy(f, {
+    get(u, i, m) {
+      return i === "submit" ? (c) => u.submit(r.method, r.url, c) : Reflect.get(u, i, m);
+    }
+  });
 }
 export {
-  h as default,
-  f as isRouteResult,
-  h as useForm,
-  F as useFormWithPrecognition
+  d as default,
+  s as isRouteResult,
+  d as useForm,
+  p as useFormWithPrecognition
 };

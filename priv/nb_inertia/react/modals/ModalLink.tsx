@@ -23,6 +23,7 @@
  */
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
+import type { Method } from '@inertiajs/core';
 import { router } from '@inertiajs/react';
 import { isRouteResult, type RouteResult } from '../../shared/types';
 import { routerPrefetch } from '../../shared/routerCompat';
@@ -55,7 +56,7 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
    * Defaults to 'get'. Can be overridden if href is a string.
    * When href is a RouteResult, the method from the route is used unless explicitly overridden.
    */
-  method?: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+  method?: Method;
 
   /**
    * Data to send with the request (for POST/PUT/PATCH/DELETE)

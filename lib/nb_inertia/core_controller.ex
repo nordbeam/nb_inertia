@@ -14,12 +14,29 @@ defmodule NbInertia.CoreController do
 
   @title_regex ~r/<title inertia>(.*?)<\/title>/
 
+  defmodule Scroll do
+    @moduledoc false
+
+    @type t :: %__MODULE__{
+            fun: fun() | any(),
+            wrapper: String.t() | nil,
+            metadata: (any() -> map()) | nil,
+            prepend: boolean(),
+            match_on: String.t() | nil
+          }
+
+    defstruct [:fun, :metadata, :match_on, wrapper: nil, prepend: false]
+  end
+
   @type raw_prop_key :: atom() | String.t()
 
   @opaque optional() :: {:optional, fun()}
   @opaque always() :: {:keep, any()}
   @opaque merge() :: {:merge, any()}
   @opaque deep_merge() :: {:deep_merge, any()}
+  @opaque prepend() :: {:prepend, any()}
+  @opaque match_merge() :: {:match_merge, {any(), String.t()}}
+  @opaque scroll() :: Scroll.t()
   @opaque defer() :: {:defer, {fun(), String.t()}}
   @opaque preserved_prop_key :: {:preserve, raw_prop_key()}
 
@@ -80,11 +97,6 @@ defmodule NbInertia.CoreController do
     raise ArgumentError, message: "inertia_optional/1 only accepts a function argument"
   end
 
-  @doc false
-  @spec inertia_lazy(fun :: fun()) :: optional()
-  @deprecated "Use inertia_optional/1 instead"
-  def inertia_lazy(fun), do: inertia_optional(fun)
-
   @doc """
   Marks that a prop should be merged with existing data on the client-side.
   """
@@ -98,6 +110,92 @@ defmodule NbInertia.CoreController do
   @doc since: "2.5.0"
   @spec inertia_deep_merge(value :: any()) :: deep_merge()
   def inertia_deep_merge(value), do: {:deep_merge, value}
+
+  @doc """
+  Marks that a prop should be prepended to existing data on the client-side.
+
+  Unlike `inertia_merge/1` which appends items, `inertia_prepend/1` inserts items
+  at the beginning of the array. Useful for reverse-chronological lists like chat
+  messages or activity feeds.
+
+  ## Examples
+
+      conn
+      |> assign_prop(:messages, inertia_prepend(new_messages))
+
+  """
+  @doc since: "3.0.0"
+  @spec inertia_prepend(value :: any()) :: prepend()
+  def inertia_prepend(value), do: {:prepend, value}
+
+  @doc """
+  Marks that a prop should use smart merge matching on the client-side.
+
+  The client will match items by the specified ID field for efficient updates
+  instead of blindly appending. This is useful for updating existing items in
+  a list without duplicating them.
+
+  ## Examples
+
+      # Update items by their "id" field
+      conn
+      |> assign_prop(:items, inertia_match_merge(items, :id))
+
+      # Match on a custom field
+      conn
+      |> assign_prop(:users, inertia_match_merge(users, :uuid))
+
+  """
+  @doc since: "3.0.0"
+  @spec inertia_match_merge(value :: any(), id_field :: String.t() | atom()) :: match_merge()
+  def inertia_match_merge(value, id_field) do
+    {:match_merge, {value, to_string(id_field)}}
+  end
+
+  @doc """
+  Marks a prop for infinite scroll pagination.
+
+  Automatically configures merge behavior for the paginated item collection and
+  extracts pagination metadata for Inertia's `<InfiniteScroll>` component.
+
+  ## Options
+
+    * `:wrapper` - Nested key containing the items (auto-detected from `data`/`entries`/`items`)
+    * `:page_name` - Override the query parameter name used for pagination
+    * `:metadata` - Custom metadata extraction function
+    * `:prepend` - Force prepending when merging paginated items
+    * `:match_on` - Field to match items on for smart merge (e.g. `"id"`)
+
+  ## Examples
+
+      # Basic usage with auto-detected metadata
+      conn
+      |> assign_prop(:items, inertia_scroll(page_of_items))
+
+      # Lazy evaluation
+      conn
+      |> assign_prop(:items, inertia_scroll(fn -> page_of_items() end))
+
+      # Scrivener-style wrapper
+      conn
+      |> assign_prop(:items, inertia_scroll(page_of_items, wrapper: "entries"))
+
+      # Smart matching by ID field
+      conn
+      |> assign_prop(:items, inertia_scroll(page_of_items, match_on: :id))
+
+  """
+  @doc since: "3.0.0"
+  @spec inertia_scroll(value :: any(), opts :: keyword()) :: scroll()
+  def inertia_scroll(value, opts \\ []) do
+    %Scroll{
+      fun: value,
+      wrapper: Keyword.get(opts, :wrapper),
+      metadata: build_scroll_metadata_fun(opts),
+      prepend: Keyword.get(opts, :prepend, false),
+      match_on: opts |> Keyword.get(:match_on) |> normalize_scroll_match_on()
+    }
+  end
 
   @doc """
   Marks that a prop should fetched immediately after the page is loaded on the client-side.
@@ -442,6 +540,54 @@ defmodule NbInertia.CoreController do
   end
 
   @doc """
+  Instruct the client-side to preserve the URL hash fragment during navigation.
+
+  When set to `true`, the Inertia client will preserve the current URL's hash
+  fragment (e.g., `#section`) when performing page visits.
+
+  ## Examples
+
+      conn
+      |> preserve_fragment()
+      |> render_inertia("Page")
+
+      conn
+      |> preserve_fragment(should_preserve?)
+      |> render_inertia("Page")
+
+  """
+  @doc since: "3.0.0"
+  @spec preserve_fragment(Plug.Conn.t()) :: Plug.Conn.t()
+  def preserve_fragment(conn) do
+    put_private(conn, :inertia_preserve_fragment, true)
+  end
+
+  @doc since: "3.0.0"
+  @spec preserve_fragment(Plug.Conn.t(), boolean()) :: Plug.Conn.t()
+  def preserve_fragment(conn, true_or_false) when is_boolean(true_or_false) do
+    put_private(conn, :inertia_preserve_fragment, true_or_false)
+  end
+
+  @doc """
+  Marks certain prop keys as "shared" for the Inertia v3 instant visits protocol.
+
+  Shared prop keys are included in the `sharedProps` metadata field of the page
+  object, allowing the client to carry these props over during instant navigation.
+
+  ## Examples
+
+      conn
+      |> mark_shared_prop_keys([:current_user, :locale, :flash])
+
+  """
+  @doc since: "3.0.0"
+  @spec mark_shared_prop_keys(Plug.Conn.t(), [atom() | String.t()]) :: Plug.Conn.t()
+  def mark_shared_prop_keys(conn, keys) when is_list(keys) do
+    existing = conn.private[:inertia_shared_prop_keys] || []
+    put_private(conn, :inertia_shared_prop_keys, existing ++ keys)
+  end
+
+  @doc """
   Enable (or disable) automatic conversion of prop keys from snake case (e.g.
   `inserted_at`), which is conventional in Elixir, to camel case (e.g.
   `insertedAt`), which is conventional in JavaScript.
@@ -618,14 +764,26 @@ defmodule NbInertia.CoreController do
     is_partial = conn.private[:inertia_partial_component] == component
     only = if is_partial, do: conn.private[:inertia_partial_only], else: []
     except = if is_partial, do: conn.private[:inertia_partial_except], else: []
+    except_once = conn.private[:inertia_except_once_props] || []
     camelize_props = conn.private[:inertia_camelize_props] || false
     reset = conn.private[:inertia_reset] || []
 
-    opts = Keyword.merge(opts, camelize_props: camelize_props, reset: reset)
+    scroll_merge_intent = conn.private[:inertia_scroll_merge_intent] || "append"
+
+    opts =
+      Keyword.merge(opts,
+        camelize_props: camelize_props,
+        reset: reset,
+        scroll_merge_intent: scroll_merge_intent
+      )
 
     props = Map.merge(shared_props, inline_props)
-    {props, merge_props, deep_merge_props} = resolve_merge_props(props, opts)
-    {props, deferred_props, once_props} = resolve_deferred_and_once_props(props, opts)
+
+    {props, merge_props, deep_merge_props, prepend_props, match_props_on, scroll_props} =
+      resolve_merge_props(props, opts)
+
+    {props, deferred_props, once_props} =
+      resolve_deferred_and_once_props(props, opts, except_once)
 
     props =
       props
@@ -639,6 +797,9 @@ defmodule NbInertia.CoreController do
       props: props,
       merge_props: merge_props,
       deep_merge_props: deep_merge_props,
+      prepend_props: prepend_props,
+      match_props_on: match_props_on,
+      scroll_props: scroll_props,
       deferred_props: deferred_props,
       once_props: once_props,
       is_partial: is_partial
@@ -689,31 +850,152 @@ defmodule NbInertia.CoreController do
   # place the key in an array (unless that key is included in the list of
   # "reset" keys). Otherwise, make no modification.
   defp resolve_merge_props(props, opts) do
-    Enum.reduce(props, {[], [], []}, fn {key, value}, {props, merge_keys, deep_merge_keys} ->
+    Enum.reduce(props, {[], [], [], [], [], %{}}, fn {key, value},
+                                                     {props, merge_keys, deep_merge_keys,
+                                                      prepend_keys, match_props_on,
+                                                      scroll_props} ->
       transformed_key =
         key
         |> transform_key(opts)
         |> to_string()
 
+      is_reset = transformed_key in opts[:reset]
+
       # Only include this key in the collection of merge prop keys
       # if it's not in the "reset" list
-      case {transformed_key in opts[:reset], value} do
-        {true, {tag, unwrapped_value}} when tag in [:merge, :deep_merge] ->
-          {[{key, unwrapped_value} | props], merge_keys, deep_merge_keys}
+      case {is_reset, value} do
+        {true, {tag, unwrapped_value}} when tag in [:merge, :deep_merge, :prepend] ->
+          {[{key, unwrapped_value} | props], merge_keys, deep_merge_keys, prepend_keys,
+           match_props_on, scroll_props}
+
+        {true, {:match_merge, {unwrapped_value, _id_field}}} ->
+          {[{key, unwrapped_value} | props], merge_keys, deep_merge_keys, prepend_keys,
+           match_props_on, scroll_props}
+
+        {true, %Scroll{} = scroll} ->
+          resolved_value = resolve_scroll_value(scroll)
+
+          {[{key, {:scroll_value, resolved_value}} | props], merge_keys, deep_merge_keys,
+           prepend_keys, match_props_on, scroll_props}
 
         {_, {:merge, unwrapped_value}} ->
-          {[{key, unwrapped_value} | props], [key | merge_keys], deep_merge_keys}
+          {[{key, unwrapped_value} | props], [transformed_key | merge_keys], deep_merge_keys,
+           prepend_keys, match_props_on, scroll_props}
 
         {_, {:deep_merge, unwrapped_value}} ->
-          {[{key, unwrapped_value} | props], merge_keys, [key | deep_merge_keys]}
+          {[{key, unwrapped_value} | props], merge_keys, [transformed_key | deep_merge_keys],
+           prepend_keys, match_props_on, scroll_props}
+
+        {_, {:prepend, unwrapped_value}} ->
+          {[{key, unwrapped_value} | props], merge_keys, deep_merge_keys,
+           [transformed_key | prepend_keys], match_props_on, scroll_props}
+
+        {_, {:match_merge, {unwrapped_value, id_field}}} ->
+          {[{key, unwrapped_value} | props], [transformed_key | merge_keys], deep_merge_keys,
+           prepend_keys, ["#{transformed_key}.#{id_field}" | match_props_on], scroll_props}
+
+        {_, %Scroll{} = scroll} ->
+          resolved_value = resolve_scroll_value(scroll)
+          wrapper = detect_scroll_wrapper(resolved_value, scroll.wrapper)
+          metadata = extract_scroll_metadata(resolved_value, scroll)
+          merge_path = build_scroll_merge_path(transformed_key, wrapper)
+          mode = scroll_merge_mode(scroll, opts)
+
+          scroll_meta = %{
+            "pageName" => metadata.page_name,
+            "currentPage" => metadata.current_page,
+            "previousPage" => metadata.previous_page,
+            "nextPage" => metadata.next_page,
+            "reset" => false
+          }
+
+          scroll_match_props =
+            case scroll.match_on do
+              nil -> match_props_on
+              id_field -> ["#{merge_path}.#{id_field}" | match_props_on]
+            end
+
+          case mode do
+            :prepend ->
+              {[{key, {:scroll_value, resolved_value}} | props], merge_keys, deep_merge_keys,
+               [merge_path | prepend_keys], scroll_match_props,
+               Map.put(scroll_props, transformed_key, scroll_meta)}
+
+            :merge ->
+              {[{key, {:scroll_value, resolved_value}} | props], [merge_path | merge_keys],
+               deep_merge_keys, prepend_keys, scroll_match_props,
+               Map.put(scroll_props, transformed_key, scroll_meta)}
+          end
 
         _ ->
-          {[{key, value} | props], merge_keys, deep_merge_keys}
+          {[{key, value} | props], merge_keys, deep_merge_keys, prepend_keys, match_props_on,
+           scroll_props}
       end
     end)
   end
 
-  defp resolve_deferred_and_once_props(props, opts) do
+  defp build_scroll_metadata_fun(opts) do
+    cond do
+      fun = Keyword.get(opts, :metadata) -> fun
+      page_name = Keyword.get(opts, :page_name) -> fn _data -> %{page_name: page_name} end
+      true -> nil
+    end
+  end
+
+  defp normalize_scroll_match_on(nil), do: nil
+  defp normalize_scroll_match_on(value), do: to_string(value)
+
+  defp resolve_scroll_value(%Scroll{fun: fun}) when is_function(fun, 0), do: fun.()
+  defp resolve_scroll_value(%Scroll{fun: value}), do: value
+
+  defp detect_scroll_wrapper(_value, wrapper) when is_binary(wrapper), do: wrapper
+
+  defp detect_scroll_wrapper(value, nil) do
+    cond do
+      scroll_key?(value, :data) -> "data"
+      scroll_key?(value, :entries) -> "entries"
+      scroll_key?(value, :items) -> "items"
+      is_list(value) -> nil
+      true -> "data"
+    end
+  end
+
+  defp build_scroll_merge_path(transformed_key, nil), do: transformed_key
+  defp build_scroll_merge_path(transformed_key, wrapper), do: "#{transformed_key}.#{wrapper}"
+
+  defp scroll_merge_mode(%Scroll{prepend: true}, _opts), do: :prepend
+
+  defp scroll_merge_mode(_scroll, opts) do
+    if Keyword.get(opts, :scroll_merge_intent) == "prepend" do
+      :prepend
+    else
+      :merge
+    end
+  end
+
+  defp extract_scroll_metadata(data, %Scroll{metadata: metadata_fun})
+       when is_function(metadata_fun, 1) do
+    metadata = metadata_fun.(data)
+
+    %{
+      page_name: metadata[:page_name] || metadata["page_name"] || "page",
+      current_page: metadata[:current_page] || metadata["current_page"],
+      previous_page: metadata[:previous_page] || metadata["previous_page"],
+      next_page: metadata[:next_page] || metadata["next_page"]
+    }
+  end
+
+  defp extract_scroll_metadata(data, %Scroll{}) do
+    NbInertia.ScrollMetadata.to_scroll_metadata(data)
+  end
+
+  defp scroll_key?(value, key) when is_map(value) do
+    Map.has_key?(value, key) || Map.has_key?(value, to_string(key))
+  end
+
+  defp scroll_key?(_value, _key), do: false
+
+  defp resolve_deferred_and_once_props(props, opts, except_once) do
     Enum.reduce(props, {[], %{}, %{}}, fn {key, value}, {props_acc, deferred_acc, once_acc} ->
       transformed_key =
         key
@@ -722,17 +1004,27 @@ defmodule NbInertia.CoreController do
 
       case value do
         {:defer, {fun, group}} ->
-          deferred_acc = add_to_deferred_group(deferred_acc, group, key)
+          deferred_acc = add_to_deferred_group(deferred_acc, group, transformed_key)
           {[{key, {:optional, fun}} | props_acc], deferred_acc, once_acc}
 
         {:defer_once, {fun, group, once_config}} ->
-          deferred_acc = add_to_deferred_group(deferred_acc, group, key)
           once_acc = build_once_prop_entry(once_acc, transformed_key, once_config)
-          {[{key, {:optional, fun}} | props_acc], deferred_acc, once_acc}
+
+          if skip_once_prop?(transformed_key, once_config, except_once) do
+            {props_acc, deferred_acc, once_acc}
+          else
+            deferred_acc = add_to_deferred_group(deferred_acc, group, transformed_key)
+            {[{key, {:optional, fun}} | props_acc], deferred_acc, once_acc}
+          end
 
         {:once, %{callback: fun} = once_config} ->
           once_acc = build_once_prop_entry(once_acc, transformed_key, once_config)
-          {[{key, {:once_value, fun}} | props_acc], deferred_acc, once_acc}
+
+          if skip_once_prop?(transformed_key, once_config, except_once) do
+            {props_acc, deferred_acc, once_acc}
+          else
+            {[{key, {:once_value, fun}} | props_acc], deferred_acc, once_acc}
+          end
 
         _ ->
           {[{key, value} | props_acc], deferred_acc, once_acc}
@@ -758,6 +1050,11 @@ defmodule NbInertia.CoreController do
       end
 
     Map.put(once_acc, once_key, entry)
+  end
+
+  defp skip_once_prop?(transformed_key, once_config, except_once) do
+    once_key = once_config.as || transformed_key
+    !once_config.fresh and once_key in except_once
   end
 
   defp apply_filters(props, only, _except, opts) when is_list(only) and only != [] do
@@ -825,6 +1122,13 @@ defmodule NbInertia.CoreController do
   defp resolve_props({:optional, value}, opts), do: resolve_props(value, opts)
   defp resolve_props({:keep, value}, opts), do: resolve_props(value, opts)
   defp resolve_props({:merge, value}, opts), do: resolve_props(value, opts)
+  defp resolve_props({:prepend, value}, opts), do: resolve_props(value, opts)
+  defp resolve_props({:match_merge, {value, _}}, opts), do: resolve_props(value, opts)
+  defp resolve_props({:scroll_value, value}, opts), do: resolve_props(value, opts)
+
+  # Raw values from NbSerializer (raw: true fields) should NOT be camelized.
+  # Return the value as-is without recursing into it.
+  defp resolve_props({:raw, value}, _opts), do: value
 
   defp resolve_props({:once_value, fun}, opts) when is_function(fun, 0),
     do: resolve_props(fun.(), opts)
@@ -923,14 +1227,23 @@ defmodule NbInertia.CoreController do
       props: conn.private.inertia_page.props,
       url: request_path(conn),
       version: conn.private.inertia_version,
-      encryptHistory: conn.private.inertia_encrypt_history,
-      clearHistory: conn.private.inertia_clear_history,
-      flash: NbInertia.Flash.get_flash_for_response(conn)
+      flash:
+        if(conn.private[:inertia_prefetch],
+          do: %{},
+          else: NbInertia.Flash.get_flash_for_response(conn)
+        )
     }
+    |> maybe_put_encrypt_history(conn)
+    |> maybe_put_clear_history(conn)
+    |> maybe_put_preserve_fragment(conn)
     |> maybe_put_merge_props(conn)
     |> maybe_put_deep_merge_props(conn)
+    |> maybe_put_prepend_props(conn)
+    |> maybe_put_match_props_on(conn)
+    |> maybe_put_scroll_props(conn)
     |> maybe_put_deferred_props(conn)
     |> maybe_put_once_props(conn)
+    |> maybe_put_shared_props(conn)
   end
 
   defp maybe_put_merge_props(assigns, conn) do
@@ -953,6 +1266,36 @@ defmodule NbInertia.CoreController do
     end
   end
 
+  defp maybe_put_prepend_props(assigns, conn) do
+    prepend_props = conn.private.inertia_page.prepend_props
+
+    if Enum.empty?(prepend_props) do
+      assigns
+    else
+      Map.put(assigns, :prependProps, prepend_props)
+    end
+  end
+
+  defp maybe_put_match_props_on(assigns, conn) do
+    match_props_on = conn.private.inertia_page.match_props_on
+
+    if Enum.empty?(match_props_on) do
+      assigns
+    else
+      Map.put(assigns, :matchPropsOn, match_props_on)
+    end
+  end
+
+  defp maybe_put_scroll_props(assigns, conn) do
+    scroll_props = conn.private.inertia_page.scroll_props
+
+    if Enum.empty?(scroll_props) do
+      assigns
+    else
+      Map.put(assigns, :scrollProps, scroll_props)
+    end
+  end
+
   defp maybe_put_deferred_props(assigns, conn) do
     is_partial = conn.private.inertia_page.is_partial
     deferred_props = conn.private.inertia_page.deferred_props
@@ -971,6 +1314,55 @@ defmodule NbInertia.CoreController do
       assigns
     else
       Map.put(assigns, :onceProps, once_props)
+    end
+  end
+
+  defp maybe_put_encrypt_history(assigns, conn) do
+    if conn.private[:inertia_encrypt_history] do
+      Map.put(assigns, :encryptHistory, true)
+    else
+      assigns
+    end
+  end
+
+  defp maybe_put_clear_history(assigns, conn) do
+    if conn.private[:inertia_clear_history] do
+      Map.put(assigns, :clearHistory, true)
+    else
+      assigns
+    end
+  end
+
+  defp maybe_put_preserve_fragment(assigns, conn) do
+    if conn.private[:inertia_preserve_fragment] do
+      Map.put(assigns, :preserveFragment, true)
+    else
+      assigns
+    end
+  end
+
+  defp maybe_put_shared_props(assigns, conn) do
+    shared_prop_keys = conn.private[:inertia_shared_prop_keys] || []
+
+    if Enum.empty?(shared_prop_keys) do
+      assigns
+    else
+      camelize? = conn.private[:inertia_camelize_props] || false
+
+      keys =
+        shared_prop_keys
+        |> Enum.map(fn key ->
+          key_str = to_string(key)
+
+          if camelize? do
+            Phoenix.Naming.camelize(key_str, :lower)
+          else
+            key_str
+          end
+        end)
+        |> Enum.uniq()
+
+      Map.put(assigns, :sharedProps, keys)
     end
   end
 

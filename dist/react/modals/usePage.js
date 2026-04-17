@@ -7,10 +7,12 @@ function n() {
     props: e.props,
     url: e.url,
     version: e.version || null,
+    flash: e.flash || {},
     scrollRegions: e.scrollRegions || [],
     rememberedState: e.rememberedState || {},
-    clearHistory: e.clearHistory || !1,
-    encryptHistory: e.encryptHistory || !1
+    clearHistory: e.clearHistory,
+    encryptHistory: e.encryptHistory,
+    preserveFragment: e.preserveFragment
   } : r();
 }
 export {

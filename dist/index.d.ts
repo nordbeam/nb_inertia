@@ -1,5 +1,7 @@
 import { Channel } from 'phoenix';
+import { PageProps } from '@inertiajs/core';
 import { Presence } from 'phoenix';
+import { ReloadOptions as ReloadOptions_2 } from '@inertiajs/core';
 import { Socket } from 'phoenix';
 
 /**
@@ -47,7 +49,7 @@ export declare function createSocket(endpoint: string, options?: SocketOptions):
 /**
  * Custom event handler with helpers
  */
-export declare type CustomEventHandler<TProps, TEvent> = (event: TEvent, helpers: {
+export declare type CustomEventHandler<TProps extends Record<string, unknown>, TEvent> = (event: TEvent, helpers: {
     props: TProps;
     setProp: UseRealtimePropsReturn<TProps>['setProp'];
     setProps: UseRealtimePropsReturn<TProps>['setProps'];
@@ -103,14 +105,14 @@ export { Presence }
 /**
  * Options for usePresence hook
  */
-export declare interface PresenceOptions extends ChannelOptions {
+export declare type PresenceOptions = Omit<ChannelOptions, 'onJoin'> & {
     /** Callback when presence syncs */
     onSync?: () => void;
     /** Callback when a user joins */
     onJoin?: (id: string, current: unknown, newPres: unknown) => void;
     /** Callback when a user leaves */
     onLeave?: (id: string, current: unknown, leftPres: unknown) => void;
-}
+};
 
 /**
  * Presence state structure from Phoenix Presence
@@ -121,39 +123,7 @@ export declare interface PresenceState<T = unknown> {
     };
 }
 
-/**
- * NbInertia Realtime Props Hook for React
- *
- * Provides optimistic prop updates for Inertia.js pages with WebSocket integration.
- * Updates are instant and automatically sync with server state on navigation.
- *
- * @example
- * import { useRealtimeProps } from '@/lib/realtime';
- * import { useChannel } from '@/lib/socket';
- *
- * function ChatRoom() {
- *   const { props, setProp } = useRealtimeProps<ChatRoomProps>();
- *
- *   useChannel(socket, `chat:${props.room.id}`, {
- *     message_created: ({ message }) => {
- *       setProp('messages', msgs => [...msgs, message]);
- *     }
- *   });
- *
- *   return <div>{props.messages.map(m => <Message key={m.id} {...m} />)}</div>;
- * }
- */
-/**
- * Reload options for useRealtimeProps
- */
-export declare interface ReloadOptions {
-    /** Only reload these specific props */
-    only?: string[];
-    /** Preserve scroll position */
-    preserveScroll?: boolean;
-    /** Preserve component state */
-    preserveState?: boolean;
-}
+export declare type ReloadOptions = ReloadOptions_2;
 
 /**
  * Reload prop(s) from server
@@ -452,12 +422,12 @@ export declare function usePresence<T = unknown>(socket: Socket | null, topic: s
  * // Full reload
  * reload();
  */
-export declare function useRealtimeProps<T extends Record<string, unknown> = Record<string, unknown>>(): UseRealtimePropsReturn<T>;
+export declare function useRealtimeProps<T extends PageProps = PageProps>(): UseRealtimePropsReturn<T>;
 
 /**
  * Return type for useRealtimeProps hook
  */
-export declare interface UseRealtimePropsReturn<T extends Record<string, unknown>> {
+export declare interface UseRealtimePropsReturn<T extends PageProps> {
     /** Current props (server + optimistic updates) */
     props: T;
     /** Update a single prop */

@@ -121,7 +121,8 @@ export declare interface ModalPageObject {
     component: string;
     props: Record<string, any>;
     url: string;
-    version?: string;
+    version?: string | number | null;
+    flash?: Record<string, unknown>;
     scrollRegions?: Array<{
         top: number;
         left: number;
@@ -129,6 +130,7 @@ export declare interface ModalPageObject {
     rememberedState?: Record<string, unknown>;
     clearHistory?: boolean;
     encryptHistory?: boolean;
+    preserveFragment?: boolean;
 }
 
 export declare const ModalPageProvider: default_2.FC<ModalPageProviderProps>;

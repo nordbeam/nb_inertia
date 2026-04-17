@@ -66,14 +66,14 @@ export interface PresenceState<T = unknown> {
 /**
  * Options for usePresence hook
  */
-export interface PresenceOptions extends ChannelOptions {
+export type PresenceOptions = Omit<ChannelOptions, 'onJoin'> & {
   /** Callback when presence syncs */
   onSync?: () => void;
   /** Callback when a user joins */
   onJoin?: (id: string, current: unknown, newPres: unknown) => void;
   /** Callback when a user leaves */
   onLeave?: (id: string, current: unknown, leftPres: unknown) => void;
-}
+};
 
 /**
  * Socket configuration options
@@ -113,7 +113,7 @@ export function createSocket(endpoint: string, options: SocketOptions = {}): Soc
       const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]');
       return { _csrf_token: token?.content };
     }),
-    logger: options.logger ?? ((kind, msg, data) => {
+    logger: options.logger ?? ((kind: string, msg: string, data: unknown) => {
       if (import.meta.env?.DEV) {
         console.debug(`[socket:${kind}]`, msg, data);
       }
@@ -205,7 +205,7 @@ export function useChannel<TEvents extends Record<string, unknown> = Record<stri
     // Register event handlers using stable wrappers that delegate to ref
     const events = Object.keys(handlers) as (keyof TEvents)[];
     events.forEach((event) => {
-      channel.on(event as string, (payload) => {
+      channel.on(event as string, (payload: unknown) => {
         handlersRef.current[event]?.(payload as TEvents[typeof event]);
       });
     });
@@ -213,13 +213,13 @@ export function useChannel<TEvents extends Record<string, unknown> = Record<stri
     // Join the channel
     channel
       .join()
-      .receive('ok', (response) => {
+      .receive('ok', (response: unknown) => {
         if (import.meta.env?.DEV) {
           console.debug(`[channel] Joined ${topic}`);
         }
         options.onJoin?.(response);
       })
-      .receive('error', (error) => {
+      .receive('error', (error: unknown) => {
         console.error(`[channel] Failed to join ${topic}:`, error);
         options.onError?.(error);
       });
@@ -317,12 +317,12 @@ export function usePresence<T = unknown>(
     // Join the channel
     channel
       .join()
-      .receive('ok', (response) => {
+      .receive('ok', (response: unknown) => {
         if (import.meta.env?.DEV) {
           console.debug(`[presence] Joined ${topic}`);
         }
       })
-      .receive('error', (error) => {
+      .receive('error', (error: unknown) => {
         console.error(`[presence] Failed to join ${topic}:`, error);
         options.onError?.(error);
       });

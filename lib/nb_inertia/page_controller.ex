@@ -212,16 +212,12 @@ defmodule NbInertia.PageController do
 
   # Renders the page as a modal using the existing NbInertia.Modal infrastructure.
   defp render_modal(conn, component, page_module, props_map, modal_config) do
-    # Apply shared props (router-level + page-level)
-    conn = apply_all_shared_modules(conn, page_module)
-
-    # Process props: handle serializer tuples, apply DSL options
     dsl_props = page_module.__inertia_props__()
-    _dsl_opts_map = build_dsl_opts_map(dsl_props)
     props_map = apply_from_and_defaults(conn, props_map, dsl_props)
+    shared_props = shared_props_for_page(conn, page_module)
 
     # Build serialized modal props from the props_map
-    modal_props = build_modal_props_from_map(props_map)
+    modal_props = build_modal_props_from_map(Map.merge(shared_props, props_map))
 
     # Build the Modal struct using existing NbInertia.Modal module
     base_url = Keyword.get(modal_config, :base_url)
@@ -287,20 +283,18 @@ defmodule NbInertia.PageController do
   end
 
   defp render_page(conn, component, page_module, props_map) do
-    # Apply shared props (router-level + page-level)
-    conn = apply_all_shared_modules(conn, page_module)
-
-    # Process props: handle serializer tuples, apply DSL options
     dsl_props = page_module.__inertia_props__()
-    dsl_opts_map = build_dsl_opts_map(dsl_props)
+    inline_shared_props = page_module.__inertia_shared_inline__() || []
+    dsl_opts_map = build_dsl_opts_map(dsl_props ++ inline_shared_props)
 
-    # Merge in `from:` props (pulled from conn.assigns) and `default:` values
-    # for any DSL-declared props not already provided by mount/2
     props_map = apply_from_and_defaults(conn, props_map, dsl_props)
+    shared_props = shared_props_for_page(conn, page_module)
 
-    conn = process_and_assign_props(conn, props_map, dsl_opts_map)
+    conn =
+      conn
+      |> NbInertia.PropRuntime.mark_shared_prop_keys(shared_props)
+      |> process_and_assign_props(Map.merge(shared_props, props_map), dsl_opts_map)
 
-    # Delegate to CoreController for the actual Inertia response
     NbInertia.Controller.do_render_inertia(conn, component)
   end
 
@@ -310,12 +304,9 @@ defmodule NbInertia.PageController do
     # :errors with a default value (e.g., `prop :errors, :map, default: %{}`).
     saved_errors = conn.private[:inertia_shared][:errors]
 
-    # Apply shared props (router-level + page-level)
-    conn = apply_all_shared_modules(conn, page_module)
-
-    # Re-call mount/2 to get the base page props, then render with errors
     dsl_props = page_module.__inertia_props__()
-    dsl_opts_map = build_dsl_opts_map(dsl_props)
+    inline_shared_props = page_module.__inertia_shared_inline__() || []
+    dsl_opts_map = build_dsl_opts_map(dsl_props ++ inline_shared_props)
 
     case page_module.mount(conn, params) do
       %Plug.Conn{} = returned_conn ->
@@ -324,14 +315,26 @@ defmodule NbInertia.PageController do
         else
           page_props = returned_conn.private[:nb_inertia_page_props] || %{}
           page_props = apply_from_and_defaults(returned_conn, page_props, dsl_props)
-          returned_conn = process_and_assign_props(returned_conn, page_props, dsl_opts_map)
+          shared_props = shared_props_for_page(returned_conn, page_module)
+
+          returned_conn =
+            returned_conn
+            |> NbInertia.PropRuntime.mark_shared_prop_keys(shared_props)
+            |> process_and_assign_props(Map.merge(shared_props, page_props), dsl_opts_map)
+
           returned_conn = restore_errors(returned_conn, saved_errors)
           NbInertia.Controller.do_render_inertia(returned_conn, component)
         end
 
       %{} = props_map ->
         props_map = apply_from_and_defaults(conn, props_map, dsl_props)
-        conn = process_and_assign_props(conn, props_map, dsl_opts_map)
+        shared_props = shared_props_for_page(conn, page_module)
+
+        conn =
+          conn
+          |> NbInertia.PropRuntime.mark_shared_prop_keys(shared_props)
+          |> process_and_assign_props(Map.merge(shared_props, props_map), dsl_opts_map)
+
         conn = restore_errors(conn, saved_errors)
         NbInertia.Controller.do_render_inertia(conn, component)
     end
@@ -346,10 +349,19 @@ defmodule NbInertia.PageController do
     put_private(conn, :inertia_shared, Map.put(shared, :errors, saved_errors))
   end
 
+  defp shared_props_for_page(conn, page_module) do
+    router_shared_modules = conn.private[:nb_inertia_shared_modules] || []
+    page_shared_modules = page_module.__inertia_shared_modules__()
+
+    NbInertia.PropRuntime.resolve_shared_props(
+      conn,
+      router_shared_modules ++ page_shared_modules,
+      page_module.__inertia_shared_inline__()
+    )
+  end
+
   defp build_dsl_opts_map(dsl_props) do
-    dsl_props
-    |> Enum.map(fn prop -> {prop.name, prop[:opts] || []} end)
-    |> Map.new()
+    NbInertia.PropRuntime.dsl_opts_map(dsl_props)
   end
 
   # Applies `from:` and `default:` DSL options for props not returned by mount/2.
@@ -358,122 +370,10 @@ defmodule NbInertia.PageController do
   # - `from: :key_name` — pulls from `conn.assigns[:key_name]`
   # - `default: value` — uses the default if the prop is not in the mount return
   defp apply_from_and_defaults(conn, props_map, dsl_props) do
-    Enum.reduce(dsl_props, props_map, fn prop_config, acc ->
-      name = prop_config.name
-      opts = prop_config[:opts] || []
-
-      if Map.has_key?(acc, name) do
-        # Prop was explicitly provided by mount/2, don't override
-        acc
-      else
-        from = Keyword.get(opts, :from)
-        default = Keyword.get(opts, :default, :__no_default__)
-
-        cond do
-          # from: :assigns — pull from conn.assigns using the prop name as the key
-          from == :assigns ->
-            Map.put(acc, name, Map.get(conn.assigns, name))
-
-          # from: :other_key — pull from conn.assigns using the specified key
-          is_atom(from) and not is_nil(from) ->
-            Map.put(acc, name, Map.get(conn.assigns, from))
-
-          # default: value — use the default value
-          default != :__no_default__ ->
-            Map.put(acc, name, default)
-
-          true ->
-            acc
-        end
-      end
-    end)
-  end
-
-  # Applies all shared props: router-level modules first, then page-level modules.
-  # Page-level shared props take precedence (applied second).
-  defp apply_all_shared_modules(conn, page_module) do
-    # First, apply router-level shared modules
-    conn = apply_router_shared_modules(conn)
-
-    # Then, apply page-level shared modules
-    conn = apply_page_shared_modules(conn, page_module)
-
-    conn
-  end
-
-  # Applies shared props from modules registered via `inertia_shared` in the router.
-  # Each shared module's `build_props/2` is called and its props are merged into
-  # `conn.private[:inertia_shared]` so they're included in the Inertia response.
-  defp apply_router_shared_modules(conn) do
-    case conn.private[:nb_inertia_shared_modules] do
-      nil ->
-        conn
-
-      [] ->
-        conn
-
-      modules when is_list(modules) ->
-        Enum.reduce(modules, conn, fn module, acc ->
-          shared_props = module.build_props(acc, [])
-
-          Enum.reduce(shared_props, acc, fn {key, value}, inner_acc ->
-            assign_prop(inner_acc, key, value)
-          end)
-        end)
-    end
-  end
-
-  # Applies page-level shared props modules and inline shared props.
-  # These are declared via `shared MyModule` and `shared do ... end` in the Page module.
-  defp apply_page_shared_modules(conn, page_module) do
-    # Apply page-level shared modules
-    shared_modules = page_module.__inertia_shared_modules__()
-
-    conn =
-      Enum.reduce(shared_modules, conn, fn module, acc ->
-        shared_props = module.build_props(acc, [])
-
-        Enum.reduce(shared_props, acc, fn {key, value}, inner_acc ->
-          assign_prop(inner_acc, key, value)
-        end)
-      end)
-
-    # Apply page-level inline shared props
-    # Inline shared props are DSL prop declarations — they don't have build_props.
-    # They serve as type declarations for nb_ts, not runtime prop providers.
-    # No runtime application needed for inline shared props.
-    conn
+    NbInertia.PropRuntime.apply_from_and_defaults(conn, props_map, dsl_props)
   end
 
   defp process_and_assign_props(conn, props_map, dsl_opts_map) do
-    # Split into serializer tuples and raw values
-    {serialized_props, raw_props} =
-      Enum.split_with(props_map, fn {_key, value} ->
-        is_tuple(value) and tuple_size(value) >= 2 and is_atom(elem(value, 0)) and
-          Code.ensure_loaded?(elem(value, 0)) and
-          function_exported?(elem(value, 0), :serialize, 2)
-      end)
-
-    # Handle serialized props (NbSerializer tuples)
-    conn =
-      if serialized_props != [] and Code.ensure_loaded?(NbSerializer) do
-        NbInertia.Controller.assign_serialized_props_with_dsl_opts(
-          conn,
-          serialized_props,
-          dsl_opts_map
-        )
-      else
-        # If NbSerializer not available, treat as raw props
-        Enum.reduce(serialized_props, conn, fn {key, value}, acc ->
-          dsl_opts = Map.get(dsl_opts_map, key, [])
-          NbInertia.Controller.assign_raw_prop_with_dsl_opts(acc, key, value, dsl_opts)
-        end)
-      end
-
-    # Handle raw props with DSL options applied
-    Enum.reduce(raw_props, conn, fn {key, value}, acc ->
-      dsl_opts = Map.get(dsl_opts_map, key, [])
-      NbInertia.Controller.assign_raw_prop_with_dsl_opts(acc, key, value, dsl_opts)
-    end)
+    NbInertia.PropRuntime.assign_props(conn, props_map, dsl_opts_map)
   end
 end

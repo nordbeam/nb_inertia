@@ -18,22 +18,20 @@
  * ```
  */
 
+import type { Page as InertiaPage, PageProps, SharedPageProps } from '@inertiajs/core';
 import { usePage as inertiaUsePage } from '@inertiajs/react';
 import { useModalPageContext } from './modals/modalStack';
 
 /**
  * Page object structure (matches Inertia's Page type)
  */
-export interface Page<TProps = Record<string, any>> {
-  component: string;
-  props: TProps;
-  url: string;
-  version: string | null;
-  scrollRegions: Array<{ top: number; left: number }>;
-  rememberedState: Record<string, unknown>;
-  clearHistory: boolean;
-  encryptHistory: boolean;
-}
+export type Page<TProps extends PageProps = PageProps> = Omit<
+  InertiaPage<TProps & SharedPageProps>,
+  'version'
+> & {
+  version: string | number | null;
+  scrollRegions?: Array<{ top: number; left: number }>;
+};
 
 /**
  * Enhanced usePage hook
@@ -46,7 +44,7 @@ export interface Page<TProps = Record<string, any>> {
  *
  * @returns The current page object with props
  */
-export function usePage<TProps = Record<string, any>>(): Page<TProps> {
+export function usePage<TProps extends PageProps = PageProps>(): Page<TProps> {
   // First, check if we're in a modal context
   const modalPage = useModalPageContext();
 
@@ -54,19 +52,21 @@ export function usePage<TProps = Record<string, any>>(): Page<TProps> {
     // We're inside a modal - return the modal's page object
     return {
       component: modalPage.component,
-      props: modalPage.props as TProps,
+      props: modalPage.props as TProps & SharedPageProps,
       url: modalPage.url,
       version: modalPage.version || null,
+      flash: modalPage.flash || {},
       scrollRegions: modalPage.scrollRegions || [],
       rememberedState: modalPage.rememberedState || {},
-      clearHistory: modalPage.clearHistory || false,
-      encryptHistory: modalPage.encryptHistory || false,
-    };
+      clearHistory: modalPage.clearHistory,
+      encryptHistory: modalPage.encryptHistory,
+      preserveFragment: modalPage.preserveFragment,
+    } as Page<TProps>;
   }
 
   // Not in a modal - delegate to Inertia's usePage
   // This will throw if also not inside Inertia's App component
-  return inertiaUsePage<TProps>();
+  return inertiaUsePage<TProps>() as Page<TProps>;
 }
 
 export default usePage;

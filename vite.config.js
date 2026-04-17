@@ -15,12 +15,16 @@ function getEntryPoints(dir, baseDir = null) {
     const stat = statSync(fullPath);
 
     if (stat.isDirectory()) {
+      if (['node_modules', 'coverage', '__tests__'].includes(file)) {
+        continue;
+      }
       Object.assign(entries, getEntryPoints(fullPath, baseDir));
     } else if ((file.endsWith('.tsx') || file.endsWith('.ts')) &&
                !file.endsWith('.test.ts') &&
                !file.endsWith('.test.tsx') &&
                !file.includes('vitest') &&
                !file.endsWith('.d.ts') &&
+               !fullPath.includes('/node_modules/') &&
                !fullPath.includes('/vue/')) {
       // Create relative path from baseDir
       const baseResolved = resolve(baseDir);
@@ -39,7 +43,7 @@ export default defineConfig({
     react(),
     dts({
       include: ['priv/nb_inertia/**/*.{ts,tsx}'],
-      exclude: ['**/*.test.ts', '**/*.test.tsx', '**/vitest.*', '**/vue/**'],
+      exclude: ['**/*.test.ts', '**/*.test.tsx', '**/vitest.*', '**/vue/**', '**/node_modules/**'],
       outDir: 'dist',
       rollupTypes: true,
     }),

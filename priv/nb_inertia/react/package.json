@@ -10,8 +10,7 @@
     "./react/useForm": "./useForm.tsx",
     "./react/usePage": "./usePage.tsx",
     "./react/Head": "./Head.tsx",
-    "./react/modals": "./modals/index.ts",
-    "./react/preserveBackdrop": "./preserveBackdrop.ts"
+    "./react/modals": "./modals/index.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -20,25 +19,25 @@
     "test:ui": "vitest --ui"
   },
   "devDependencies": {
-    "@inertiajs/react": "^1.0.0 || ^2.0.0",
+    "@inertiajs/react": "^3.0.3",
     "@radix-ui/react-dialog": "^1.1.2",
     "@testing-library/jest-dom": "^6.1.5",
-    "@testing-library/react": "^14.1.2",
-    "@types/react": "^18.2.45",
-    "@types/react-dom": "^18.2.18",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.2.6",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.2.1",
     "@vitest/coverage-v8": "^1.0.4",
     "@vitest/ui": "^1.0.4",
     "jsdom": "^23.0.1",
-    "react": "^18.2.0 || ^19.0.0",
-    "react-dom": "^18.2.0 || ^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",
     "vitest": "^1.0.4"
   },
   "peerDependencies": {
-    "@inertiajs/react": "^1.0.0 || ^2.0.0",
+    "@inertiajs/react": "^3.0.3",
     "@radix-ui/react-dialog": "^1.1.0",
-    "react": "^18.0.0 || ^19.0.0"
+    "react": "^19.0.0"
   }
 }

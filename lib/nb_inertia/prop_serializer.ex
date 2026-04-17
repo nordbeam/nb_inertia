@@ -106,7 +106,7 @@ defprotocol NbInertia.PropSerializer do
       {:ok, %{name: "Alice", ...}}
   """
   @spec serialize(t, opts :: keyword()) :: {:ok, any()} | {:error, term()}
-  def serialize(value, opts)
+  def serialize(value, opts \\ [])
 end
 
 # Explicit implementations for primitive types
@@ -230,8 +230,11 @@ defimpl NbInertia.PropSerializer, for: Tuple do
   def serialize({serializer, data}, opts) when is_atom(serializer) do
     # Check if this looks like a serializer module
     if Code.ensure_loaded?(serializer) and function_exported?(serializer, :serialize, 2) do
+      # Keep raw markers so resolve_props can skip camelization for raw: true fields
+      merged_opts = Keyword.put_new(opts, :keep_raw_markers, true)
+
       # Delegate to NbSerializer
-      case serializer.serialize(data, opts) do
+      case serializer.serialize(data, merged_opts) do
         {:ok, result} -> {:ok, result}
         {:error, error} -> {:error, error}
         # Some serializers return raw results
@@ -245,8 +248,11 @@ defimpl NbInertia.PropSerializer, for: Tuple do
 
   def serialize({serializer, data, serializer_opts}, opts)
       when is_atom(serializer) and is_list(serializer_opts) do
-    # Merge opts
-    merged_opts = Keyword.merge(opts, serializer_opts)
+    # Merge opts, keeping raw markers for resolve_props
+    merged_opts =
+      opts
+      |> Keyword.put_new(:keep_raw_markers, true)
+      |> Keyword.merge(serializer_opts)
 
     if Code.ensure_loaded?(serializer) and function_exported?(serializer, :serialize, 2) do
       case serializer.serialize(data, merged_opts) do

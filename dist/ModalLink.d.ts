@@ -1,4 +1,5 @@
 import { default as default_2 } from 'react';
+import { Method } from '@inertiajs/core';
 
 /**
  * Configuration for a modal instance
@@ -73,7 +74,7 @@ export declare interface ModalLinkProps extends Omit<default_2.AnchorHTMLAttribu
      * Defaults to 'get'. Can be overridden if href is a string.
      * When href is a RouteResult, the method from the route is used unless explicitly overridden.
      */
-    method?: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method?: Method;
     /**
      * Data to send with the request (for POST/PUT/PATCH/DELETE)
      */
@@ -160,7 +161,8 @@ declare type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5x
  */
 declare type RouteResult = {
     url: string;
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete';
+    component?: string | Record<string, string>;
 };
 
 export { }

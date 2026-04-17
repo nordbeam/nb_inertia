@@ -52,9 +52,10 @@ defmodule NbInertia.SSRTest do
 
       script_content = """
       function render(page) {
+        const json = JSON.stringify(page).replace(/\\//g, '\\\\/');
         return {
           head: [`<title>${page.component}</title>`],
-          body: `<div id="app" data-page="${page.component}">SSR Content</div>`
+          body: `<script data-page="app" type="application/json">${json}</script><div id="app" data-server-rendered="true">SSR Content</div>`
         };
       }
       """

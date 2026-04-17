@@ -1,5 +1,7 @@
-import { usePage, router } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import type { PageWithFlash } from '../shared/types';
+import { usePage } from './usePage';
 
 /**
  * Default flash data type.
@@ -61,11 +63,11 @@ export interface UseFlashResult<T extends FlashData = FlashData> {
  * ```
  */
 export function useFlash<T extends FlashData = FlashData>(): UseFlashResult<T> {
-  const page = usePage<{ flash?: T }>();
+  const page = usePage() as PageWithFlash<Record<string, unknown>>;
 
   // Computed flash data
   const flash = computed(() => {
-    return (page.props?.flash ?? {}) as T;
+    return (page.flash ?? {}) as T;
   });
 
   // Check if a key exists and has a truthy value

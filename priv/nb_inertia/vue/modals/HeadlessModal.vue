@@ -8,6 +8,7 @@ import { router } from '@inertiajs/vue3';
 import { useModalStack } from './modalStack';
 import type { ModalConfig } from './types';
 import type { Component } from 'vue';
+import { provideModalPageContext, type ModalPageObject } from '../modalPageContext';
 
 /**
  * HeadlessModal - Core modal state management for Vue
@@ -88,6 +89,32 @@ const { pushModal, popModal, emitEvent } = useModalStack();
 const modalId = ref<string | null>(props.id || null);
 const isClosing = ref(false);
 const isOpen = ref(props.open);
+
+const modalPage = computed<ModalPageObject | null>(() => {
+  if (!isOpen.value) {
+    return null;
+  }
+
+  const componentName =
+    typeof props.component === 'string'
+      ? props.component
+      : ((props.component as any)?.name ?? 'Modal');
+
+  return {
+    component: componentName,
+    props: props.componentProps,
+    url: props.baseUrl,
+    version: null,
+    flash: {},
+    scrollRegions: [],
+    rememberedState: {},
+    clearHistory: false,
+    encryptHistory: false,
+    preserveFragment: false,
+  };
+});
+
+provideModalPageContext(modalPage);
 
 // Watch for open prop changes
 watch(() => props.open, (newVal) => {

@@ -195,8 +195,11 @@ defmodule NbInertia.Modal.HttpClient do
   @doc """
   Extracts Inertia page data from HTML response.
 
-  The Inertia page data is embedded in the HTML as a `data-page` attribute
-  on the root element, typically: `<div id="app" data-page='...'>`
+  In Inertia v3, the initial page data is embedded in a
+  `<script data-page="app" type="application/json">...</script>` tag.
+
+  For backward compatibility, the legacy `data-page` attribute format is also
+  supported when parsing existing HTML.
 
   ## Parameters
 
@@ -205,23 +208,47 @@ defmodule NbInertia.Modal.HttpClient do
   ## Returns
 
     - `{:ok, page_data}` - The parsed page data as a map
-    - `{:error, reason}` - Failed to find or parse the data-page attribute
+    - `{:error, reason}` - Failed to find or parse the embedded page data
   """
   @spec extract_page_data_from_html(String.t()) :: {:ok, map()} | {:error, String.t()}
   def extract_page_data_from_html(html) do
-    # Try single quotes first (most common in Phoenix)
+    case extract_page_data_from_script(html) do
+      {:ok, page_data} ->
+        {:ok, page_data}
+
+      {:error, _reason} ->
+        extract_page_data_from_data_page_attribute(html)
+    end
+  end
+
+  defp extract_page_data_from_script(html) do
+    regex =
+      ~r/<script\b(?=[^>]*\bdata-page=(['"])[^'"]+\1)(?=[^>]*\btype=(['"])application\/json\2)[^>]*>(.*?)<\/script>/s
+
+    case Regex.run(regex, html) do
+      [_, _quote1, _quote2, encoded_json] ->
+        case Jason.decode(encoded_json) do
+          {:ok, page_data} -> {:ok, page_data}
+          {:error, _} -> {:error, "Failed to parse page data JSON"}
+        end
+
+      nil ->
+        {:error, "No Inertia page data found in HTML"}
+    end
+  end
+
+  defp extract_page_data_from_data_page_attribute(html) do
     case Regex.run(~r/data-page='([^']*)'/s, html) do
       [_, encoded_json] ->
         decode_page_data(encoded_json)
 
       nil ->
-        # Try double quotes
         case Regex.run(~r/data-page="([^"]*)"/s, html) do
           [_, encoded_json] ->
             decode_page_data(encoded_json)
 
           nil ->
-            {:error, "No data-page attribute found in HTML"}
+            {:error, "No Inertia page data found in HTML"}
         end
     end
   end
@@ -238,7 +265,7 @@ defmodule NbInertia.Modal.HttpClient do
   @doc """
   Decodes common HTML entities in a string.
 
-  Used to decode the HTML-encoded JSON in the data-page attribute.
+  Used to decode the HTML-encoded JSON in the legacy `data-page` attribute.
   """
   @spec decode_html_entities(String.t()) :: String.t()
   def decode_html_entities(str) do
@@ -254,7 +281,8 @@ defmodule NbInertia.Modal.HttpClient do
   @doc """
   Encodes a string for safe embedding in an HTML attribute.
 
-  Used when building the composed HTML response.
+  Used when building the composed HTML response for legacy `data-page`
+  attribute fallbacks.
   """
   @spec encode_html_entities(String.t()) :: String.t()
   def encode_html_entities(str) do
@@ -268,8 +296,9 @@ defmodule NbInertia.Modal.HttpClient do
   @doc """
   Injects modified page data back into the original HTML.
 
-  Replaces the existing `data-page` attribute value with the new page data,
-  preserving all other HTML (CSS, JS, etc).
+  Replaces the existing embedded page data with the new page data, preserving
+  all other HTML (CSS, JS, etc). Inertia v3 script tags are updated first, with
+  a legacy `data-page` attribute fallback for older markup.
 
   ## Parameters
 
@@ -278,24 +307,54 @@ defmodule NbInertia.Modal.HttpClient do
 
   ## Returns
 
-    - `{:ok, modified_html}` - The HTML with updated data-page
-    - `{:error, reason}` - Failed to find data-page attribute
+    - `{:ok, modified_html}` - The HTML with updated embedded page data
+    - `{:error, reason}` - Failed to find existing embedded page data
   """
   @spec inject_page_data_into_html(String.t(), map()) :: {:ok, String.t()} | {:error, String.t()}
   def inject_page_data_into_html(html, page_data) do
+    case replace_script_page_data(html, page_data) do
+      {:ok, modified_html} ->
+        {:ok, modified_html}
+
+      {:error, _reason} ->
+        replace_legacy_data_page(html, page_data)
+    end
+  end
+
+  defp replace_script_page_data(html, page_data) do
+    encoded_json =
+      page_data
+      |> Jason.encode!()
+      |> String.replace("/", "\\/")
+
+    regex =
+      ~r/(<script\b(?=[^>]*\bdata-page=(['"])[^'"]+\2)(?=[^>]*\btype=(['"])application\/json\3)[^>]*>).*?(<\/script>)/s
+
+    case Regex.run(regex, html) do
+      [_match | _rest] ->
+        modified =
+          Regex.replace(regex, html, fn _full, open_tag, _quote1, _quote2, close_tag ->
+            open_tag <> encoded_json <> close_tag
+          end)
+
+        {:ok, modified}
+
+      nil ->
+        {:error, "No Inertia page data found in HTML"}
+    end
+  end
+
+  defp replace_legacy_data_page(html, page_data) do
     encoded_json = page_data |> Jason.encode!() |> encode_html_entities()
 
-    # Try single quotes first (most common in Phoenix/Inertia)
     case Regex.run(~r/data-page='[^']*'/s, html) do
       [_match] ->
         modified = Regex.replace(~r/data-page='[^']*'/s, html, "data-page='#{encoded_json}'")
         {:ok, modified}
 
       nil ->
-        # Try double quotes
         case Regex.run(~r/data-page="[^"]*"/s, html) do
           [_match] ->
-            # For double quotes, we need different escaping
             encoded_for_double_quotes =
               page_data
               |> Jason.encode!()
@@ -314,7 +373,7 @@ defmodule NbInertia.Modal.HttpClient do
             {:ok, modified}
 
           nil ->
-            {:error, "No data-page attribute found in HTML"}
+            {:error, "No Inertia page data found in HTML"}
         end
     end
   end

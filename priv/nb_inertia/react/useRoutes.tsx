@@ -20,10 +20,12 @@
  * }
  */
 
-import { usePage } from '@inertiajs/react';
+import type { PageProps } from '@inertiajs/core';
+import { usePage } from './usePage';
 import { useMemo } from 'react';
+import type { RouteResult } from '../shared/types';
 
-export interface UseRoutesOptions<TPageProps = Record<string, unknown>> {
+export interface UseRoutesOptions<TPageProps extends PageProps = PageProps> {
   /**
    * Name of the parameter to auto-inject (e.g., 'account_subdomain', 'tenant_id')
    */
@@ -43,16 +45,6 @@ export interface UseRoutesOptions<TPageProps = Record<string, unknown>> {
    * @default true
    */
   throwOnMissing?: boolean;
-}
-
-/**
- * Result returned by rich route helpers
- */
-export interface RouteResult {
-  /** Generated URL */
-  url: string;
-  /** HTTP method */
-  method: 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head' | 'options';
 }
 
 /**
@@ -82,8 +74,6 @@ export interface RouteHelperWithForm<TParams extends any[] = any[]> {
   put(...args: TParams): RouteResult;
   /** DELETE method variant */
   delete(...args: TParams): RouteResult;
-  /** HEAD method variant */
-  head(...args: TParams): RouteResult;
   /** URL-only variant - returns just the URL string */
   url(...args: TParams): string;
   /** Form helper - returns FormAttributes for use with HTML forms */
@@ -116,8 +106,6 @@ export interface RouteHelper<TParams extends any[] = any[]> {
   put(...args: TParams): RouteResult;
   /** DELETE method variant */
   delete(...args: TParams): RouteResult;
-  /** HEAD method variant */
-  head(...args: TParams): RouteResult;
   /** URL-only variant - returns just the URL string */
   url(...args: TParams): string;
 }
@@ -233,7 +221,7 @@ function wrapRouteFunction(
  */
 export function useRoutes<
   TRoutes extends Record<string, any> = Record<string, any>,
-  TPageProps = Record<string, unknown>
+  TPageProps extends PageProps = PageProps
 >(
   routeHelpers: TRoutes,
   options: UseRoutesOptions<TPageProps>

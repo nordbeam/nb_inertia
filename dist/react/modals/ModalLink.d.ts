@@ -1,4 +1,5 @@
 import { default as React } from 'react';
+import { Method } from '@inertiajs/core';
 import { RouteResult } from '../../shared/types';
 import { ModalConfig } from './types';
 /**
@@ -24,7 +25,7 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
      * Defaults to 'get'. Can be overridden if href is a string.
      * When href is a RouteResult, the method from the route is used unless explicitly overridden.
      */
-    method?: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+    method?: Method;
     /**
      * Data to send with the request (for POST/PUT/PATCH/DELETE)
      */

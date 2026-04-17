@@ -1,5 +1,6 @@
-import { usePage } from '@inertiajs/react';
 import { useCallback, useMemo } from 'react';
+import type { PageWithFlash } from '../shared/types';
+import { usePage } from './usePage';
 
 /**
  * Default flash data type.
@@ -75,12 +76,12 @@ export interface UseFlashResult<T extends FlashData = FlashData> {
  * ```
  */
 export function useFlash<T extends FlashData = FlashData>(): UseFlashResult<T> {
-  const page = usePage<{ flash?: T }>();
+  const page = usePage() as PageWithFlash<Record<string, unknown>>;
 
   // Memoize flash to prevent unnecessary re-renders
   const flash = useMemo(() => {
-    return (page.props?.flash ?? {}) as T;
-  }, [page.props?.flash]);
+    return (page.flash ?? {}) as T;
+  }, [page.flash]);
 
   // Check if a key exists and has a truthy value
   const has = useCallback(

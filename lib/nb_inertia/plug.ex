@@ -47,6 +47,10 @@ defmodule NbInertia.Plug do
     |> put_private(:inertia_error_bag, get_error_bag(conn))
     |> put_private(:inertia_encrypt_history, default_encrypt_history())
     |> put_private(:inertia_clear_history, false)
+    |> put_private(:inertia_preserve_fragment, false)
+    |> put_private(:inertia_prefetch, false)
+    |> put_private(:inertia_except_once_props, [])
+    |> put_private(:inertia_shared_prop_keys, [])
     |> put_private(:inertia_camelize_props, default_camelize_props())
     |> Flash.load_from_session()
     |> merge_forwarded_flash()
@@ -59,7 +63,9 @@ defmodule NbInertia.Plug do
 
   defp register_flash_persistence(conn) do
     register_before_send(conn, fn conn ->
-      if conn.status in @flash_redirect_statuses do
+      is_prefetch = conn.private[:inertia_prefetch] == true
+
+      if !is_prefetch and conn.status in @flash_redirect_statuses do
         Flash.persist_to_session(conn)
       else
         conn
@@ -101,6 +107,9 @@ defmodule NbInertia.Plug do
         |> put_private(:inertia_request, true)
         |> detect_partial_reload()
         |> detect_reset()
+        |> detect_infinite_scroll_merge_intent()
+        |> detect_prefetch()
+        |> detect_except_once_props()
         |> convert_redirects()
         |> check_version()
 
@@ -132,6 +141,49 @@ defmodule NbInertia.Plug do
     put_private(conn, :inertia_reset, resets)
   end
 
+  defp detect_infinite_scroll_merge_intent(conn) do
+    case get_req_header(conn, "x-inertia-infinite-scroll-merge-intent") do
+      [intent] when is_binary(intent) ->
+        case String.downcase(intent) do
+          "append" -> put_private(conn, :inertia_scroll_merge_intent, "append")
+          "prepend" -> put_private(conn, :inertia_scroll_merge_intent, "prepend")
+          _ -> conn
+        end
+
+      _ ->
+        conn
+    end
+  end
+
+  defp detect_prefetch(conn) do
+    purpose_prefetch? =
+      conn
+      |> get_req_header("purpose")
+      |> Enum.any?(fn value -> String.downcase(value) == "prefetch" end)
+
+    legacy_prefetch? =
+      case get_req_header(conn, "x-inertia-prefetch") do
+        ["true"] -> true
+        _ -> false
+      end
+
+    if purpose_prefetch? or legacy_prefetch? do
+      put_private(conn, :inertia_prefetch, true)
+    else
+      conn
+    end
+  end
+
+  defp detect_except_once_props(conn) do
+    except_once_props =
+      case get_req_header(conn, "x-inertia-except-once-props") do
+        [list] when is_binary(list) and list != "" -> String.split(list, ",")
+        _ -> []
+      end
+
+    put_private(conn, :inertia_except_once_props, except_once_props)
+  end
+
   defp get_partial_only(conn) do
     case get_req_header(conn, "x-inertia-partial-data") do
       [list] when is_binary(list) -> String.split(list, ",")
@@ -158,6 +210,14 @@ defmodule NbInertia.Plug do
   defp convert_redirects(conn) do
     register_before_send(conn, fn %{method: method, status: status} = conn ->
       cond do
+        # Hash fragment redirect: return 409 so client can do SPA visit preserving fragment
+        fragment_redirect?(conn) ->
+          [location] = get_resp_header(conn, "location")
+
+          conn
+          |> put_status(409)
+          |> put_resp_header("x-inertia-redirect", location)
+
         # External redirects: https://inertiajs.com/redirects#external-redirects
         external_redirect?(conn) ->
           [location] = get_resp_header(conn, "location")
@@ -175,6 +235,21 @@ defmodule NbInertia.Plug do
       end
     end)
   end
+
+  defp fragment_redirect?(%{status: status} = conn) when status in 300..308 do
+    case get_resp_header(conn, "location") do
+      [location] -> has_fragment?(location) and conn.private[:inertia_request] == true
+      _ -> false
+    end
+  end
+
+  defp fragment_redirect?(_conn), do: false
+
+  defp has_fragment?(url) when is_binary(url) do
+    String.contains?(url, "#")
+  end
+
+  defp has_fragment?(_), do: false
 
   defp external_redirect?(%{status: status} = conn) when status in 300..308 do
     [location] = get_resp_header(conn, "location")

@@ -22,28 +22,19 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { PageProps, ReloadOptions as InertiaReloadOptions } from '@inertiajs/core';
 import { usePage, router } from '@inertiajs/react';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-/**
- * Reload options for useRealtimeProps
- */
-export interface ReloadOptions {
-  /** Only reload these specific props */
-  only?: string[];
-  /** Preserve scroll position */
-  preserveScroll?: boolean;
-  /** Preserve component state */
-  preserveState?: boolean;
-}
+export type ReloadOptions = InertiaReloadOptions;
 
 /**
  * Return type for useRealtimeProps hook
  */
-export interface UseRealtimePropsReturn<T extends Record<string, unknown>> {
+export interface UseRealtimePropsReturn<T extends PageProps> {
   /** Current props (server + optimistic updates) */
   props: T;
   /** Update a single prop */
@@ -117,10 +108,10 @@ export interface UseRealtimePropsReturn<T extends Record<string, unknown>> {
  * reload();
  */
 export function useRealtimeProps<
-  T extends Record<string, unknown> = Record<string, unknown>
+  T extends PageProps = PageProps
 >(): UseRealtimePropsReturn<T> {
   // Get server props from Inertia
-  const { props: serverProps } = usePage<{ props: T }>();
+  const serverProps = usePage<T>().props as unknown as T;
 
   // Track optimistic updates separately
   const [optimistic, setOptimistic] = useState<Partial<T>>({});
@@ -138,7 +129,7 @@ export function useRealtimeProps<
 
   // Merge server and optimistic props
   const props = useMemo(
-    () => ({ ...serverProps, ...optimistic }) as T,
+    () => ({ ...serverProps, ...optimistic }) as unknown as T,
     [serverProps, optimistic]
   );
 
@@ -152,7 +143,7 @@ export function useRealtimeProps<
   const setProp = useCallback(
     <K extends keyof T>(key: K, updater: T[K] | ((current: T[K]) => T[K])) => {
       setOptimistic((prev) => {
-        const current = { ...serverProps, ...prev } as T;
+        const current = { ...serverProps, ...prev } as unknown as T;
         const newValue =
           typeof updater === 'function'
             ? (updater as (current: T[K]) => T[K])(current[key])
@@ -167,7 +158,7 @@ export function useRealtimeProps<
   const setProps = useCallback(
     (updater: Partial<T> | ((current: T) => Partial<T>)) => {
       setOptimistic((prev) => {
-        const current = { ...serverProps, ...prev } as T;
+        const current = { ...serverProps, ...prev } as unknown as T;
         const updates =
           typeof updater === 'function' ? updater(current) : updater;
 
@@ -181,12 +172,13 @@ export function useRealtimeProps<
   // Reload props from server
   const reload = useCallback(
     (options: ReloadOptions = {}) => {
+      const { onSuccess, ...reloadOptions } = options;
+
       router.reload({
-        only: options.only,
-        preserveScroll: options.preserveScroll ?? true,
-        preserveState: options.preserveState ?? true,
-        onSuccess: () => {
+        ...reloadOptions,
+        onSuccess: (page) => {
           setOptimistic({});
+          onSuccess?.(page);
         },
       });
     },

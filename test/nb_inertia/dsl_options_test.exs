@@ -87,6 +87,54 @@ defmodule NbInertia.DslOptionsTest do
       assert {:deep_merge, %{nested: %{key: "value"}}} = prop
     end
 
+    test "applies prepend: true option" do
+      conn = conn(:get, "/")
+
+      conn = assign_raw_prop_with_dsl_opts(conn, :messages, [%{id: 1}], prepend: true)
+
+      prop = conn.private[:inertia_shared][:messages]
+      assert {:prepend, [%{id: 1}]} = prop
+    end
+
+    test "applies match_on option" do
+      conn = conn(:get, "/")
+
+      conn =
+        assign_raw_prop_with_dsl_opts(conn, :messages, [%{id: 1, body: "hello"}], match_on: :id)
+
+      prop = conn.private[:inertia_shared][:messages]
+      assert {:match_merge, {[%{id: 1, body: "hello"}], "id"}} = prop
+    end
+
+    test "applies scroll: true option" do
+      conn = conn(:get, "/")
+
+      conn =
+        assign_raw_prop_with_dsl_opts(conn, :posts, %{entries: [%{id: 1}]}, scroll: true)
+
+      prop = conn.private[:inertia_shared][:posts]
+      assert %NbInertia.CoreController.Scroll{fun: %{entries: [%{id: 1}]}} = prop
+      assert prop.prepend == false
+      assert prop.match_on == nil
+    end
+
+    test "applies scroll options with prepend and match_on shorthands" do
+      conn = conn(:get, "/")
+
+      conn =
+        assign_raw_prop_with_dsl_opts(conn, :posts, %{entries: [%{id: 1}]},
+          scroll: [wrapper: "entries"],
+          prepend: true,
+          match_on: :id
+        )
+
+      prop = conn.private[:inertia_shared][:posts]
+      assert %NbInertia.CoreController.Scroll{} = prop
+      assert prop.wrapper == "entries"
+      assert prop.prepend == true
+      assert prop.match_on == "id"
+    end
+
     test "combines defer with merge option" do
       conn = conn(:get, "/")
 
@@ -130,6 +178,22 @@ defmodule NbInertia.DslOptionsTest do
 
       prop = conn.private[:inertia_shared][:data]
       assert {:defer, {_fun, "default"}} = prop
+    end
+
+    test "raises when prepend and match_on are combined without scroll" do
+      conn = conn(:get, "/")
+
+      assert_raise ArgumentError, ~r/prepend and match_on require scroll/, fn ->
+        assign_raw_prop_with_dsl_opts(conn, :messages, [%{id: 1}], prepend: true, match_on: :id)
+      end
+    end
+
+    test "raises when scroll and merge are combined" do
+      conn = conn(:get, "/")
+
+      assert_raise ArgumentError, ~r/scroll cannot be combined with merge/, fn ->
+        assign_raw_prop_with_dsl_opts(conn, :posts, %{entries: []}, scroll: true, merge: true)
+      end
     end
 
     test "applies once: true option" do

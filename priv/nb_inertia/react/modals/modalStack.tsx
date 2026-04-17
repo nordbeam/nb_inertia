@@ -55,11 +55,13 @@ export interface ModalPageObject {
   component: string;
   props: Record<string, any>;
   url: string;
-  version?: string;
+  version?: string | number | null;
+  flash?: Record<string, unknown>;
   scrollRegions?: Array<{ top: number; left: number }>;
   rememberedState?: Record<string, unknown>;
   clearHistory?: boolean;
   encryptHistory?: boolean;
+  preserveFragment?: boolean;
 }
 
 /**
@@ -108,10 +110,12 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
       props,
       url,
       version: '1.0',
+      flash: {},
       scrollRegions: [],
       rememberedState: {},
       clearHistory: false,
       encryptHistory: false,
+      preserveFragment: false,
     }),
     [component, props, url]
   );
