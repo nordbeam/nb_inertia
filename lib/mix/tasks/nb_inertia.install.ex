@@ -1689,13 +1689,16 @@ if Code.ensure_loaded?(Igniter) do
 
       // Modal components
       export {
-        Modal,
+        ClientModalLink,
         HeadlessModal,
+        InitialModalHandler,
         ModalLink,
-        ModalContent,
-        SlideoverContent,
+        ModalPageProvider,
+        ModalRenderer,
         CloseButton,
         ModalStackProvider,
+        useIsInModal,
+        useModalPageContext,
         useModalStack,
         useModal
       } from '@nordbeam/nb-inertia/react/modals';
