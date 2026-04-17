@@ -240,8 +240,8 @@ if Code.ensure_loaded?(Igniter) do
       if missing_specs == [] do
         igniter
       else
-        igniter
-        |> Enum.reduce(missing_specs, fn spec, igniter ->
+        missing_specs
+        |> Enum.reduce(igniter, fn spec, igniter ->
           Igniter.Project.Deps.add_dep(igniter, spec)
         end)
         |> Igniter.apply_and_fetch_dependencies(
