@@ -1033,6 +1033,12 @@ if Code.ensure_loaded?(Igniter) do
         :dev
       )
       |> Igniter.Project.Config.configure(
+        "dev.exs",
+        :nb_inertia,
+        [:raise_on_ssr_failure],
+        false
+      )
+      |> Igniter.Project.Config.configure(
         "test.exs",
         :nb_inertia,
         [:ssr],
