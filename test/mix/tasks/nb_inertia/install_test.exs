@@ -15,14 +15,16 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert info.composes == ["nb_ts.install", "nb_flop.install"]
     end
 
-    test "adds deno_rider only for SSR with nb_vite projects" do
+    test "adds deno_rider whenever SSR is requested" do
       options = Install.installer_options(["--ssr"])
 
       assert Install.optional_dependency_specs(options, [:nb_vite]) == [
                {:deno_rider, "~> 0.2"}
              ]
 
-      assert Install.optional_dependency_specs(options, []) == []
+      assert Install.optional_dependency_specs(options, []) == [
+               {:deno_rider, "~> 0.2"}
+             ]
     end
 
     test "parses grouped igniter flags for shared nb task namespaces" do

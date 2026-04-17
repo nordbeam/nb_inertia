@@ -205,7 +205,7 @@ if Code.ensure_loaded?(Igniter) do
         {:nb_flop, github: "nordbeam/nb_flop"}
       )
       |> maybe_add_optional_dep(
-        options[:ssr] && dep_installed?(installed_deps, :nb_vite),
+        options[:ssr],
         installed_deps,
         {:deno_rider, "~> 0.2"}
       )
