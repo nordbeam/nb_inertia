@@ -171,6 +171,8 @@ defmodule NbInertia.SSR do
 
   @dev_ssr_path "/ssr"
   @dev_ssr_health_path "/ssr-health"
+  @dev_render_retry_attempts 12
+  @dev_render_retry_delay_ms 250
 
   @doc """
   Starts the SSR GenServer.
@@ -559,12 +561,18 @@ defmodule NbInertia.SSR do
   end
 
   defp do_render_dev(page, state) do
+    do_render_dev(page, state, @dev_render_retry_attempts)
+  end
+
+  defp do_render_dev(page, state, attempts_left) do
     page_json = Jason.encode!(page)
     render_url = build_dev_server_url(state.dev_server_url, @dev_ssr_path)
 
     case ensure_httpc_started() do
       {:error, reason} ->
-        handle_render_error(
+        maybe_retry_dev_render(
+          attempts_left,
+          fn -> do_render_dev(page, state, attempts_left - 1) end,
           %{"message" => "HTTP client startup failed: #{inspect(reason)}"},
           page,
           state
@@ -598,6 +606,16 @@ defmodule NbInertia.SSR do
                 )
             end
 
+          {:ok, {{_, status, _}, _, body}}
+          when status in [404, 502, 503, 504] ->
+            maybe_retry_dev_render(
+              attempts_left,
+              fn -> do_render_dev(page, state, attempts_left - 1) end,
+              %{"message" => "Dev server returned #{status}: #{body}"},
+              page,
+              state
+            )
+
           {:ok, {{_, status, _}, _, body}} ->
             # Try to parse JSON body first
             error =
@@ -609,7 +627,9 @@ defmodule NbInertia.SSR do
             handle_render_error(error, page, state)
 
           {:error, reason} ->
-            handle_render_error(
+            maybe_retry_dev_render(
+              attempts_left,
+              fn -> do_render_dev(page, state, attempts_left - 1) end,
               %{"message" => "HTTP request failed: #{inspect(reason)}"},
               page,
               state
@@ -627,6 +647,16 @@ defmodule NbInertia.SSR do
 
         {:error, :render_exception}
       end
+  end
+
+  defp maybe_retry_dev_render(attempts_left, retry_fun, _error, _page, _state)
+       when attempts_left > 0 do
+    Process.sleep(@dev_render_retry_delay_ms)
+    retry_fun.()
+  end
+
+  defp maybe_retry_dev_render(_attempts_left, _retry_fun, error, page, state) do
+    handle_render_error(error, page, state)
   end
 
   defp do_render_prod(page, state) do
