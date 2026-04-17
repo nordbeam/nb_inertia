@@ -64,7 +64,6 @@ export default defineConfig({
         'radix-vue',
         'vue',
         'phoenix',
-        'axios',
       ],
       output: {
         preserveModules: true,

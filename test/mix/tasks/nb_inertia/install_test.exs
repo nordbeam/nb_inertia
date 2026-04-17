@@ -111,4 +111,14 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   test "hex package includes installer assets" do
     assert "priv" in Mix.Project.config()[:package][:files]
   end
+
+  test "installer source uses Inertia HTTP hooks for CSRF instead of axios" do
+    source =
+      Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+      |> File.read!()
+
+    assert source =~ ~s(import { createInertiaApp, http } from "@/lib/inertia";)
+    assert source =~ "http.onRequest((config) => {"
+    refute source =~ "axios.defaults.xsrfHeaderName"
+  end
 end

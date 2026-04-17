@@ -742,7 +742,7 @@ if Code.ensure_loaded?(Igniter) do
       # Pin the validated Inertia v3 beta + React 19 set used by nb_inertia itself.
       # Use GitHub for @nordbeam/nb-inertia (workspace conflict fixed in nb_vite by limiting workspaces to Phoenix packages only)
       base_packages =
-        "@inertiajs/react@^3.0.3 github:nordbeam/nb_inertia react@^19.0.0 react-dom@^19.0.0 axios @radix-ui/react-visually-hidden"
+        "@inertiajs/react@^3.0.3 github:nordbeam/nb_inertia react@^19.0.0 react-dom@^19.0.0 @radix-ui/react-visually-hidden"
 
       install_cmd =
         case pkg_manager do
@@ -769,7 +769,7 @@ if Code.ensure_loaded?(Igniter) do
       # Pin the validated Inertia v3 beta set used by nb_inertia itself.
       # Use GitHub for @nordbeam/nb-inertia - see comment in React version
       base_packages =
-        "@inertiajs/vue3@^3.0.3 github:nordbeam/nb_inertia vue@^3.0.0 vue-loader axios"
+        "@inertiajs/vue3@^3.0.3 github:nordbeam/nb_inertia vue@^3.0.0 vue-loader"
 
       install_cmd =
         case pkg_manager do
@@ -788,10 +788,10 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
-          "bun" -> "bun add --cwd #{assets_dir} @inertiajs/svelte svelte axios"
-          "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/svelte svelte axios"
-          "yarn" -> "yarn --cwd #{assets_dir} add @inertiajs/svelte svelte axios"
-          _ -> "npm install --prefix #{assets_dir} @inertiajs/svelte svelte axios"
+          "bun" -> "bun add --cwd #{assets_dir} @inertiajs/svelte svelte"
+          "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/svelte svelte"
+          "yarn" -> "yarn --cwd #{assets_dir} add @inertiajs/svelte svelte"
+          _ -> "npm install --prefix #{assets_dir} @inertiajs/svelte svelte"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -930,14 +930,32 @@ if Code.ensure_loaded?(Igniter) do
 
       """
       import React from "react";
-      import axios from "axios";
 
-      import { createInertiaApp } from "@/lib/inertia";
+      import { createInertiaApp, http } from "@/lib/inertia";
       import { createRoot } from "react-dom/client";
 
-      axios.defaults.xsrfHeaderName = "x-csrf-token";
-
       const pages = import.meta.glob("./pages/**/*.#{extension}");
+
+      const getCsrfToken = () =>
+        document
+          .querySelector('meta[name="csrf-token"]')
+          ?.getAttribute("content");
+
+      http.onRequest((config) => {
+        const csrfToken = getCsrfToken();
+
+        if (!csrfToken) {
+          return config;
+        }
+
+        return {
+          ...config,
+          headers: {
+            ...(config.headers ?? {}),
+            "x-csrf-token": csrfToken,
+          },
+        };
+      });
 
       createInertiaApp({
         // Inertia v3: resolve receives (name, props). Props can be used for
