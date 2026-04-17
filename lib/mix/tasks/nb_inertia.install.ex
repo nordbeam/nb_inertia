@@ -1471,7 +1471,7 @@ if Code.ensure_loaded?(Igniter) do
       case client_framework do
         "react" ->
           extension = if typescript, do: "tsx", else: "jsx"
-          sample_page = sample_react_page()
+          sample_page = sample_react_page(extension, typescript)
 
           Igniter.create_new_file(igniter, "assets/js/pages/Home.#{extension}", sample_page,
             on_exists: :skip
@@ -1482,7 +1482,7 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    defp sample_react_page() do
+    defp sample_react_page(extension, typescript) do
       """
       import React from "react";
 
@@ -1494,7 +1494,7 @@ if Code.ensure_loaded?(Igniter) do
               This is a sample Inertia.js page component created by the nb_inertia installer.
             </p>
             <p>
-              Edit this file at <code>assets/js/pages/Home.jsx</code> to get started.
+              Edit this file at <code>assets/js/pages/Home.#{extension}</code> to get started.
             </p>
 
             <div style={{ marginTop: "2rem" }}>
@@ -1514,7 +1514,7 @@ if Code.ensure_loaded?(Igniter) do
         use NbInertia.Controller
 
         inertia_page :home do
-          prop :greeting, :string
+          prop :greeting, #{if typescript, do: ~s(type: ~TS"string"), else: ":string"}
         end
 
         def home(conn, _params) do

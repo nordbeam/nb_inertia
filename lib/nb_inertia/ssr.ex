@@ -169,6 +169,9 @@ defmodule NbInertia.SSR do
 
   require Logger
 
+  @dev_ssr_path "/ssr"
+  @dev_ssr_health_path "/ssr-health"
+
   @doc """
   Starts the SSR GenServer.
 
@@ -458,26 +461,16 @@ defmodule NbInertia.SSR do
     base_url
     |> candidate_dev_server_urls()
     |> Enum.find_value(:error, fn candidate ->
-      health_url = "#{candidate}/ssr"
-      healthcheck_page = Jason.encode!(%{component: "__nb_inertia_healthcheck__", props: %{}})
-
-      case :httpc.request(
-             :post,
-             {
-               String.to_charlist(health_url),
-               [],
-               ~c"application/json",
-               healthcheck_page
-             },
-             [{:timeout, 5_000}],
-             [body_format: :binary]
-           ) do
-        {:ok, {{_, 200, _}, _, body}} ->
-          case Jason.decode(body) do
-            {:ok, %{"success" => true}} -> {:ok, candidate}
-            _ -> false
-          end
-
+      with {:ok, {{_, 200, _}, _, body}} <-
+             :httpc.request(
+               :get,
+               {String.to_charlist(build_dev_server_url(candidate, @dev_ssr_health_path)), []},
+               [{:timeout, 5_000}],
+               [body_format: :binary]
+             ),
+           {:ok, %{"status" => "ok", "ready" => true}} <- Jason.decode(body) do
+        {:ok, candidate}
+      else
         _ ->
           false
       end
@@ -508,6 +501,15 @@ defmodule NbInertia.SSR do
     |> Enum.uniq()
   end
 
+  defp build_dev_server_url(base_url, path) do
+    base_url
+    |> URI.parse()
+    |> Map.put(:path, path)
+    |> Map.put(:query, nil)
+    |> Map.put(:fragment, nil)
+    |> URI.to_string()
+  end
+
   defp deno_rider_available? do
     Code.ensure_loaded?(DenoRider)
   end
@@ -528,7 +530,7 @@ defmodule NbInertia.SSR do
 
   defp do_render_dev(page, state) do
     page_json = Jason.encode!(page)
-    render_url = "#{state.dev_server_url}/ssr"
+    render_url = build_dev_server_url(state.dev_server_url, @dev_ssr_path)
 
     case :httpc.request(
            :post,
