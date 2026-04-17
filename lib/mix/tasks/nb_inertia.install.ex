@@ -1032,6 +1032,12 @@ if Code.ensure_loaded?(Igniter) do
         [:env],
         :dev
       )
+      |> Igniter.Project.Config.configure(
+        "test.exs",
+        :nb_inertia,
+        [:ssr],
+        false
+      )
     end
 
     defp add_ssr_to_supervision_tree(igniter) do
