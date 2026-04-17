@@ -1211,6 +1211,7 @@ defmodule NbInertia.CoreController do
     conn
     |> put_view(NbInertia.HTML)
     |> compile_head(head)
+    |> assign(:page, inertia_assigns(conn))
     |> assign(:body, body)
     |> render(:inertia_ssr)
   end
