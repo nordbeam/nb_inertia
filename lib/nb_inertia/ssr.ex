@@ -296,9 +296,9 @@ defmodule NbInertia.SSR do
       # In dev mode, try to use the dev SSR server
       state.enabled and state.dev_mode ->
         case check_dev_server_health(state.dev_server_url) do
-          :ok ->
-            Logger.info("NbInertia.SSR: Using development server at #{state.dev_server_url}")
-            {:ok, %{state | script_loaded: true}}
+          {:ok, dev_server_url} ->
+            Logger.info("NbInertia.SSR: Using development server at #{dev_server_url}")
+            {:ok, %{state | script_loaded: true, dev_server_url: dev_server_url}}
 
           :error ->
             Logger.info(
@@ -368,9 +368,9 @@ defmodule NbInertia.SSR do
   def handle_info(:check_dev_server, state) do
     if state.dev_mode and state.enabled and not state.script_loaded do
       case check_dev_server_health(state.dev_server_url) do
-        :ok ->
-          Logger.info("NbInertia.SSR: Development server is now ready at #{state.dev_server_url}")
-          {:noreply, %{state | script_loaded: true}}
+        {:ok, dev_server_url} ->
+          Logger.info("NbInertia.SSR: Development server is now ready at #{dev_server_url}")
+          {:noreply, %{state | script_loaded: true, dev_server_url: dev_server_url}}
 
         :error ->
           # Retry again in 2 seconds (max 30 seconds total = 15 attempts)
@@ -395,12 +395,12 @@ defmodule NbInertia.SSR do
 
   defp maybe_mark_dev_server_ready(%{dev_mode: true, enabled: true, script_loaded: false} = state) do
     case check_dev_server_health(state.dev_server_url) do
-      :ok ->
+      {:ok, dev_server_url} ->
         Logger.info(
-          "NbInertia.SSR: Development server became ready during render at #{state.dev_server_url}"
+          "NbInertia.SSR: Development server became ready during render at #{dev_server_url}"
         )
 
-        %{state | script_loaded: true}
+        %{state | script_loaded: true, dev_server_url: dev_server_url}
 
       :error ->
         state
@@ -455,31 +455,57 @@ defmodule NbInertia.SSR do
   end
 
   defp check_dev_server_health(base_url) do
-    health_url = "#{base_url}/ssr"
-    healthcheck_page = Jason.encode!(%{component: "__nb_inertia_healthcheck__", props: %{}})
+    base_url
+    |> candidate_dev_server_urls()
+    |> Enum.find_value(:error, fn candidate ->
+      health_url = "#{candidate}/ssr"
+      healthcheck_page = Jason.encode!(%{component: "__nb_inertia_healthcheck__", props: %{}})
 
-    case :httpc.request(
-           :post,
-           {
-             String.to_charlist(health_url),
-             [],
-             ~c"application/json",
-             healthcheck_page
-           },
-           [{:timeout, 5_000}],
-           [body_format: :binary]
-         ) do
-      {:ok, {{_, 200, _}, _, body}} ->
-        case Jason.decode(body) do
-          {:ok, %{"success" => true}} -> :ok
-          _ -> :error
-        end
+      case :httpc.request(
+             :post,
+             {
+               String.to_charlist(health_url),
+               [],
+               ~c"application/json",
+               healthcheck_page
+             },
+             [{:timeout, 5_000}],
+             [body_format: :binary]
+           ) do
+        {:ok, {{_, 200, _}, _, body}} ->
+          case Jason.decode(body) do
+            {:ok, %{"success" => true}} -> {:ok, candidate}
+            _ -> false
+          end
 
-      _ ->
-        :error
-    end
+        _ ->
+          false
+      end
+    end)
   rescue
     _ -> :error
+  end
+
+  defp candidate_dev_server_urls(base_url) do
+    uri = URI.parse(base_url)
+
+    alternate_host =
+      case uri.host do
+        "127.0.0.1" -> "localhost"
+        "localhost" -> "127.0.0.1"
+        _ -> nil
+      end
+
+    alternate_url =
+      if alternate_host do
+        uri
+        |> Map.put(:host, alternate_host)
+        |> URI.to_string()
+      end
+
+    [base_url, alternate_url]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
   end
 
   defp deno_rider_available? do
