@@ -345,6 +345,8 @@ defmodule NbInertia.SSR do
 
   @impl true
   def handle_call({:render, page}, _from, state) do
+    state = maybe_mark_dev_server_ready(state)
+
     if state.enabled and state.script_loaded do
       result =
         if state.dev_mode do
@@ -387,6 +389,22 @@ defmodule NbInertia.SSR do
       {:noreply, state}
     end
   end
+
+  defp maybe_mark_dev_server_ready(%{dev_mode: true, enabled: true, script_loaded: false} = state) do
+    case check_dev_server_health(state.dev_server_url) do
+      :ok ->
+        Logger.info(
+          "NbInertia.SSR: Development server became ready during render at #{state.dev_server_url}"
+        )
+
+        %{state | script_loaded: true}
+
+      :error ->
+        state
+    end
+  end
+
+  defp maybe_mark_dev_server_ready(state), do: state
 
   ## Private Functions
 
