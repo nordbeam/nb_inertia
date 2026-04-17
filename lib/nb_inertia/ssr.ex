@@ -171,7 +171,7 @@ defmodule NbInertia.SSR do
 
   @dev_ssr_path "/ssr"
   @dev_ssr_health_path "/ssr-health"
-  @dev_render_retry_attempts 12
+  @dev_render_retry_attempts 24
   @dev_render_retry_delay_ms 250
 
   @doc """
