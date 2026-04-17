@@ -263,6 +263,30 @@ defmodule NbInertia.SSRTest do
       end
     end
 
+    test "uses top-level raise_on_ssr_failure when ssr config is boolean" do
+      original_ssr_config = Application.get_env(:nb_inertia, :ssr, [])
+      original_raise_on_ssr_failure = Application.get_env(:nb_inertia, :raise_on_ssr_failure)
+
+      try do
+        Application.put_env(:nb_inertia, :ssr, true)
+        Application.put_env(:nb_inertia, :raise_on_ssr_failure, false)
+
+        {:ok, pid} = SSR.start_link()
+
+        refute :sys.get_state(pid).raise_on_failure
+
+        Process.exit(pid, :normal)
+      after
+        Application.put_env(:nb_inertia, :ssr, original_ssr_config)
+
+        if is_nil(original_raise_on_ssr_failure) do
+          Application.delete_env(:nb_inertia, :raise_on_ssr_failure)
+        else
+          Application.put_env(:nb_inertia, :raise_on_ssr_failure, original_raise_on_ssr_failure)
+        end
+      end
+    end
+
     test "opts override application config" do
       original_config = Application.get_env(:nb_inertia, :ssr, [])
 

@@ -282,7 +282,15 @@ defmodule NbInertia.SSR do
       end
 
     config_raise_on_failure =
-      if is_list(config), do: Keyword.get(config, :raise_on_failure, true), else: true
+      if is_list(config) do
+        Keyword.get(
+          config,
+          :raise_on_failure,
+          Application.get_env(:nb_inertia, :raise_on_ssr_failure, true)
+        )
+      else
+        Application.get_env(:nb_inertia, :raise_on_ssr_failure, true)
+      end
 
     state = %{
       enabled: enabled,
