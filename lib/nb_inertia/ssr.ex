@@ -372,11 +372,19 @@ defmodule NbInertia.SSR do
 
         next_state =
           case result do
-            {:ok, _result} -> %{state | script_loaded: true}
+            {:ok, _result, dev_server_url} ->
+              %{state | script_loaded: true, dev_server_url: dev_server_url}
+
             _ -> state
           end
 
-        {:reply, result, next_state}
+        reply =
+          case result do
+            {:ok, rendered, _dev_server_url} -> {:ok, rendered}
+            other -> other
+          end
+
+        {:reply, reply, next_state}
 
       state.script_loaded ->
         {:reply, do_render_prod(page, state), state}
@@ -566,7 +574,6 @@ defmodule NbInertia.SSR do
 
   defp do_render_dev(page, state, attempts_left) do
     page_json = Jason.encode!(page)
-    render_url = build_dev_server_url(state.dev_server_url, @dev_ssr_path)
 
     case ensure_httpc_started() do
       {:error, reason} ->
@@ -579,61 +586,21 @@ defmodule NbInertia.SSR do
         )
 
       :ok ->
-        case :httpc.request(
-               :post,
-               {
-                 String.to_charlist(render_url),
-                 [],
-                 ~c"application/json",
-                 page_json
-               },
-               [{:timeout, 30_000}],
-               [body_format: :binary]
-             ) do
-          {:ok, {{_, 200, _}, _, body}} ->
-            case Jason.decode(body) do
-              {:ok, %{"success" => true, "result" => result}} ->
-                {:ok, result}
+        case perform_dev_render(page_json, state) do
+          {:ok, result, dev_server_url} ->
+            {:ok, result, dev_server_url}
 
-              {:ok, %{"success" => false, "error" => error}} ->
-                handle_render_error(error, page, state)
-
-              {:error, reason} ->
-                handle_render_error(
-                  %{"message" => "Failed to decode response: #{inspect(reason)}"},
-                  page,
-                  state
-                )
-            end
-
-          {:ok, {{_, status, _}, _, body}}
-          when status in [404, 502, 503, 504] ->
+          {:retry, error} ->
             maybe_retry_dev_render(
               attempts_left,
               fn -> do_render_dev(page, state, attempts_left - 1) end,
-              %{"message" => "Dev server returned #{status}: #{body}"},
+              error,
               page,
               state
             )
 
-          {:ok, {{_, status, _}, _, body}} ->
-            # Try to parse JSON body first
-            error =
-              case Jason.decode(body) do
-                {:ok, %{"error" => error}} -> error
-                _ -> %{"message" => "Dev server returned #{status}: #{body}"}
-              end
-
+          {:error, error} ->
             handle_render_error(error, page, state)
-
-          {:error, reason} ->
-            maybe_retry_dev_render(
-              attempts_left,
-              fn -> do_render_dev(page, state, attempts_left - 1) end,
-              %{"message" => "HTTP request failed: #{inspect(reason)}"},
-              page,
-              state
-            )
         end
     end
   rescue
@@ -657,6 +624,56 @@ defmodule NbInertia.SSR do
 
   defp maybe_retry_dev_render(_attempts_left, _retry_fun, error, page, state) do
     handle_render_error(error, page, state)
+  end
+
+  defp perform_dev_render(page_json, state) do
+    state.dev_server_url
+    |> candidate_dev_server_urls()
+    |> Enum.reduce_while({:retry, %{"message" => "Dev SSR endpoint is not ready"}}, fn dev_server_url, _acc ->
+      case request_dev_render(dev_server_url, page_json) do
+        {:ok, result} -> {:halt, {:ok, result, dev_server_url}}
+        {:error, error} -> {:halt, {:error, error}}
+        {:retry, error} -> {:cont, {:retry, error}}
+      end
+    end)
+  end
+
+  defp request_dev_render(dev_server_url, page_json) do
+    render_url = build_dev_server_url(dev_server_url, @dev_ssr_path)
+
+    case :httpc.request(
+           :post,
+           {
+             String.to_charlist(render_url),
+             [],
+             ~c"application/json",
+             page_json
+           },
+           [{:timeout, 30_000}],
+           [body_format: :binary]
+         ) do
+      {:ok, {{_, 200, _}, _, body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"success" => true, "result" => result}} -> {:ok, result}
+          {:ok, %{"success" => false, "error" => error}} -> {:error, error}
+          {:error, reason} -> {:error, %{"message" => "Failed to decode response: #{inspect(reason)}"}}
+        end
+
+      {:ok, {{_, status, _}, _, body}} when status in [404, 502, 503, 504] ->
+        {:retry, %{"message" => "Dev server returned #{status}: #{body}"}}
+
+      {:ok, {{_, status, _}, _, body}} ->
+        error =
+          case Jason.decode(body) do
+            {:ok, %{"error" => error}} -> error
+            _ -> %{"message" => "Dev server returned #{status}: #{body}"}
+          end
+
+        {:error, error}
+
+      {:error, reason} ->
+        {:retry, %{"message" => "HTTP request failed: #{inspect(reason)}"}}
+    end
   end
 
   defp do_render_prod(page, state) do
