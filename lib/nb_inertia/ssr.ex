@@ -458,23 +458,27 @@ defmodule NbInertia.SSR do
   end
 
   defp check_dev_server_health(base_url) do
-    base_url
-    |> candidate_dev_server_urls()
-    |> Enum.find_value(:error, fn candidate ->
-      with {:ok, {{_, 200, _}, _, body}} <-
-             :httpc.request(
-               :get,
-               {String.to_charlist(build_dev_server_url(candidate, @dev_ssr_health_path)), []},
-               [{:timeout, 5_000}],
-               [body_format: :binary]
-             ),
-           {:ok, %{"status" => "ok", "ready" => true}} <- Jason.decode(body) do
-        {:ok, candidate}
-      else
-        _ ->
-          false
-      end
-    end)
+    with :ok <- ensure_httpc_started() do
+      base_url
+      |> candidate_dev_server_urls()
+      |> Enum.find_value(:error, fn candidate ->
+        with {:ok, {{_, 200, _}, _, body}} <-
+               :httpc.request(
+                 :get,
+                 {String.to_charlist(build_dev_server_url(candidate, @dev_ssr_health_path)), []},
+                 [{:timeout, 5_000}],
+                 [body_format: :binary]
+               ),
+             {:ok, %{"status" => "ok", "ready" => true}} <- Jason.decode(body) do
+          {:ok, candidate}
+        else
+          _ ->
+            false
+        end
+      end)
+    else
+      _ -> :error
+    end
   rescue
     _ -> :error
   end
@@ -510,6 +514,15 @@ defmodule NbInertia.SSR do
     |> URI.to_string()
   end
 
+  defp ensure_httpc_started do
+    case :inets.start() do
+      :ok -> :ok
+      {:error, {:already_started, :inets}} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp deno_rider_available? do
     Code.ensure_loaded?(DenoRider)
   end
@@ -532,49 +545,59 @@ defmodule NbInertia.SSR do
     page_json = Jason.encode!(page)
     render_url = build_dev_server_url(state.dev_server_url, @dev_ssr_path)
 
-    case :httpc.request(
-           :post,
-           {
-             String.to_charlist(render_url),
-             [],
-             ~c"application/json",
-             page_json
-           },
-           [{:timeout, 30_000}],
-           [body_format: :binary]
-         ) do
-      {:ok, {{_, 200, _}, _, body}} ->
-        case Jason.decode(body) do
-          {:ok, %{"success" => true, "result" => result}} ->
-            {:ok, result}
+    case ensure_httpc_started() do
+      {:error, reason} ->
+        handle_render_error(
+          %{"message" => "HTTP client startup failed: #{inspect(reason)}"},
+          page,
+          state
+        )
 
-          {:ok, %{"success" => false, "error" => error}} ->
+      :ok ->
+        case :httpc.request(
+               :post,
+               {
+                 String.to_charlist(render_url),
+                 [],
+                 ~c"application/json",
+                 page_json
+               },
+               [{:timeout, 30_000}],
+               [body_format: :binary]
+             ) do
+          {:ok, {{_, 200, _}, _, body}} ->
+            case Jason.decode(body) do
+              {:ok, %{"success" => true, "result" => result}} ->
+                {:ok, result}
+
+              {:ok, %{"success" => false, "error" => error}} ->
+                handle_render_error(error, page, state)
+
+              {:error, reason} ->
+                handle_render_error(
+                  %{"message" => "Failed to decode response: #{inspect(reason)}"},
+                  page,
+                  state
+                )
+            end
+
+          {:ok, {{_, status, _}, _, body}} ->
+            # Try to parse JSON body first
+            error =
+              case Jason.decode(body) do
+                {:ok, %{"error" => error}} -> error
+                _ -> %{"message" => "Dev server returned #{status}: #{body}"}
+              end
+
             handle_render_error(error, page, state)
 
           {:error, reason} ->
             handle_render_error(
-              %{"message" => "Failed to decode response: #{inspect(reason)}"},
+              %{"message" => "HTTP request failed: #{inspect(reason)}"},
               page,
               state
             )
         end
-
-      {:ok, {{_, status, _}, _, body}} ->
-        # Try to parse JSON body first
-        error =
-          case Jason.decode(body) do
-            {:ok, %{"error" => error}} -> error
-            _ -> %{"message" => "Dev server returned #{status}: #{body}"}
-          end
-
-        handle_render_error(error, page, state)
-
-      {:error, reason} ->
-        handle_render_error(
-          %{"message" => "HTTP request failed: #{inspect(reason)}"},
-          page,
-          state
-        )
     end
   rescue
     e ->
