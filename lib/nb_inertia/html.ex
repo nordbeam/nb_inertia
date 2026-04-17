@@ -43,21 +43,19 @@ defmodule NbInertia.HTML do
 
   Outputs the Inertia v3 SSR bootstrap markup:
 
-  - a `<script type="application/json" data-page="app">` containing the initial page object
-  - a `<div id="app" data-server-rendered="true">` containing the prerendered HTML body
+  - the prerendered HTML body returned by the SSR runtime
+
+  The React/Vue SSR entry point already returns Inertia's bootstrap `<script>`
+  and `<div id="app" data-server-rendered="true">` wrapper, so this component
+  must not wrap it again.
   """
   @doc type: :component
-  attr(:page, :map, required: true, doc: "The Inertia page object.")
+  attr(:page, :map, default: nil, doc: "The Inertia page object.")
   attr(:body, :string, required: true, doc: "The pre-rendered HTML body from SSR.")
 
   def inertia_ssr(assigns) do
-    assigns = Map.put(assigns, :page_json, page_json(assigns.page))
-
     ~H"""
-    <script data-page="app" type="application/json"><%= Phoenix.HTML.raw(@page_json) %></script>
-    <div data-server-rendered="true" id="app">
-      <%= Phoenix.HTML.raw(@body) %>
-    </div>
+    <%= Phoenix.HTML.raw(@body) %>
     """
   end
 
