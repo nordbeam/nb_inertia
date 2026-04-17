@@ -1280,6 +1280,10 @@ if Code.ensure_loaded?(Igniter) do
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       export async function render(page: any) {
+        if (page?.component === "__nb_inertia_healthcheck__") {
+          return { head: [], body: "" };
+        }
+
         return await createInertiaApp({
           page,
           render: ReactDOMServer.renderToString,
@@ -1331,6 +1335,10 @@ if Code.ensure_loaded?(Igniter) do
        */
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       export async function render(page: any) {
+        if (page?.component === "__nb_inertia_healthcheck__") {
+          return { head: [], body: "" };
+        }
+
         return await createInertiaApp({
           page,
           render: ReactDOMServer.renderToString,

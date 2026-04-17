@@ -434,12 +434,23 @@ defmodule NbInertia.SSR do
   end
 
   defp check_dev_server_health(base_url) do
-    health_url = "#{base_url}/ssr-health"
+    health_url = "#{base_url}/ssr"
+    healthcheck_page = Jason.encode!(%{component: "__nb_inertia_healthcheck__", props: %{}})
 
-    case :httpc.request(:get, {String.to_charlist(health_url), []}, [], body_format: :binary) do
+    case :httpc.request(
+           :post,
+           {
+             String.to_charlist(health_url),
+             [],
+             ~c"application/json",
+             healthcheck_page
+           },
+           [{:timeout, 5_000}],
+           [body_format: :binary]
+         ) do
       {:ok, {{_, 200, _}, _, body}} ->
         case Jason.decode(body) do
-          {:ok, %{"status" => "ok", "ready" => true}} -> :ok
+          {:ok, %{"success" => true}} -> :ok
           _ -> :error
         end
 
