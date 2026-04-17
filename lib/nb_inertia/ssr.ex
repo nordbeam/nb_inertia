@@ -232,6 +232,8 @@ defmodule NbInertia.SSR do
     end
   rescue
     _ -> false
+  catch
+    :exit, _ -> false
   end
 
   ## GenServer Callbacks
@@ -340,6 +342,7 @@ defmodule NbInertia.SSR do
 
   @impl true
   def handle_call(:enabled?, _from, state) do
+    state = maybe_mark_dev_server_ready(state)
     {:reply, state.enabled and state.script_loaded, state}
   end
 
