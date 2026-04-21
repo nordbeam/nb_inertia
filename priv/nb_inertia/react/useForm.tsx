@@ -44,6 +44,8 @@ import {
   type InertiaPrecognitiveFormProps,
 } from '@inertiajs/react';
 import { type RouteResult, isRouteResult } from '../shared/types';
+import { useModalPageContext } from './modals/modalStack';
+import { mergeModalHeaders } from './modals/requestContext';
 
 // Re-export RouteResult and type guard for convenience
 export type { RouteResult } from '../shared/types';
@@ -55,6 +57,59 @@ type RouteLike = RouteResult | RouteResolver;
 
 function isRouteLike(value: unknown): value is RouteLike {
   return typeof value === 'function' || isRouteResult(value);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Object.prototype.toString.call(value) === '[object Object]';
+}
+
+function decorateFormWithModalHeaders<TForm extends FormDataType<TForm>>(
+  form: InertiaFormProps<TForm> | InertiaPrecognitiveFormProps<TForm>,
+  modalPage:
+    | {
+        url: string;
+        baseUrl?: string;
+        returnUrl?: string;
+      }
+    | null
+): InertiaFormProps<TForm> | InertiaPrecognitiveFormProps<TForm> {
+  if (!modalPage) {
+    return form;
+  }
+
+  return new Proxy(form, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+
+      if (
+        typeof value !== 'function' ||
+        !['submit', 'get', 'post', 'put', 'patch', 'delete'].includes(String(prop))
+      ) {
+        return value;
+      }
+
+      return (...args: unknown[]) => {
+        const finalArgs = [...args];
+        const lastArg = finalArgs[finalArgs.length - 1];
+        const mergedOptions = mergeModalHeaders(
+          isPlainObject(lastArg) ? (lastArg as { headers?: Record<string, string> }) : undefined,
+          {
+            url: modalPage.url,
+            baseUrl: modalPage.baseUrl,
+            returnUrl: modalPage.returnUrl,
+          }
+        );
+
+        if (isPlainObject(lastArg)) {
+          finalArgs[finalArgs.length - 1] = mergedOptions;
+        } else {
+          finalArgs.push(mergedOptions);
+        }
+
+        return (value as (...innerArgs: unknown[]) => unknown).apply(target, finalArgs);
+      };
+    },
+  }) as InertiaFormProps<TForm> | InertiaPrecognitiveFormProps<TForm>;
 }
 
 /**
@@ -120,32 +175,43 @@ export function useForm<TForm extends FormDataType<TForm>>(
     | [UrlMethodPair | RouteResolver, FormDataArgument<TForm>]
     | [FormDataArgument<TForm>, RouteLike]
 ): InertiaFormProps<TForm> | InertiaPrecognitiveFormProps<TForm> {
+  const modalPage = useModalPageContext();
+
   if (args.length === 0) {
-    return useInertiaForm<TForm>();
+    return decorateFormWithModalHeaders(useInertiaForm<TForm>(), modalPage);
   }
 
   if (args.length === 3) {
     const [method, url, data] = args;
-    return useInertiaForm<TForm>(method, url, data);
+    return decorateFormWithModalHeaders(useInertiaForm<TForm>(method, url, data), modalPage);
   }
 
   if (args.length === 2) {
     const [first, second] = args;
 
     if (typeof first === 'string' && !isRouteLike(second)) {
-      return useInertiaForm<TForm>(first, second);
+      return decorateFormWithModalHeaders(useInertiaForm<TForm>(first, second), modalPage);
     }
 
     if (isRouteLike(first)) {
-      return useInertiaForm<TForm>(first, second as FormDataArgument<TForm>);
+      return decorateFormWithModalHeaders(
+        useInertiaForm<TForm>(first, second as FormDataArgument<TForm>),
+        modalPage
+      );
     }
 
     if (typeof first !== 'string' && isRouteLike(second)) {
-      return useInertiaForm<TForm>(second, first as FormDataArgument<TForm>);
+      return decorateFormWithModalHeaders(
+        useInertiaForm<TForm>(second, first as FormDataArgument<TForm>),
+        modalPage
+      );
     }
   }
 
-  return useInertiaForm<TForm>(args[0] as FormDataArgument<TForm>);
+  return decorateFormWithModalHeaders(
+    useInertiaForm<TForm>(args[0] as FormDataArgument<TForm>),
+    modalPage
+  );
 }
 
 // ============================================================================
@@ -174,6 +240,7 @@ export function useFormWithPrecognition<TForm extends FormDataType<TForm>>(
   validationRoute: RouteResult,
   submitRoute?: RouteResult
 ): InertiaPrecognitiveFormProps<TForm> {
+  const modalPage = useModalPageContext();
   // v3's useForm natively supports precognition when route is provided
   const form = useInertiaForm<TForm>(validationRoute, data);
 
@@ -182,12 +249,12 @@ export function useFormWithPrecognition<TForm extends FormDataType<TForm>>(
     !submitRoute ||
     (submitRoute.url === validationRoute.url && submitRoute.method === validationRoute.method)
   ) {
-    return form;
+    return decorateFormWithModalHeaders(form, modalPage) as InertiaPrecognitiveFormProps<TForm>;
   }
 
   // Different submit route: wrap submit to use the submission endpoint
   // Use Proxy to avoid breaking v3's form internals (may be class/proxy)
-  return new Proxy(form, {
+  const submitDecoratedForm = new Proxy(form, {
     get(target, prop, receiver) {
       if (prop === 'submit') {
         return (options?: any) =>
@@ -196,6 +263,11 @@ export function useFormWithPrecognition<TForm extends FormDataType<TForm>>(
       return Reflect.get(target, prop, receiver);
     },
   }) as InertiaPrecognitiveFormProps<TForm>;
+
+  return decorateFormWithModalHeaders(
+    submitDecoratedForm,
+    modalPage
+  ) as InertiaPrecognitiveFormProps<TForm>;
 }
 
 export default useForm;

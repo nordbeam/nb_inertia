@@ -29,7 +29,11 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
-import { useModalStack, ModalPageProvider } from '@nordbeam/nb-inertia/react/modals';
+import {
+  HeadlessModal,
+  ModalPageProvider,
+  useModalStack,
+} from '@nordbeam/nb-inertia/react/modals';
 import type { ModalConfig, ModalInstance } from '@nordbeam/nb-inertia/react/modals';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
@@ -113,6 +117,7 @@ function AnimatedModal({
   const isSlideover = modal.config.slideover === true;
   const showCloseButton = modal.config.closeButton !== false;
   const closeExplicitly = modal.config.closeExplicitly === true;
+  const closeOnClickOutside = modal.config.closeOnClickOutside !== false;
   const Component = modal.component;
 
   const handleClose = useCallback(() => {
@@ -141,26 +146,29 @@ function AnimatedModal({
   // Render loading state or actual content
   const LoadingComponent = modal.loadingComponent;
   const content = (
-    <ModalPageProvider
-      component={modal.componentName}
-      props={modal.props}
-      url={modal.url}
-    >
-      {modal.loading ? (
-        // Show loading state - custom component or default spinner
-        LoadingComponent ? (
-          <LoadingComponent />
-        ) : (
-          <DefaultLoadingFallback />
-        )
-      ) : (
-        // Show actual content with Suspense for lazy loading
-        // Pass handleClose as onClose prop so modal content can trigger close
-        <Suspense fallback={<DefaultLoadingFallback />}>
-          <Component {...modal.props} onClose={handleClose} />
-        </Suspense>
+    <HeadlessModal modal={modal} onClose={handleClose} isOpen={isOpen}>
+      {({ close }) => (
+        <ModalPageProvider
+          component={modal.componentName}
+          props={modal.props}
+          url={modal.url}
+          baseUrl={modal.baseUrl}
+          returnUrl={modal.returnUrl}
+        >
+          {modal.loading ? (
+            LoadingComponent ? (
+              <LoadingComponent />
+            ) : (
+              <DefaultLoadingFallback />
+            )
+          ) : (
+            <Suspense fallback={<DefaultLoadingFallback />}>
+              <Component {...modal.props} onClose={close} />
+            </Suspense>
+          )}
+        </ModalPageProvider>
       )}
-    </ModalPageProvider>
+    </HeadlessModal>
   );
 
   if (isSlideover) {
@@ -173,7 +181,7 @@ function AnimatedModal({
           showCloseButton={showCloseButton}
           className="overflow-y-auto p-0"
           onInteractOutside={(e: Event) => {
-            if (closeExplicitly) {
+            if (closeExplicitly || !closeOnClickOutside) {
               e.preventDefault();
             }
           }}
@@ -201,7 +209,7 @@ function AnimatedModal({
         className={`overflow-y-auto max-h-[90vh] ${sizeClass}`}
         showCloseButton={showCloseButton}
         onInteractOutside={(e: Event) => {
-          if (closeExplicitly) {
+          if (closeExplicitly || !closeOnClickOutside) {
             e.preventDefault();
           }
         }}

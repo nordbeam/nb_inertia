@@ -1,6 +1,8 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useForm, useFormWithPrecognition } from '../useForm';
+import { ModalPageProvider } from '../modals';
 import type { RouteResult } from '../../shared/types';
 
 const mockUseForm = vi.fn();
@@ -57,6 +59,39 @@ describe('useForm (React)', () => {
     renderHook(() => useForm(route, data));
 
     expect(mockUseForm).toHaveBeenCalledWith(route, data);
+  });
+
+  it('merges modal headers into submit options inside modal context', () => {
+    const route: RouteResult = { url: '/posts/1', method: 'patch' };
+    window.history.replaceState({}, '', '/posts?page=2');
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ModalPageProvider
+        component="Posts/Edit"
+        props={{}}
+        url="/posts/1/edit"
+        baseUrl="/posts"
+        returnUrl="/posts?page=2"
+      >
+        {children}
+      </ModalPageProvider>
+    );
+
+    const { result } = renderHook(() => useForm(route, { title: 'Updated' }), { wrapper });
+
+    act(() => {
+      result.current.submit({ preserveScroll: true });
+    });
+
+    expect(mockSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preserveScroll: true,
+        headers: {
+          'x-inertia-modal': 'true',
+          'x-inertia-modal-base-url': '/posts?page=2',
+        },
+      })
+    );
   });
 
   it('rewrites submit for separate submission routes', () => {

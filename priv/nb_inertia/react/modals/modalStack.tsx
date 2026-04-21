@@ -39,14 +39,18 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import type { Method } from '@inertiajs/core';
 import { router } from '@inertiajs/react';
 import { routerPrefetch } from '../../shared/routerCompat';
+import { isRouteResult, type RouteResult } from '../../shared/types';
 import type {
   ModalConfig,
   ModalInstance,
+  ModalVisitOptions,
   ModalStackContextValue,
   PrefetchedModal,
 } from './types';
+import { mergeModalHeaders, registerModalRequestContext, unregisterModalRequestContext } from './requestContext';
 
 /**
  * Inertia Page object structure for modal context
@@ -55,6 +59,8 @@ export interface ModalPageObject {
   component: string;
   props: Record<string, any>;
   url: string;
+  baseUrl?: string;
+  returnUrl?: string;
   version?: string | number | null;
   flash?: Record<string, unknown>;
   scrollRegions?: Array<{ top: number; left: number }>;
@@ -95,6 +101,8 @@ export interface ModalPageProviderProps {
   component: string;
   props: Record<string, any>;
   url: string;
+  baseUrl?: string;
+  returnUrl?: string;
   children: React.ReactNode;
 }
 
@@ -102,13 +110,18 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
   component,
   props,
   url,
+  baseUrl,
+  returnUrl,
   children,
 }) => {
+  const contextIdRef = React.useRef(Symbol('nb-inertia-modal-request-context'));
   const page: ModalPageObject = React.useMemo(
     () => ({
       component,
       props,
       url,
+      baseUrl,
+      returnUrl,
       version: '1.0',
       flash: {},
       scrollRegions: [],
@@ -117,8 +130,20 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
       encryptHistory: false,
       preserveFragment: false,
     }),
-    [component, props, url]
+    [component, props, url, baseUrl, returnUrl]
   );
+
+  useEffect(() => {
+    registerModalRequestContext(contextIdRef.current, {
+      url,
+      baseUrl,
+      returnUrl,
+    });
+
+    return () => {
+      unregisterModalRequestContext(contextIdRef.current);
+    };
+  }, [url, baseUrl, returnUrl]);
 
   return (
     <ModalPageContext.Provider value={page}>
@@ -214,6 +239,13 @@ export const useModal = (): ModalInstance | null => {
  * Function type for resolving component names to React components
  */
 export type ResolveComponentFn = (name: string) => Promise<React.ComponentType<any>>;
+
+function getVisitTarget(href: string | RouteResult, method?: Method) {
+  const url = isRouteResult(href) ? href.url : href;
+  const requestMethod = (isRouteResult(href) && !method ? href.method : method) || 'get';
+
+  return { url, method: requestMethod };
+}
 
 /**
  * Props for ModalStackProvider
@@ -467,6 +499,71 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
     return cached;
   }, []);
 
+  const visitModal = useCallback(
+    (href: string | RouteResult, options: ModalVisitOptions = {}) => {
+      const { url, method } = getVisitTarget(href, options.method);
+
+      const existingModal = modals.find((modal) => modal.url === url);
+      if (existingModal) {
+        return;
+      }
+
+      const returnUrl =
+        options.returnUrl || (typeof window !== 'undefined' ? window.location.href : '');
+
+      const prefetched = method === 'get' ? getPrefetchedModal(url) : undefined;
+
+      if (prefetched) {
+        pushModal({
+          component: prefetched.component,
+          componentName: prefetched.data.component,
+          props: prefetched.data.props,
+          url: prefetched.data.url,
+          config: prefetched.data.config || options.modalConfig || {},
+          baseUrl: prefetched.data.baseUrl,
+          returnUrl,
+          onClose: () => {
+            if (returnUrl && typeof window !== 'undefined') {
+              window.history.replaceState({}, '', returnUrl);
+            }
+          },
+        });
+
+        if (typeof window !== 'undefined') {
+          window.history.pushState({}, '', prefetched.data.url);
+        }
+
+        return;
+      }
+
+      pushModal({
+        component: () => null,
+        componentName: '',
+        props: {},
+        url,
+        config: options.modalConfig || {},
+        baseUrl: '',
+        returnUrl,
+        loading: true,
+        loadingComponent: options.loadingComponent,
+      });
+
+      router.visit(url, {
+        method,
+        data: options.data ?? {},
+        preserveState: options.preserveState ?? true,
+        preserveScroll: options.preserveScroll ?? true,
+        ...mergeModalHeaders(
+          {
+            headers: options.headers,
+          },
+          { url, baseUrl: returnUrl, returnUrl }
+        ),
+      });
+    },
+    [getPrefetchedModal, modals, pushModal]
+  );
+
   /**
    * Prefetch modal data and component for a URL
    * This triggers Inertia's prefetch and then resolves the component
@@ -565,6 +662,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
     clearModals,
     getModal,
     updateModal,
+    visitModal,
     resolveComponent,
     prefetchModal: resolveComponent ? prefetchModal : undefined,
     getPrefetchedModal,

@@ -100,6 +100,12 @@ declare interface ModalConfig {
      */
     closeExplicitly?: boolean;
     /**
+     * Whether clicking the backdrop closes the modal.
+     * Ignored when `closeExplicitly` is true.
+     * @default true
+     */
+    closeOnClickOutside?: boolean;
+    /**
      * Any additional custom data your UI implementation needs
      * This is passed through to your modal renderer unchanged.
      */

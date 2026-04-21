@@ -16,7 +16,7 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 - **Optional Dependency**: Works standalone or with NbSerializer for advanced features
 - **Real-Time Updates**: WebSocket integration via Phoenix Channels with declarative strategies
 - **Modal System**: Render pages as modals/slideovers without full page navigation
-- **Credo Checks**: 8 custom Credo checks for compile-time code quality validation
+- **Credo Checks**: Shortcut task to enable nb-specific custom checks from installed `nb_*` packages
 - **Page Modules**: LiveView-style single-module-per-page pattern with `mount/2`, `action/3`, `~TSX` sigil, and colocated frontend components
 
 ## Installation
@@ -41,6 +41,18 @@ Then run the installer:
 mix igniter.install nb_inertia@github:nordbeam/nb_inertia
 ```
 
+For the complete recommended stack, use `--full`:
+
+```bash
+mix igniter.install nb_inertia@github:nordbeam/nb_inertia --full
+```
+
+To sync the nb Credo checks into your project after installation:
+
+```bash
+mix nb.setup.credo
+```
+
 For TypeScript support, add the `--typescript` flag:
 
 ```bash
@@ -53,6 +65,14 @@ This installs and configures:
 - Optional TypeScript type generation (with `--typescript`)
 - Mix aliases
 - Example files
+
+`--full` also installs and configures:
+- `nb_vite`
+- `nb_routes`
+- `nb_serializer`
+- `nb_ts`
+- `nb_flop`
+- React + TypeScript + SSR defaults
 
 If `nb_inertia` is already present in your `mix.exs`, you can also run the task directly:
 
@@ -2165,34 +2185,25 @@ const { props } = useChannelProps(socket, `chat:${room.id}`, {
 
 ## Credo Checks
 
-NbInertia includes 8 custom Credo checks for code quality:
+Use the shortcut task:
 
-| Check | Priority | Description |
-|-------|----------|-------------|
-| `NbInertia.Credo.InertiaPageWithoutProps` | HIGH | Detects `inertia_page` blocks without any props |
-| `NbInertia.Credo.DuplicateProps` | HIGH | Detects duplicate prop definitions |
-| `NbInertia.Credo.MissingSharedPropsModule` | NORMAL | Warns when `inertia_shared` references missing module |
-| `NbInertia.Credo.UnusedInertiaPage` | NORMAL | Detects unused `inertia_page` definitions |
-| `NbInertia.Credo.LargePropsCount` | LOW | Warns when page has too many props (configurable) |
-| `NbInertia.Credo.PropWithoutType` | HIGH | Detects props without explicit types |
-| `NbInertia.Credo.SharedPropsCollision` | HIGH | Detects prop name collisions between shared and page props |
-| `NbInertia.Credo.MissingSerializerType` | NORMAL | Warns when using serializer without proper type annotation |
+```bash
+mix nb.setup.credo
+```
 
-Enable in `.credo.exs`:
+That task:
 
-```elixir
-%{
-  configs: [
-    %{
-      checks: [
-        {NbInertia.Credo.PropWithoutType, []},
-        {NbInertia.Credo.DuplicateProps, []},
-        {NbInertia.Credo.SharedPropsCollision, []},
-        # ... other checks
-      ]
-    }
-  ]
-}
+- adds `:credo` to `mix.exs` when needed
+- creates `.credo.exs` when needed
+- enables the recommended `nb_inertia` checks
+- also enables `nb_serializer` checks when `nb_serializer` is installed
+- removes stale nb-specific check entries for libraries that are no longer installed
+- preserves any existing options or disabled state for nb-specific checks already present in `.credo.exs`
+
+After it runs, verify the setup with:
+
+```bash
+mix credo --strict
 ```
 
 ## Page Modules (NbInertia.Page)

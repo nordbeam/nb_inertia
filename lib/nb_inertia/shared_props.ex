@@ -105,61 +105,6 @@ defmodule NbInertia.SharedProps do
   defmacro __before_compile__(env) do
     props = Module.get_attribute(env.module, :inertia_shared_props) |> Enum.reverse()
 
-    # Check if NbSerializer is available
-    nb_serializer_available? = Code.ensure_loaded?(NbSerializer)
-
-    serialize_props_impl =
-      if nb_serializer_available? do
-        quote do
-          @doc """
-          Builds props and serializes them using NbSerializer serializers.
-
-          Props with serializers (not primitive types) are automatically
-          serialized. Primitive props are passed through as-is.
-
-          This function is only available when `nb_serializer` is installed.
-          """
-          def serialize_props(conn, opts \\ []) do
-            props = build_and_validate_props(conn, opts)
-            declared_props = __inertia_shared_props__()
-
-            Enum.reduce(declared_props, %{}, fn prop_config, acc ->
-              key = prop_config.name
-              value = Map.get(props, key)
-
-              serialized_value =
-                cond do
-                  # If it has a serializer, use it
-                  Map.has_key?(prop_config, :serializer) ->
-                    serialize_with_serializer(value, prop_config.serializer)
-
-                  # Otherwise, pass through (primitive type)
-                  true ->
-                    value
-                end
-
-              Map.put(acc, key, serialized_value)
-            end)
-          end
-
-          # Private helper to serialize with a serializer module
-          defp serialize_with_serializer(nil, _serializer), do: nil
-          defp serialize_with_serializer([], _serializer), do: []
-
-          defp serialize_with_serializer(data, serializer) when is_list(data) do
-            Enum.map(data, &serialize_with_serializer(&1, serializer))
-          end
-
-          defp serialize_with_serializer(data, serializer) do
-            NbSerializer.serialize!(serializer, data)
-          end
-        end
-      else
-        quote do
-          # When NbSerializer is not available, serialize_props is not defined
-        end
-      end
-
     quote do
       @doc """
       Returns the declared shared props for introspection.
@@ -185,7 +130,71 @@ defmodule NbInertia.SharedProps do
         props
       end
 
-      unquote(serialize_props_impl)
+      @doc """
+      Builds props and serializes them using NbSerializer serializers.
+
+      Props with serializers (not primitive types) are automatically
+      serialized. Primitive props are passed through as-is.
+      """
+      def serialize_props(conn, opts \\ []) do
+        props = build_and_validate_props(conn, opts)
+        declared_props = __inertia_shared_props__()
+
+        Enum.reduce(declared_props, %{}, fn prop_config, acc ->
+          key = prop_config.name
+          value = Map.get(props, key)
+
+          serialized_value =
+            cond do
+              Map.has_key?(prop_config, :serializer) ->
+                serialize_with_serializer(value, prop_config.serializer)
+
+              true ->
+                value
+            end
+
+          Map.put(acc, key, serialized_value)
+        end)
+      end
+
+      defp serialize_with_serializer(nil, _serializer), do: nil
+      defp serialize_with_serializer([], _serializer), do: []
+
+      defp serialize_with_serializer(data, serializer) when is_list(data) do
+        Enum.map(data, &serialize_with_serializer(&1, serializer))
+      end
+
+      defp serialize_with_serializer(data, serializer) do
+        ensure_nb_serializer_loaded!()
+        NbSerializer.serialize!(serializer, data)
+      end
+
+      defp ensure_nb_serializer_loaded! do
+        unless Code.ensure_loaded?(NbSerializer) and
+                 function_exported?(NbSerializer, :serialize!, 2) do
+          raise """
+          NbSerializer package not found
+
+          Shared props with serializer declarations require the `nb_serializer` package to be installed and available at runtime.
+
+          Add it to your dependencies in mix.exs:
+
+              defp deps do
+                [
+                  {:nb_inertia, "~> 0.1"},
+                  {:nb_serializer, "~> 0.1"}  # Add this line
+                ]
+              end
+
+          Then run:
+
+              mix deps.get
+
+          Without nb_serializer, change the shared prop declaration to use a primitive type such as `:map`
+          and serialize the value yourself in build_props/2.
+          """
+        end
+      end
 
       # Private helper to validate props
       defp validate_props!(props, declared_props) do

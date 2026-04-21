@@ -96,6 +96,7 @@ function DefaultModalRenderer({
 }: ModalRenderContext & { backdropClassName: string; wrapperClassName: string }) {
   const Component = modal.component;
   const showCloseButton = config.closeButton !== false;
+  const closeOnClickOutside = config.closeOnClickOutside !== false;
 
   if (modal.loading) {
     const LoadingComponent = modal.loadingComponent;
@@ -104,7 +105,7 @@ function DefaultModalRenderer({
         <div
           className={backdropClassName}
           style={{ zIndex }}
-          onClick={config.closeExplicitly ? undefined : close}
+          onClick={config.closeExplicitly || !closeOnClickOutside ? undefined : close}
           aria-hidden="true"
         />
         <div className={wrapperClassName} style={{ zIndex: zIndex + 1 }}>
@@ -122,7 +123,7 @@ function DefaultModalRenderer({
       <div
         className={backdropClassName}
         style={{ zIndex }}
-        onClick={config.closeExplicitly ? undefined : close}
+        onClick={config.closeExplicitly || !closeOnClickOutside ? undefined : close}
         aria-hidden="true"
       />
       <div
@@ -170,6 +171,8 @@ export const ModalRenderer: React.FC<ModalRendererProps> = ({
             component={modal.componentName}
             props={modal.props}
             url={modal.url}
+            baseUrl={modal.baseUrl}
+            returnUrl={modal.returnUrl}
           >
             <HeadlessModal modal={modal} onClose={close}>
               {() =>

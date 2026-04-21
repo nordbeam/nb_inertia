@@ -62,12 +62,12 @@ export { ClientModalLink } from './ClientModalLink';
 export type { ClientModalLinkProps } from './ClientModalLink';
 export { ModalLink } from './ModalLink';
 export type { ModalLinkProps } from './ModalLink';
-export { HeadlessModal } from './HeadlessModal';
-export type { HeadlessModalProps } from './HeadlessModal';
+export { HeadlessModal, Modal, useCurrentModal } from './HeadlessModal';
+export type { HeadlessModalProps, ModalHandle, ModalProps } from './HeadlessModal';
 export { ModalRenderer } from './ModalRenderer';
 export type { ModalRendererProps, ModalRenderContext } from './ModalRenderer';
 export { CloseButton } from './CloseButton';
 export type { CloseButtonProps } from './CloseButton';
-export type { ModalConfig, ModalSize, ModalPosition, ModalInstance, ModalStackContextValue, PrefetchedModal, TypedModalProps, TypedModalInstance, } from './types';
+export type { ModalConfig, ModalSize, ModalPosition, ModalInstance, ModalVisitOptions, ModalStackContextValue, PrefetchedModal, TypedModalProps, TypedModalInstance, } from './types';
 export { DEFAULT_MODAL_CONFIG, mergeModalConfig } from './types';
 //# sourceMappingURL=index.d.ts.map

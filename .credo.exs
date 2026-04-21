@@ -1,8 +1,8 @@
-# .credo.exs
 %{
   configs: [
     %{
       name: "default",
+      strict: false,
       files: %{
         included: [
           "lib/",
@@ -14,28 +14,28 @@
           "apps/*/test/",
           "apps/*/web/"
         ],
-        excluded: [~r"/_build/", ~r"/deps/", ~r"/node_modules/"]
+        excluded: [~r/\/_build\//, ~r/\/deps\//, ~r/\/node_modules\//]
       },
-      plugins: [],
-      requires: [],
-      strict: false,
-      parse_timeout: 5000,
+      requires: ["lib/nb_inertia/credo/check/**/*.ex"],
       color: true,
+      plugins: [],
+      parse_timeout: 5000,
       checks: %{
+        disabled: [
+          {Credo.Check.Readability.Specs, []},
+          {Credo.Check.Refactor.ABCSize, []},
+          {Credo.Check.Refactor.ModuleDependencies, []},
+          {Credo.Check.Warning.LazyLogging, []},
+          {Credo.Check.Warning.MixEnv, []},
+          {Credo.Check.Warning.UnsafeToAtom, []}
+        ],
         enabled: [
-          #
-          # Consistency Checks
-          #
           {Credo.Check.Consistency.ExceptionNames, []},
           {Credo.Check.Consistency.LineEndings, []},
           {Credo.Check.Consistency.ParameterPatternMatching, []},
           {Credo.Check.Consistency.SpaceAroundOperators, []},
           {Credo.Check.Consistency.SpaceInParentheses, []},
           {Credo.Check.Consistency.TabsOrSpaces, []},
-
-          #
-          # Design Checks
-          #
           {Credo.Check.Design.AliasUsage,
            [
              priority: :low,
@@ -45,10 +45,6 @@
            ]},
           {Credo.Check.Design.TagTODO, [exit_status: 2]},
           {Credo.Check.Design.TagFIXME, []},
-
-          #
-          # Readability Checks
-          #
           {Credo.Check.Readability.AliasOrder, []},
           {Credo.Check.Readability.FunctionNames, []},
           {Credo.Check.Readability.LargeNumbers, []},
@@ -69,10 +65,6 @@
           {Credo.Check.Readability.TrailingWhiteSpace, []},
           {Credo.Check.Readability.UnnecessaryAliasExpansion, []},
           {Credo.Check.Readability.VariableNames, []},
-
-          #
-          # Refactoring Opportunities
-          #
           {Credo.Check.Refactor.Apply, []},
           {Credo.Check.Refactor.CondStatements, []},
           {Credo.Check.Refactor.CyclomaticComplexity, []},
@@ -88,10 +80,6 @@
           {Credo.Check.Refactor.FilterFilter, []},
           {Credo.Check.Refactor.RejectReject, []},
           {Credo.Check.Refactor.RedundantWithClauseResult, []},
-
-          #
-          # Warnings
-          #
           {Credo.Check.Warning.ApplicationConfigInModuleAttribute, []},
           {Credo.Check.Warning.BoolOperationOnSameValues, []},
           {Credo.Check.Warning.ExpensiveEmptyEnumCheck, []},
@@ -111,28 +99,27 @@
           {Credo.Check.Warning.UnusedStringOperation, []},
           {Credo.Check.Warning.UnusedTupleOperation, []},
           {Credo.Check.Warning.UnsafeExec, []},
-
-          #
-          # NbInertia Custom Checks
-          #
-          # These checks help users write correct code when using nb_inertia
-          #
-          {NbInertia.Credo.Check.Warning.UseNbInertiaController, []},
-          {NbInertia.Credo.Check.Warning.AvoidRawInertiaRender, []},
-          {NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl, []},
+          {NbInertia.Credo.Check.Design.DeclareInertiaPage, []},
+          {NbInertia.Credo.Check.Design.FormInputsOptionalFieldConsistency, []},
+          {NbInertia.Credo.Check.Readability.InertiaPageComponentNameCase, []},
           {NbInertia.Credo.Check.Readability.PropFromAssigns, []},
-          {NbInertia.Credo.Check.Design.DeclareInertiaPage, []}
-        ],
-        disabled: [
-          #
-          # Controversial and experimental checks
-          #
-          {Credo.Check.Readability.Specs, []},
-          {Credo.Check.Refactor.ABCSize, []},
-          {Credo.Check.Refactor.ModuleDependencies, []},
-          {Credo.Check.Warning.LazyLogging, []},
-          {Credo.Check.Warning.MixEnv, []},
-          {Credo.Check.Warning.UnsafeToAtom, []}
+          {NbInertia.Credo.Check.Warning.ActionWithoutMount, []},
+          {NbInertia.Credo.Check.Warning.AvoidRawInertiaRender, []},
+          {NbInertia.Credo.Check.Warning.DirectRepoInController, []},
+          {NbInertia.Credo.Check.Warning.InconsistentOptionalProps, []},
+          {NbInertia.Credo.Check.Warning.MissingInertiaPageProps, []},
+          {NbInertia.Credo.Check.Warning.MissingInertiaSharedProps, []},
+          {NbInertia.Credo.Check.Warning.MissingMount, []},
+          {NbInertia.Credo.Check.Warning.MissingSerializerInertiaProps, []},
+          {NbInertia.Credo.Check.Warning.MixedInertiaControllerType, []},
+          {NbInertia.Credo.Check.Warning.MixedPageAndController, []},
+          {NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl, []},
+          {NbInertia.Credo.Check.Warning.ModalWithoutBaseUrl, []},
+          {NbInertia.Credo.Check.Warning.RenderWithoutProps, []},
+          {NbInertia.Credo.Check.Warning.UndeclaredPropInMount, []},
+          {NbInertia.Credo.Check.Warning.UntypedInertiaProps, []},
+          {NbInertia.Credo.Check.Warning.UnusedPropInMount, []},
+          {NbInertia.Credo.Check.Warning.UseNbInertiaController, []}
         ]
       }
     }

@@ -2,6 +2,17 @@ defmodule NbInertia.WallabyHelpersTest do
   use ExUnit.Case, async: true
 
   describe "module availability" do
+    test "source defines the helper module unconditionally" do
+      source =
+        Path.expand("../../lib/nb_inertia/wallaby_helpers.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "defmodule NbInertia.WallabyHelpers do"
+      refute source =~ "if Code.ensure_loaded?(Wallaby.Browser) do"
+      assert source =~ "inertia:navigate"
+      assert source =~ "window.__nb_inertia_flash"
+    end
+
     test "module is defined when Wallaby is available" do
       assert Code.ensure_loaded?(NbInertia.WallabyHelpers)
     end
@@ -28,8 +39,11 @@ defmodule NbInertia.WallabyHelpersTest do
       assert function_exported?(NbInertia.WallabyHelpers, :assert_modal_open, 1)
       assert function_exported?(NbInertia.WallabyHelpers, :refute_modal_open, 1)
       assert function_exported?(NbInertia.WallabyHelpers, :click_modal_link, 2)
+      assert function_exported?(NbInertia.WallabyHelpers, :click_modal_button, 2)
       assert function_exported?(NbInertia.WallabyHelpers, :close_modal, 1)
       assert function_exported?(NbInertia.WallabyHelpers, :dismiss_modal, 1)
+      assert function_exported?(NbInertia.WallabyHelpers, :accept_modal_confirm, 2)
+      assert function_exported?(NbInertia.WallabyHelpers, :accept_modal_confirm, 3)
       assert function_exported?(NbInertia.WallabyHelpers, :assert_modal_text, 2)
     end
 

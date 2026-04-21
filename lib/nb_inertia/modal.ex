@@ -39,7 +39,8 @@ defmodule NbInertia.Modal do
           optional(:position) => position(),
           optional(:slideover) => boolean(),
           optional(:closeButton) => boolean(),
-          optional(:closeExplicitly) => boolean()
+          optional(:closeExplicitly) => boolean(),
+          optional(:closeOnClickOutside) => boolean()
         }
 
   @type t :: %__MODULE__{
@@ -275,6 +276,22 @@ defmodule NbInertia.Modal do
   @spec close_explicitly(t(), boolean()) :: t()
   def close_explicitly(%Modal{} = modal, enabled \\ true) do
     put_config(modal, :closeExplicitly, enabled)
+  end
+
+  @doc """
+  Configures whether clicking outside the modal closes it.
+
+  This only affects backdrop clicks. To disable both backdrop clicks and the ESC
+  key, use `close_explicitly/2`.
+
+  ## Parameters
+
+    - `modal` - The Modal struct
+    - `enabled` - Boolean indicating if backdrop clicks should close the modal (default: true)
+  """
+  @spec close_on_click_outside(t(), boolean()) :: t()
+  def close_on_click_outside(%Modal{} = modal, enabled \\ true) do
+    put_config(modal, :closeOnClickOutside, enabled)
   end
 
   # Private helpers

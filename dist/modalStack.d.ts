@@ -1,4 +1,5 @@
 import { default as default_2 } from 'react';
+import { Method } from '@inertiajs/core';
 
 /**
  * Configuration for a modal instance
@@ -39,6 +40,12 @@ export declare interface ModalConfig {
      * @default false
      */
     closeExplicitly?: boolean;
+    /**
+     * Whether clicking the backdrop closes the modal.
+     * Ignored when `closeExplicitly` is true.
+     * @default true
+     */
+    closeOnClickOutside?: boolean;
     /**
      * Any additional custom data your UI implementation needs
      * This is passed through to your modal renderer unchanged.
@@ -121,6 +128,8 @@ export declare interface ModalPageObject {
     component: string;
     props: Record<string, any>;
     url: string;
+    baseUrl?: string;
+    returnUrl?: string;
     version?: string | number | null;
     flash?: Record<string, unknown>;
     scrollRegions?: Array<{
@@ -143,6 +152,8 @@ export declare interface ModalPageProviderProps {
     component: string;
     props: Record<string, any>;
     url: string;
+    baseUrl?: string;
+    returnUrl?: string;
     children: default_2.ReactNode;
 }
 
@@ -246,6 +257,13 @@ export declare interface ModalStackContextValue {
      */
     updateModal: (id: string, updates: Partial<Omit<ModalInstance, 'id'>>) => void;
     /**
+     * Programmatically open a URL in a modal.
+     *
+     * This is the imperative counterpart to ModalLink and is useful for row clicks
+     * or other UI interactions that are not naturally expressed as links.
+     */
+    visitModal: (href: string | RouteResult, options?: ModalVisitOptions) => void;
+    /**
      * Function to resolve component names to React components.
      * This is provided by the app and used for prefetching component modules.
      *
@@ -346,6 +364,17 @@ export declare interface ModalStackProviderProps {
     resolveComponent?: ResolveComponentFn;
 }
 
+declare interface ModalVisitOptions {
+    method?: Method;
+    data?: Record<string, any>;
+    modalConfig?: ModalConfig;
+    loadingComponent?: default_2.ComponentType;
+    returnUrl?: string;
+    preserveState?: boolean;
+    preserveScroll?: boolean;
+    headers?: Record<string, string>;
+}
+
 /**
  * Cached prefetch data for a modal
  */
@@ -368,6 +397,21 @@ declare interface PrefetchedModal {
  * Function type for resolving component names to React components
  */
 export declare type ResolveComponentFn = (name: string) => Promise<default_2.ComponentType<any>>;
+
+/**
+ * RouteResult type from nb_routes rich mode
+ *
+ * Rich mode route helpers return objects with both url and method,
+ * allowing components to automatically use the correct HTTP method.
+ *
+ * NOTE: This type matches @inertiajs/core's UrlMethodPair type exactly.
+ * The official Inertia.js router and Link components already support this pattern.
+ */
+declare type RouteResult = {
+    url: string;
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete';
+    component?: string | Record<string, string>;
+};
 
 /**
  * Hook to check if we're inside a modal context

@@ -309,6 +309,7 @@ defmodule NbInertia.Page do
     * `:slideover` - Boolean, render as slideover instead of centered modal
     * `:close_button` - Boolean, show close button (default: true)
     * `:close_explicitly` - Boolean, require explicit close (disable backdrop/ESC)
+    * `:close_on_click_outside` - Boolean, disable backdrop-close while still allowing ESC
 
   ## Examples
 

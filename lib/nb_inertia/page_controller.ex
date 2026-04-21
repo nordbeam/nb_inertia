@@ -264,6 +264,7 @@ defmodule NbInertia.PageController do
       {:slideover, enabled}, acc -> NbInertia.Modal.slideover(acc, enabled)
       {:close_button, enabled}, acc -> NbInertia.Modal.close_button(acc, enabled)
       {:close_explicitly, enabled}, acc -> NbInertia.Modal.close_explicitly(acc, enabled)
+      {:close_on_click_outside, enabled}, acc -> NbInertia.Modal.close_on_click_outside(acc, enabled)
       {:base_url, _}, acc -> acc
       # Ignore unknown options
       _, acc -> acc

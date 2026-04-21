@@ -7,6 +7,8 @@ export interface ModalPageObject {
     component: string;
     props: Record<string, any>;
     url: string;
+    baseUrl?: string;
+    returnUrl?: string;
     version?: string | number | null;
     flash?: Record<string, unknown>;
     scrollRegions?: Array<{
@@ -36,6 +38,8 @@ export interface ModalPageProviderProps {
     component: string;
     props: Record<string, any>;
     url: string;
+    baseUrl?: string;
+    returnUrl?: string;
     children: React.ReactNode;
 }
 export declare const ModalPageProvider: React.FC<ModalPageProviderProps>;

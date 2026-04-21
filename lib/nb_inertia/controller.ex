@@ -1883,6 +1883,7 @@ defmodule NbInertia.Controller do
     - `:slideover` - Boolean, render as slideover instead of centered modal
     - `:close_button` - Boolean, show close button (default: true)
     - `:close_explicitly` - Boolean, require explicit close (disable backdrop/ESC)
+    - `:close_on_click_outside` - Boolean, disable backdrop-close while still allowing ESC
     - `:max_width` - Custom max-width CSS value
     - `:padding_classes` - Custom padding CSS classes
     - `:panel_classes` - Custom panel CSS classes
@@ -2047,6 +2048,7 @@ defmodule NbInertia.Controller do
       {:slideover, enabled}, acc -> NbInertia.Modal.slideover(acc, enabled)
       {:close_button, enabled}, acc -> NbInertia.Modal.close_button(acc, enabled)
       {:close_explicitly, enabled}, acc -> NbInertia.Modal.close_explicitly(acc, enabled)
+      {:close_on_click_outside, enabled}, acc -> NbInertia.Modal.close_on_click_outside(acc, enabled)
       {:base_url, _}, acc -> acc
       # Ignore unknown options
       _, acc -> acc
@@ -2070,14 +2072,30 @@ defmodule NbInertia.Controller do
   """
   @spec build_modal_props(keyword()) :: map()
   def build_modal_props(props) when is_list(props) do
+    camelize? = NbInertia.Config.camelize_props?()
+
     props
     |> Enum.map(fn {key, value} ->
       # Serialize the value if it's a serializer tuple
       serialized_value = serialize_prop_value(value)
-      {key, serialized_value}
+      {transform_modal_prop_key(key, camelize?), serialized_value}
     end)
     |> Map.new()
   end
+
+  defp transform_modal_prop_key({:preserve, key}, _camelize?), do: key
+
+  defp transform_modal_prop_key(key, true) do
+    key
+    |> to_string()
+    |> Phoenix.Naming.camelize(:lower)
+    |> atomize_if(is_atom(key))
+  end
+
+  defp transform_modal_prop_key(key, false), do: key
+
+  defp atomize_if(value, true), do: String.to_atom(value)
+  defp atomize_if(value, false), do: value
 
   defp serialize_prop_value({serializer, data}) when is_atom(serializer) do
     if Code.ensure_loaded?(NbSerializer) do

@@ -41,6 +41,73 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
       assert Install.optional_dependency_specs(options, [:nb_ts, :nb_flop]) == []
     end
+
+    test "full mode declares the complete stack installer contract" do
+      info = Install.info(["--full"], nil)
+      options = Install.installer_options(["--full"]) |> Install.effective_options()
+
+      assert info.composes == [
+               "nb_vite.install",
+               "nb_serializer.install",
+               "nb_ts.install",
+               "nb_flop.install"
+             ]
+
+      assert Install.optional_dependency_specs(options, []) == [
+               {:nb_vite, github: "nordbeam/nb_vite", override: true},
+               {:nb_routes, github: "nordbeam/nb_routes", override: true},
+               {:nb_serializer, github: "nordbeam/nb_serializer", override: true},
+               {:nb_ts, github: "nordbeam/nb_ts"},
+               {:nb_flop, github: "nordbeam/nb_flop"},
+               {:deno_rider, "~> 0.2"}
+             ]
+    end
+  end
+
+  describe "effective_options/1" do
+    test "full mode enables the nb_stack defaults on nb_inertia" do
+      options =
+        ["--full"]
+        |> Install.installer_options()
+        |> Install.effective_options()
+
+      assert options[:full] == true
+      assert options[:client_framework] == "react"
+      assert options[:camelize_props] == true
+      assert options[:typescript] == true
+      assert options[:ssr] == true
+      assert options[:with_flop] == true
+      assert options[:table] == true
+    end
+  end
+
+  describe "npm_source_from_dep_declaration/2" do
+    test "uses a local file source when nb_inertia is installed from path" do
+      source =
+        Install.npm_source_from_dep_declaration(
+          "{:nb_inertia, [path: \"../nb_inertia\", override: true]}",
+          "github:nordbeam/nb_inertia"
+        )
+
+      assert source == "file:#{Path.expand("../nb_inertia")}"
+    end
+
+    test "preserves github refs when nb_inertia is installed from github" do
+      source =
+        Install.npm_source_from_dep_declaration(
+          "{:nb_inertia, [github: \"nordbeam/nb_inertia\", ref: \"abc123\"]}",
+          "github:nordbeam/nb_inertia"
+        )
+
+      assert source == "github:nordbeam/nb_inertia#abc123"
+    end
+
+    test "falls back to the default source for version-only deps" do
+      assert Install.npm_source_from_dep_declaration(
+               "{:nb_inertia, \"~> 1.0\"}",
+               "github:nordbeam/nb_inertia"
+             ) == "github:nordbeam/nb_inertia"
+    end
   end
 
   describe "forwarded_global_argv/1" do

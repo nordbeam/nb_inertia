@@ -594,7 +594,9 @@ defmodule NbInertia.TestHelpers do
   """
   @spec with_modal_headers(Plug.Conn.t()) :: Plug.Conn.t()
   def with_modal_headers(conn) do
-    put_req_header(conn, "x-inertia-modal-request", "true")
+    conn
+    |> put_req_header("x-inertia-modal", "true")
+    |> put_req_header("x-inertia-modal-request", "true")
   end
 
   # Private helpers

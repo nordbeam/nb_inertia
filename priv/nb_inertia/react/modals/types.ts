@@ -4,7 +4,9 @@
  * Central type definitions for the modal system used across all modal components.
  */
 
+import type { Method } from '@inertiajs/core';
 import React from 'react';
+import type { RouteResult } from '../../shared/types';
 
 /**
  * Modal size presets and custom sizes
@@ -59,6 +61,13 @@ export interface ModalConfig {
    * @default false
    */
   closeExplicitly?: boolean;
+
+  /**
+   * Whether clicking the backdrop closes the modal.
+   * Ignored when `closeExplicitly` is true.
+   * @default true
+   */
+  closeOnClickOutside?: boolean;
 
   /**
    * Any additional custom data your UI implementation needs
@@ -144,6 +153,17 @@ export interface ModalInstance {
    */
   loadingComponent?: React.ComponentType;
 
+}
+
+export interface ModalVisitOptions {
+  method?: Method;
+  data?: Record<string, any>;
+  modalConfig?: ModalConfig;
+  loadingComponent?: React.ComponentType;
+  returnUrl?: string;
+  preserveState?: boolean;
+  preserveScroll?: boolean;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -240,6 +260,14 @@ export interface ModalStackContextValue {
   updateModal: (id: string, updates: Partial<Omit<ModalInstance, 'id'>>) => void;
 
   /**
+   * Programmatically open a URL in a modal.
+   *
+   * This is the imperative counterpart to ModalLink and is useful for row clicks
+   * or other UI interactions that are not naturally expressed as links.
+   */
+  visitModal: (href: string | RouteResult, options?: ModalVisitOptions) => void;
+
+  /**
    * Function to resolve component names to React components.
    * This is provided by the app and used for prefetching component modules.
    *
@@ -297,6 +325,7 @@ export const DEFAULT_MODAL_CONFIG = {
   slideover: false,
   closeButton: true,
   closeExplicitly: false,
+  closeOnClickOutside: true,
 };
 
 /**

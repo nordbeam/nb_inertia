@@ -121,16 +121,14 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
    */
   const openModal = useCallback((modalOnBase: ModalOnBase) => {
     const url = modalOnBase.url;
+    const loadingModal = modals.find((m) => m.loading && m.url === url);
+    const existingModal = modals.find((m) => !m.loading && m.url === url);
 
-    // Check if we've already handled this URL (prevents duplicates from multiple sources)
-    if (handledUrlsRef.current.has(url)) {
+    // Avoid racing duplicate open requests for the same new URL, but allow
+    // same-URL navigations to refresh an already mounted modal.
+    if (handledUrlsRef.current.has(url) && !loadingModal && !existingModal) {
       return;
     }
-
-    // Check if there's a loading modal with matching URL that we should update
-    const loadingModal = modals.find(
-      (m) => m.loading && m.url === url
-    );
 
     // Mark as handled immediately to prevent race conditions
     handledUrlsRef.current.add(url);
@@ -162,6 +160,16 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
             returnUrl, // Preserve the return URL
             onClose: createOnClose(modalOnBase, returnUrl),
             loading: false,
+          });
+          currentModalRef.current = modalOnBase;
+        } else if (existingModal) {
+          updateModal(existingModal.id, {
+            component: Component,
+            componentName: modalOnBase.component,
+            props: modalOnBase.props,
+            config: modalOnBase.config || {},
+            baseUrl: modalOnBase.baseUrl,
+            onClose: existingModal.onClose || createOnClose(modalOnBase, existingModal.returnUrl),
           });
           currentModalRef.current = modalOnBase;
         } else {
@@ -213,15 +221,6 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
         clearModals();
         currentModalRef.current = null;
         handledUrlsRef.current.clear();
-        return;
-      }
-
-      // Check if this is the same modal (avoid duplicates)
-      if (
-        currentModalRef.current &&
-        currentModalRef.current.component === modalOnBase.component &&
-        currentModalRef.current.url === modalOnBase.url
-      ) {
         return;
       }
 

@@ -3,7 +3,8 @@ const o = {
   position: "center",
   slideover: !1,
   closeButton: !0,
-  closeExplicitly: !1
+  closeExplicitly: !1,
+  closeOnClickOutside: !0
 };
 function t(e) {
   return {

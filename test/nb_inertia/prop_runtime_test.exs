@@ -75,6 +75,11 @@ defmodule NbInertia.PropRuntimeTest do
 
   if Code.ensure_loaded?(NbSerializer) do
     describe "resolve_shared_props/4" do
+      test "shared prop modules expose serialize_props/2 for serializer-backed props" do
+        assert function_exported?(__MODULE__.SerializedSharedProps, :serialize_props, 1)
+        assert function_exported?(__MODULE__.SerializedSharedProps, :serialize_props, 2)
+      end
+
       test "uses serialize_props from shared modules when available" do
         conn =
           conn(:get, "/")

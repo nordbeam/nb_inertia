@@ -185,10 +185,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp web_dir(igniter) do
-      igniter
-      |> web_module()
-      |> inspect()
-      |> Macro.underscore()
+      "#{Igniter.Project.Application.app_name(igniter)}_web"
     end
 
     defp using_typescript?(igniter) do

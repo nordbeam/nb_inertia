@@ -1,15 +1,10 @@
 import { default as default_2 } from 'react';
-import { JSX } from 'react/jsx-runtime';
+import { router } from '@inertiajs/react';
 
 /**
  * HeadlessModal provides modal lifecycle management without any styling.
- *
- * It handles:
- * - ESC key to close (unless closeExplicitly is true)
- * - Preventing close during transition
- * - Providing a close function to children
  */
-declare function HeadlessModal({ modal, onClose, children }: HeadlessModalProps): JSX.Element;
+declare const HeadlessModal: default_2.ForwardRefExoticComponent<HeadlessModalProps & default_2.RefAttributes<ModalHandle>>;
 export { HeadlessModal }
 export default HeadlessModal;
 
@@ -19,14 +14,18 @@ export declare interface HeadlessModalProps {
     /** Called when the modal should close */
     onClose: () => void;
     /**
-     * Render function receiving a close handler.
-     * The close handler triggers onClose after any beforeClose logic.
+     * Whether the modal is currently open.
+     * Custom renderers with animations can pass this through for richer context.
+     * @default true
      */
-    children: (context: {
-        close: () => void;
-        config: ModalConfig;
-    }) => React.ReactNode;
+    isOpen?: boolean;
+    /**
+     * Render function receiving modal controls and metadata.
+     */
+    children: (context: ModalHandle) => default_2.ReactNode;
 }
+
+export declare const Modal: default_2.ForwardRefExoticComponent<ModalProps & default_2.RefAttributes<ModalHandle>>;
 
 /**
  * Configuration for a modal instance
@@ -68,10 +67,30 @@ declare interface ModalConfig {
      */
     closeExplicitly?: boolean;
     /**
+     * Whether clicking the backdrop closes the modal.
+     * Ignored when `closeExplicitly` is true.
+     * @default true
+     */
+    closeOnClickOutside?: boolean;
+    /**
      * Any additional custom data your UI implementation needs
      * This is passed through to your modal renderer unchanged.
      */
     [key: string]: unknown;
+}
+
+export declare interface ModalHandle {
+    modal: ModalInstance;
+    id: string;
+    index: number;
+    onTopOfStack: boolean;
+    isOpen: boolean;
+    config: ModalConfig;
+    close: () => void;
+    setOpen: (open: boolean) => void;
+    reload: (options?: ModalReloadOptions) => void;
+    getParentModal: () => ModalHandle | null;
+    getChildModal: () => ModalHandle | null;
 }
 
 /**
@@ -147,9 +166,19 @@ declare interface ModalInstance {
  */
 declare type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | string;
 
+export declare interface ModalProps {
+    children?: default_2.ReactNode | ((context: ModalHandle) => default_2.ReactNode);
+}
+
+declare type ModalReloadOptions = Omit<VisitOptions, 'method' | 'data' | 'async'>;
+
 /**
  * Modal size presets and custom sizes
  */
 declare type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full' | string;
+
+export declare function useCurrentModal(): ModalHandle;
+
+declare type VisitOptions = NonNullable<Parameters<typeof router.visit>[1]>;
 
 export { }

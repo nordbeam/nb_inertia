@@ -1,98 +1,100 @@
-import { jsx as e, Fragment as p, jsxs as a } from "react/jsx-runtime";
-import { useModalStack as h, ModalPageProvider as g } from "./modalStack.js";
+import { jsx as n, Fragment as p, jsxs as u } from "react/jsx-runtime";
+import { useModalStack as h, ModalPageProvider as C } from "./modalStack.js";
 import { HeadlessModal as v } from "./HeadlessModal.js";
 import { CloseButton as m } from "./CloseButton.js";
-import { mergeModalConfig as C } from "./types.js";
-const x = 50;
-function k(t) {
-  return x + t * 2;
+import { mergeModalConfig as g } from "./types.js";
+const k = 50;
+function x(t) {
+  return k + t * 2;
 }
 function y({
   modal: t,
-  close: o,
-  config: s,
-  zIndex: i,
-  backdropClassName: l,
-  wrapperClassName: n
+  close: r,
+  config: i,
+  zIndex: o,
+  backdropClassName: c,
+  wrapperClassName: e
 }) {
-  const c = t.component, d = s.closeButton !== !1;
+  const a = t.component, d = i.closeButton !== !1, s = i.closeOnClickOutside !== !1;
   if (t.loading) {
-    const r = t.loadingComponent;
-    return /* @__PURE__ */ a(p, { children: [
-      /* @__PURE__ */ e(
+    const l = t.loadingComponent;
+    return /* @__PURE__ */ u(p, { children: [
+      /* @__PURE__ */ n(
         "div",
         {
-          className: l,
-          style: { zIndex: i },
-          onClick: s.closeExplicitly ? void 0 : o,
+          className: c,
+          style: { zIndex: o },
+          onClick: i.closeExplicitly || !s ? void 0 : r,
           "aria-hidden": "true"
         }
       ),
-      /* @__PURE__ */ e("div", { className: n, style: { zIndex: i + 1 }, children: /* @__PURE__ */ a("div", { className: "relative", children: [
-        d && /* @__PURE__ */ e(m, { onClick: o }),
-        r ? /* @__PURE__ */ e(r, {}) : null
+      /* @__PURE__ */ n("div", { className: e, style: { zIndex: o + 1 }, children: /* @__PURE__ */ u("div", { className: "relative", children: [
+        d && /* @__PURE__ */ n(m, { onClick: r }),
+        l ? /* @__PURE__ */ n(l, {}) : null
       ] }) })
     ] });
   }
-  return /* @__PURE__ */ a(p, { children: [
-    /* @__PURE__ */ e(
+  return /* @__PURE__ */ u(p, { children: [
+    /* @__PURE__ */ n(
       "div",
       {
-        className: l,
-        style: { zIndex: i },
-        onClick: s.closeExplicitly ? void 0 : o,
+        className: c,
+        style: { zIndex: o },
+        onClick: i.closeExplicitly || !s ? void 0 : r,
         "aria-hidden": "true"
       }
     ),
-    /* @__PURE__ */ e(
+    /* @__PURE__ */ n(
       "div",
       {
-        className: n,
-        style: { zIndex: i + 1 },
+        className: e,
+        style: { zIndex: o + 1 },
         role: "dialog",
         "aria-modal": "true",
-        children: /* @__PURE__ */ a("div", { className: "relative", children: [
-          d && /* @__PURE__ */ e(m, { onClick: o }),
-          /* @__PURE__ */ e(c, { ...t.props, close: o })
+        children: /* @__PURE__ */ u("div", { className: "relative", children: [
+          d && /* @__PURE__ */ n(m, { onClick: r }),
+          /* @__PURE__ */ n(a, { ...t.props, close: r })
         ] })
       }
     )
   ] });
 }
-const j = ({
+const O = ({
   renderModal: t,
-  backdropClassName: o = "fixed inset-0 bg-black/50",
-  wrapperClassName: s = "fixed inset-0 flex items-center justify-center"
+  backdropClassName: r = "fixed inset-0 bg-black/50",
+  wrapperClassName: i = "fixed inset-0 flex items-center justify-center"
 }) => {
-  const { modals: i, popModal: l } = h();
-  return i.length === 0 ? null : /* @__PURE__ */ e(p, { children: i.map((n, c) => {
-    const d = k(c), r = C(n.config), u = () => l(n.id), f = {
-      modal: n,
-      close: u,
-      config: r,
+  const { modals: o, popModal: c } = h();
+  return o.length === 0 ? null : /* @__PURE__ */ n(p, { children: o.map((e, a) => {
+    const d = x(a), s = g(e.config), l = () => c(e.id), f = {
+      modal: e,
+      close: l,
+      config: s,
       zIndex: d,
-      index: c
+      index: a
     };
-    return /* @__PURE__ */ e(
-      g,
+    return /* @__PURE__ */ n(
+      C,
       {
-        component: n.componentName,
-        props: n.props,
-        url: n.url,
-        children: /* @__PURE__ */ e(v, { modal: n, onClose: u, children: () => t ? t(f) : /* @__PURE__ */ e(
+        component: e.componentName,
+        props: e.props,
+        url: e.url,
+        baseUrl: e.baseUrl,
+        returnUrl: e.returnUrl,
+        children: /* @__PURE__ */ n(v, { modal: e, onClose: l, children: () => t ? t(f) : /* @__PURE__ */ n(
           y,
           {
             ...f,
-            backdropClassName: r.backdropClasses ? `${o} ${r.backdropClasses}` : o,
-            wrapperClassName: s
+            backdropClassName: s.backdropClasses ? `${r} ${s.backdropClasses}` : r,
+            wrapperClassName: i
           }
         ) })
       },
-      n.id
+      e.id
     );
   }) });
 };
 export {
-  j as ModalRenderer,
-  j as default
+  O as ModalRenderer,
+  O as default
 };

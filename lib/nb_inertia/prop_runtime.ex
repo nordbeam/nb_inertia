@@ -123,10 +123,10 @@ defmodule NbInertia.PropRuntime do
 
   defp shared_module_props(module, conn) do
     cond do
-      function_exported?(module, :serialize_props, 2) ->
+      Code.ensure_loaded?(module) and function_exported?(module, :serialize_props, 2) ->
         module.serialize_props(conn, [])
 
-      function_exported?(module, :build_and_validate_props, 2) ->
+      Code.ensure_loaded?(module) and function_exported?(module, :build_and_validate_props, 2) ->
         module.build_and_validate_props(conn, [])
 
       true ->

@@ -24,12 +24,10 @@
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import type { Method } from '@inertiajs/core';
-import { router } from '@inertiajs/react';
 import { isRouteResult, type RouteResult } from '../../shared/types';
 import { routerPrefetch } from '../../shared/routerCompat';
 import type { ModalConfig } from './types';
 import { useModalStack } from './modalStack';
-import type { ResolveComponentFn } from './modalStack';
 
 /**
  * Props for the ModalLink component
@@ -181,7 +179,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
   className,
   ...anchorProps
 }) => {
-  const { pushModal, modals, prefetchModal, getPrefetchedModal } = useModalStack();
+  const { modals, prefetchModal, visitModal } = useModalStack();
 
   // Extract URL and method from RouteResult if provided
   const finalHref = isRouteResult(href) ? href.url : href;
@@ -283,58 +281,15 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
       // Capture the current full URL (with query params) before opening the modal
       // This will be used to restore the URL when the modal closes
       const returnUrl = typeof window !== 'undefined' ? window.location.href : '';
-
-      // Check if we have fully prefetched data (both data AND component)
-      const prefetched = getPrefetchedModal?.(finalHref);
-      if (prefetched) {
-        // Instant modal opening - no loading state needed!
-        pushModal({
-          component: prefetched.component,
-          componentName: prefetched.data.component,
-          props: prefetched.data.props,
-          url: prefetched.data.url,
-          config: prefetched.data.config || modalConfig || {},
-          baseUrl: prefetched.data.baseUrl,
-          returnUrl,
-          onClose: () => {
-            // Update URL to the original URL (with query params) when modal is closed
-            if (returnUrl && typeof window !== 'undefined') {
-              window.history.replaceState({}, '', returnUrl);
-            }
-          },
-        });
-
-        // Update browser URL to modal URL
-        if (typeof window !== 'undefined') {
-          window.history.pushState({}, '', prefetched.data.url);
-        }
-
-        return;
-      }
-
-      // No prefetched data - show loading modal and fetch via Inertia
-      pushModal({
-        component: LoadingPlaceholder,
-        componentName: '',
-        props: {},
-        url: finalHref,
-        config: modalConfig || {},
-        baseUrl: '', // Will be updated by InitialModalHandler
-        returnUrl, // Capture the return URL now so it's available when modal is updated
-        loading: true,
-        loadingComponent,
-      });
-
-      // Fetch the content via Inertia
-      // InitialModalHandler will update the loading modal when response arrives
-      router.visit(finalHref, {
+      visitModal(href, {
         method: finalMethod,
         data: data ?? {},
-        preserveState: true,
-        preserveScroll: true,
+        modalConfig,
+        loadingComponent: loadingComponent || LoadingPlaceholder,
+        returnUrl,
       });
     },
-    [finalHref, finalMethod, data, onClick, modalConfig, loadingComponent, pushModal, modals, getPrefetchedModal]
+    [data, finalMethod, href, loadingComponent, modalConfig, modals, onClick, visitModal]
   );
 
   return (

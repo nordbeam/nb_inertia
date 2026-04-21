@@ -1,26 +1,32 @@
-import { jsx as g } from "react/jsx-runtime";
-import H, { createContext as R, useState as T, useRef as b, useCallback as d, useEffect as _, useContext as x } from "react";
-import { router as j } from "@inertiajs/react";
-import { routerPrefetch as J } from "../../shared/routerCompat.js";
-const h = R(null);
-h.displayName = "NbInertiaModalPageContext";
-function K() {
-  return x(h) !== null;
+import { jsx as E } from "react/jsx-runtime";
+import P, { createContext as I, useContext as y, useState as _, useRef as h, useCallback as p, useEffect as S } from "react";
+import { router as N } from "@inertiajs/react";
+import { routerPrefetch as j } from "../../shared/routerCompat.js";
+import { isRouteResult as C } from "../../shared/types.js";
+import { mergeModalHeaders as J, registerModalRequestContext as V, unregisterModalRequestContext as $ } from "./requestContext.js";
+const b = I(null);
+b.displayName = "NbInertiaModalPageContext";
+function Y() {
+  return y(b) !== null;
 }
-function L() {
-  return x(h);
+function Z() {
+  return y(b);
 }
-const Q = ({
-  component: c,
+const k = ({
+  component: l,
   props: n,
-  url: u,
-  children: p
+  url: d,
+  baseUrl: i,
+  returnUrl: u,
+  children: x
 }) => {
-  const i = H.useMemo(
+  const f = P.useRef(Symbol("nb-inertia-modal-request-context")), M = P.useMemo(
     () => ({
-      component: c,
+      component: l,
       props: n,
-      url: u,
+      url: d,
+      baseUrl: i,
+      returnUrl: u,
       version: "1.0",
       flash: {},
       scrollRegions: [],
@@ -29,147 +35,204 @@ const Q = ({
       encryptHistory: !1,
       preserveFragment: !1
     }),
-    [c, n, u]
+    [l, n, d, i, u]
   );
-  return /* @__PURE__ */ g(h.Provider, { value: i, children: p });
-}, y = R(null), $ = () => {
-  const c = x(y);
-  if (!c)
+  return S(() => (V(f.current, {
+    url: d,
+    baseUrl: i,
+    returnUrl: u
+  }), () => {
+    $(f.current);
+  }), [d, i, u]), /* @__PURE__ */ E(b.Provider, { value: M, children: x });
+}, U = I(null), z = () => {
+  const l = y(U);
+  if (!l)
     throw new Error("useModalStack must be used within a ModalStackProvider");
-  return c;
-}, V = () => {
-  const { modals: c } = $();
-  return c.length > 0 ? c[c.length - 1] : null;
-}, W = ({
-  children: c,
+  return l;
+}, ee = () => {
+  const { modals: l } = z();
+  return l.length > 0 ? l[l.length - 1] : null;
+};
+function B(l, n) {
+  const d = C(l) ? l.url : l, i = (C(l) && !n ? l.method : n) || "get";
+  return { url: d, method: i };
+}
+const te = ({
+  children: l,
   onStackChange: n,
-  resolveComponent: u
+  resolveComponent: d
 }) => {
-  const [p, i] = T([]), v = b(0), f = b(/* @__PURE__ */ new Map()), P = b(/* @__PURE__ */ new Map()), w = b(/* @__PURE__ */ new Set()), E = d(
-    (t) => {
-      const r = `modal-${v.current++}`, o = {
-        ...t,
-        id: r
+  const [i, u] = _([]), x = h(0), f = h(/* @__PURE__ */ new Map()), M = h(/* @__PURE__ */ new Map()), R = h(/* @__PURE__ */ new Set()), g = p(
+    (r) => {
+      const e = `modal-${x.current++}`, t = {
+        ...r,
+        id: e
       };
       let s = !1;
-      return i((e) => {
-        if (e.find((m) => m.url === t.url))
-          return e;
+      return u((o) => {
+        if (o.find((m) => m.url === r.url))
+          return o;
         s = !0;
-        const l = [...e, o];
-        return n && n(l), l;
-      }), s ? r : "";
+        const a = [...o, t];
+        return n && n(a), a;
+      }), s ? e : "";
     },
     [n]
-  ), U = d(
-    (t) => {
-      const r = { current: null };
-      i((o) => {
-        const s = o.find((a) => a.id === t);
-        r.current = s?.onClose || null;
-        const e = o.filter((a) => a.id !== t);
-        return n && n(e), e;
+  ), q = p(
+    (r) => {
+      const e = { current: null };
+      u((t) => {
+        const s = t.find((c) => c.id === r);
+        e.current = s?.onClose || null;
+        const o = t.filter((c) => c.id !== r);
+        return n && n(o), o;
       }), setTimeout(() => {
-        if (r.current)
+        if (e.current)
           try {
-            r.current();
-          } catch (o) {
-            console.error("Error in modal onClose callback:", o);
+            e.current();
+          } catch (t) {
+            console.error("Error in modal onClose callback:", t);
           }
       }, 0);
     },
     [n]
-  ), D = d((t) => {
-    t?.fireOnClose ? i((r) => {
-      const o = r.map((s) => s.onClose).filter((s) => typeof s == "function");
+  ), D = p((r) => {
+    r?.fireOnClose ? u((e) => {
+      const t = e.map((s) => s.onClose).filter((s) => typeof s == "function");
       return n && n([]), setTimeout(() => {
-        o.forEach((s) => {
+        t.forEach((s) => {
           try {
             s();
-          } catch (e) {
-            console.error("Error in modal onClose callback:", e);
+          } catch (o) {
+            console.error("Error in modal onClose callback:", o);
           }
         });
       }, 0), [];
-    }) : (i([]), n && n([]));
-  }, [n]), F = d(
-    (t) => p.find((r) => r.id === t),
-    [p]
-  ), I = d(
-    (t, r) => {
-      i((o) => {
-        const s = o.map(
-          (e) => e.id === t ? { ...e, ...r } : e
+    }) : (u([]), n && n([]));
+  }, [n]), F = p(
+    (r) => i.find((e) => e.id === r),
+    [i]
+  ), H = p(
+    (r, e) => {
+      u((t) => {
+        const s = t.map(
+          (o) => o.id === r ? { ...o, ...e } : o
         );
         return n && n(s), s;
       });
     },
     [n]
-  ), N = d((t) => {
-    const r = f.current.get(t);
-    if (!r) return;
-    if (Date.now() - r.timestamp > 3e4) {
-      f.current.delete(t);
+  ), v = p((r) => {
+    const e = f.current.get(r);
+    if (!e) return;
+    if (Date.now() - e.timestamp > 3e4) {
+      f.current.delete(r);
       return;
     }
-    return r;
-  }, []), O = d((t, r) => {
-    if (w.current.has(t) || f.current.has(t)) return;
-    w.current.add(t);
-    const o = {};
-    r?.cacheFor !== void 0 && (o.cacheFor = r.cacheFor), J(t, { preserveState: !0 }, o), w.current.delete(t);
+    return e;
+  }, []), O = p(
+    (r, e = {}) => {
+      const { url: t, method: s } = B(r, e.method);
+      if (i.find((m) => m.url === t))
+        return;
+      const c = e.returnUrl || (typeof window < "u" ? window.location.href : ""), a = s === "get" ? v(t) : void 0;
+      if (a) {
+        g({
+          component: a.component,
+          componentName: a.data.component,
+          props: a.data.props,
+          url: a.data.url,
+          config: a.data.config || e.modalConfig || {},
+          baseUrl: a.data.baseUrl,
+          returnUrl: c,
+          onClose: () => {
+            c && typeof window < "u" && window.history.replaceState({}, "", c);
+          }
+        }), typeof window < "u" && window.history.pushState({}, "", a.data.url);
+        return;
+      }
+      g({
+        component: () => null,
+        componentName: "",
+        props: {},
+        url: t,
+        config: e.modalConfig || {},
+        baseUrl: "",
+        returnUrl: c,
+        loading: !0,
+        loadingComponent: e.loadingComponent
+      }), N.visit(t, {
+        method: s,
+        data: e.data ?? {},
+        preserveState: e.preserveState ?? !0,
+        preserveScroll: e.preserveScroll ?? !0,
+        ...J(
+          {
+            headers: e.headers
+          },
+          { url: t, baseUrl: c, returnUrl: c }
+        )
+      });
+    },
+    [v, i, g]
+  ), T = p((r, e) => {
+    if (R.current.has(r) || f.current.has(r)) return;
+    R.current.add(r);
+    const t = {};
+    e?.cacheFor !== void 0 && (t.cacheFor = e.cacheFor), j(r, { preserveState: !0 }, t), R.current.delete(r);
   }, []);
-  _(() => u ? j.on("prefetched", (r) => {
-    const o = r.detail?.response, s = typeof o == "string" ? JSON.parse(o) : o, e = s?.props?._nb_modal;
-    if (!e?.component) return;
-    const a = e.component, l = e.url || s?.url;
-    if (!l || f.current.has(l)) return;
-    const m = P.current.get(a);
-    m ? f.current.set(l, {
+  S(() => d ? N.on("prefetched", (e) => {
+    const t = e.detail?.response, s = typeof t == "string" ? JSON.parse(t) : t, o = s?.props?._nb_modal;
+    if (!o?.component) return;
+    const c = o.component, a = o.url || s?.url;
+    if (!a || f.current.has(a)) return;
+    const m = M.current.get(c);
+    m ? f.current.set(a, {
       data: {
-        component: a,
-        props: e.props || {},
-        url: l,
-        baseUrl: e.baseUrl || "",
-        config: e.config
+        component: c,
+        props: o.props || {},
+        url: a,
+        baseUrl: o.baseUrl || "",
+        config: o.config
       },
       component: m,
       timestamp: Date.now()
-    }) : u(a).then((M) => {
-      P.current.set(a, M), f.current.set(l, {
+    }) : d(c).then((w) => {
+      M.current.set(c, w), f.current.set(a, {
         data: {
-          component: a,
-          props: e.props || {},
-          url: l,
-          baseUrl: e.baseUrl || "",
-          config: e.config
+          component: c,
+          props: o.props || {},
+          url: a,
+          baseUrl: o.baseUrl || "",
+          config: o.config
         },
-        component: M,
+        component: w,
         timestamp: Date.now()
       });
-    }).catch((M) => {
-      console.warn("[ModalStack] Component preload failed:", a, M);
+    }).catch((w) => {
+      console.warn("[ModalStack] Component preload failed:", c, w);
     });
-  }) : void 0, [u]);
+  }) : void 0, [d]);
   const A = {
-    modals: p,
-    pushModal: E,
-    popModal: U,
+    modals: i,
+    pushModal: g,
+    popModal: q,
     clearModals: D,
     getModal: F,
-    updateModal: I,
-    resolveComponent: u,
-    prefetchModal: u ? O : void 0,
-    getPrefetchedModal: N
+    updateModal: H,
+    visitModal: O,
+    resolveComponent: d,
+    prefetchModal: d ? T : void 0,
+    getPrefetchedModal: v
   };
-  return /* @__PURE__ */ g(y.Provider, { value: A, children: c });
+  return /* @__PURE__ */ E(U.Provider, { value: A, children: l });
 };
 export {
-  Q as ModalPageProvider,
-  W as ModalStackProvider,
-  W as default,
-  K as useIsInModal,
-  V as useModal,
-  L as useModalPageContext,
-  $ as useModalStack
+  k as ModalPageProvider,
+  te as ModalStackProvider,
+  te as default,
+  Y as useIsInModal,
+  ee as useModal,
+  Z as useModalPageContext,
+  z as useModalStack
 };
