@@ -2,11 +2,11 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
   @moduledoc false
 
   def short_doc do
-    "Installs and configures NbInertia with Inertia.js in a Phoenix application."
+    "Installs NbInertia, or the full nb_ frontend stack with --full."
   end
 
   def example do
-    "mix nb_inertia.install --client-framework react --typescript"
+    "mix nb_inertia.install --full"
   end
 
   def long_doc do
@@ -20,6 +20,13 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     ```bash
     mix igniter.install nb_inertia --typescript
+    ```
+
+    For the full blessed Phoenix + React + TypeScript + SSR stack
+    (replacing the old `nb_stack` installer path), use:
+
+    ```bash
+    mix igniter.install nb_inertia --full
     ```
 
     If `nb_inertia` is already present in your `mix.exs`, you can run this task directly.
@@ -49,6 +56,9 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     ## Options
 
+        --full                        Install the full nb_ stack:
+                                      nb_vite + nb_routes + nb_serializer +
+                                      nb_ts + nb_flop + React + TypeScript + SSR
         --client-framework FRAMEWORK  Framework to use for the client-side integration
                                       (react, vue, or svelte). Default is react.
         --camelize-props              Enable camelCase for props (stored in :nb_inertia config)
@@ -74,6 +84,9 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     # Install with React, TypeScript, and SSR support
     mix nb_inertia.install --client-framework react --typescript --ssr
+
+    # Install the full recommended stack (replaces nb_stack)
+    mix nb_inertia.install --full
 
     # Install with React, TypeScript, and Flop integration
     mix nb_inertia.install --client-framework react --typescript --with-flop
@@ -119,6 +132,7 @@ if Code.ensure_loaded?(Igniter) do
     @task_group :nb
     @forwarded_child_flags ~w(--yes)
     @schema [
+      full: :boolean,
       client_framework: :string,
       camelize_props: :boolean,
       history_encrypt: :boolean,
@@ -129,11 +143,28 @@ if Code.ensure_loaded?(Igniter) do
       pages: :boolean,
       yes: :boolean
     ]
-    @defaults [client_framework: "react", with_flop: false, table: false, pages: false]
+    @defaults [
+      full: false,
+      client_framework: "react",
+      with_flop: false,
+      table: false,
+      pages: false
+    ]
+    @full_defaults [
+      client_framework: "react",
+      camelize_props: true,
+      typescript: true,
+      ssr: true,
+      with_flop: true,
+      table: true
+    ]
 
     @impl Igniter.Mix.Task
     def info(argv, _parent) do
-      options = installer_options(argv)
+      options =
+        argv
+        |> installer_options()
+        |> effective_options()
 
       %Igniter.Mix.Task.Info{
         group: @task_group,
@@ -150,7 +181,9 @@ if Code.ensure_loaded?(Igniter) do
     def igniter(igniter) do
       igniter
       |> Igniter.Project.Formatter.import_dep(:nb_inertia)
+      |> normalize_full_install_options()
       |> ensure_optional_dependencies_available()
+      |> maybe_setup_full_stack()
       |> setup_controller_helpers()
       |> setup_html_helpers()
       |> setup_router()
@@ -185,24 +218,56 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
+    def effective_options(options) do
+      if options[:full] do
+        options
+        |> Keyword.merge(@full_defaults)
+        |> Keyword.put(:client_framework, "react")
+      else
+        options
+      end
+    end
+
+    @doc false
     def composed_tasks(options) do
+      options = effective_options(options)
+
       []
+      |> maybe_add_composed_task(options[:full], "nb_vite.install")
+      |> maybe_add_composed_task(options[:full], "nb_serializer.install")
       |> maybe_add_composed_task(options[:typescript], "nb_ts.install")
       |> maybe_add_composed_task(options[:with_flop], "nb_flop.install")
     end
 
     @doc false
     def optional_dependency_specs(options, installed_deps \\ installed_project_deps()) do
+      options = effective_options(options)
+
       []
+      |> maybe_add_optional_dep(
+        options[:full],
+        installed_deps,
+        companion_dependency_spec(:nb_vite, "nordbeam/nb_vite", override: true)
+      )
+      |> maybe_add_optional_dep(
+        options[:full],
+        installed_deps,
+        companion_dependency_spec(:nb_routes, "nordbeam/nb_routes", override: true)
+      )
+      |> maybe_add_optional_dep(
+        options[:full],
+        installed_deps,
+        companion_dependency_spec(:nb_serializer, "nordbeam/nb_serializer", override: true)
+      )
       |> maybe_add_optional_dep(
         options[:typescript],
         installed_deps,
-        {:nb_ts, github: "nordbeam/nb_ts"}
+        companion_dependency_spec(:nb_ts, "nordbeam/nb_ts")
       )
       |> maybe_add_optional_dep(
         options[:with_flop],
         installed_deps,
-        {:nb_flop, github: "nordbeam/nb_flop"}
+        companion_dependency_spec(:nb_flop, "nordbeam/nb_flop")
       )
       |> maybe_add_optional_dep(
         options[:ssr],
@@ -248,7 +313,67 @@ if Code.ensure_loaded?(Igniter) do
           operation: "installing nb_inertia dependencies",
           yes: igniter.args.options[:yes] || false
         )
+        |> refresh_project_loadpaths()
       end
+    end
+
+    defp normalize_full_install_options(igniter) do
+      raw_options = igniter.args.options
+      effective = effective_options(raw_options)
+
+      igniter =
+        if raw_options[:full] && raw_options[:client_framework] != "react" do
+          Igniter.add_warning(
+            igniter,
+            "--full installs the tested React stack. Ignoring --client-framework #{inspect(raw_options[:client_framework])}."
+          )
+        else
+          igniter
+        end
+
+      %{igniter | args: %{igniter.args | options: effective}}
+    end
+
+    defp maybe_setup_full_stack(igniter) do
+      if igniter.args.options[:full] do
+        igniter
+        |> configure_nb_routes_for_full_stack()
+        |> compose_installer_task("nb_vite.install", ["--typescript"])
+        |> compose_installer_task(
+          "nb_serializer.install",
+          ["--with-phoenix", "--camelize-props"]
+        )
+        |> queue_nb_routes_generation()
+      else
+        igniter
+      end
+    end
+
+    defp configure_nb_routes_for_full_stack(igniter) do
+      router = Igniter.Libs.Phoenix.web_module_name(igniter, "Router")
+
+      igniter
+      |> Igniter.Project.Config.configure(
+        "config.exs",
+        :nb_routes,
+        [:router],
+        router
+      )
+      |> Igniter.Project.Config.configure(
+        "config.exs",
+        :nb_routes,
+        [:style],
+        :resource
+      )
+    end
+
+    defp queue_nb_routes_generation(igniter) do
+      Igniter.add_task(igniter, "nb_routes.gen", [
+        "--style",
+        "resource",
+        "--output-dir",
+        "assets/js/routes"
+      ])
     end
 
     @doc false
@@ -319,9 +444,28 @@ if Code.ensure_loaded?(Igniter) do
 
     @doc false
     def setup_router(igniter) do
+      full? = igniter.args.options[:full] || false
+
       igniter
       |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug NbInertia.Plug")
       |> Igniter.Libs.Phoenix.append_to_pipeline(:browser, "plug NbInertia.Plugs.ModalHeaders")
+      |> then(fn igniter ->
+        if full? do
+          igniter
+          |> Igniter.Libs.Phoenix.append_to_pipeline(
+            :browser,
+            "plug NbInertia.Plugs.Precognition"
+          )
+          |> Igniter.Libs.Phoenix.append_to_scope(
+            "/",
+            "post \"/contact\", PageController, :contact",
+            arg2: Igniter.Libs.Phoenix.web_module(igniter),
+            with_pipelines: [:browser]
+          )
+        else
+          igniter
+        end
+      end)
     end
 
     @doc false
@@ -486,10 +630,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp web_dir(igniter) do
-      igniter
-      |> Igniter.Libs.Phoenix.web_module()
-      |> inspect()
-      |> Macro.underscore()
+      "#{Igniter.Project.Application.app_name(igniter)}_web"
     end
 
     defp inertia_root_html_esbuild() do
@@ -735,29 +876,23 @@ if Code.ensure_loaded?(Igniter) do
     defp install_client_main_packages(igniter, "react") do
       pkg_manager = get_package_manager_command(igniter)
       assets_dir = "assets"
+      nb_inertia_source = nb_inertia_client_package_source(igniter)
 
       # Keep the React plugin aligned with nb_vite's current Vite major.
-      react_plugin = if using_nb_vite?(igniter), do: " @vitejs/plugin-react@^6.0.1", else: ""
-
-      # Pin the validated Inertia v3 beta + React 19 set used by nb_inertia itself.
-      # Use GitHub for @nordbeam/nb-inertia (workspace conflict fixed in nb_vite by limiting workspaces to Phoenix packages only)
-      base_packages =
-        "@inertiajs/react@^3.0.3 github:nordbeam/nb_inertia react@^19.0.0 react-dom@^19.0.0 @radix-ui/react-visually-hidden"
+      react_plugin = if using_nb_vite?(igniter), do: ["@vitejs/plugin-react@^6.0.1"], else: []
 
       install_cmd =
-        case pkg_manager do
-          "bun" ->
-            "bun add --cwd #{assets_dir} #{base_packages}#{react_plugin}"
-
-          "pnpm" ->
-            "pnpm add --dir #{assets_dir} #{base_packages}#{react_plugin}"
-
-          "yarn" ->
-            "yarn --cwd #{assets_dir} add #{base_packages}#{react_plugin}"
-
-          _ ->
-            "npm install --prefix #{assets_dir} #{base_packages}#{react_plugin}"
-        end
+        package_manager_install_command(
+          pkg_manager,
+          assets_dir,
+          [
+            "@inertiajs/react@^3.0.3",
+            nb_inertia_source,
+            "react@^19.0.0",
+            "react-dom@^19.0.0",
+            "@radix-ui/react-visually-hidden"
+          ] ++ react_plugin
+        )
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
     end
@@ -765,19 +900,15 @@ if Code.ensure_loaded?(Igniter) do
     defp install_client_main_packages(igniter, "vue") do
       pkg_manager = get_package_manager_command(igniter)
       assets_dir = "assets"
-
-      # Pin the validated Inertia v3 beta set used by nb_inertia itself.
-      # Use GitHub for @nordbeam/nb-inertia - see comment in React version
-      base_packages =
-        "@inertiajs/vue3@^3.0.3 github:nordbeam/nb_inertia vue@^3.0.0 vue-loader"
+      nb_inertia_source = nb_inertia_client_package_source(igniter)
 
       install_cmd =
-        case pkg_manager do
-          "bun" -> "bun add --cwd #{assets_dir} #{base_packages}"
-          "pnpm" -> "pnpm add --dir #{assets_dir} #{base_packages}"
-          "yarn" -> "yarn --cwd #{assets_dir} add #{base_packages}"
-          _ -> "npm install --prefix #{assets_dir} #{base_packages}"
-        end
+        package_manager_install_command(pkg_manager, assets_dir, [
+          "@inertiajs/vue3@^3.0.3",
+          nb_inertia_source,
+          "vue@^3.0.0",
+          "vue-loader"
+        ])
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
     end
@@ -802,19 +933,12 @@ if Code.ensure_loaded?(Igniter) do
       assets_dir = "assets"
 
       install_cmd =
-        case pkg_manager do
-          "bun" ->
-            "bun add --cwd #{assets_dir} -D babel-plugin-react-compiler@latest"
-
-          "pnpm" ->
-            "pnpm add --dir #{assets_dir} -D babel-plugin-react-compiler@latest"
-
-          "yarn" ->
-            "yarn --cwd #{assets_dir} add -D babel-plugin-react-compiler@latest"
-
-          _ ->
-            "npm install --prefix #{assets_dir} -D babel-plugin-react-compiler@latest"
-        end
+        package_manager_install_command(
+          pkg_manager,
+          assets_dir,
+          ["babel-plugin-react-compiler@latest"],
+          dev: true
+        )
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
     end
@@ -828,19 +952,12 @@ if Code.ensure_loaded?(Igniter) do
       assets_dir = "assets"
 
       install_cmd =
-        case pkg_manager do
-          "bun" ->
-            "bun add --cwd #{assets_dir} --dev @types/react @types/react-dom typescript"
-
-          "pnpm" ->
-            "pnpm add --dir #{assets_dir} --save-dev @types/react @types/react-dom typescript"
-
-          "yarn" ->
-            "yarn --cwd #{assets_dir} add --dev @types/react @types/react-dom typescript"
-
-          _ ->
-            "npm install --prefix #{assets_dir} --save-dev @types/react @types/react-dom typescript"
-        end
+        package_manager_install_command(
+          pkg_manager,
+          assets_dir,
+          ["@types/react", "@types/react-dom", "typescript"],
+          dev: true
+        )
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
     end
@@ -850,19 +967,12 @@ if Code.ensure_loaded?(Igniter) do
       assets_dir = "assets"
 
       install_cmd =
-        case pkg_manager do
-          "bun" ->
-            "bun add --cwd #{assets_dir} --dev @vue/compiler-sfc vue-tsc typescript"
-
-          "pnpm" ->
-            "pnpm add --dir #{assets_dir} --save-dev @vue/compiler-sfc vue-tsc typescript"
-
-          "yarn" ->
-            "yarn --cwd #{assets_dir} add --dev @vue/compiler-sfc vue-tsc typescript"
-
-          _ ->
-            "npm install --prefix #{assets_dir} --save-dev @vue/compiler-sfc vue-tsc typescript"
-        end
+        package_manager_install_command(
+          pkg_manager,
+          assets_dir,
+          ["@vue/compiler-sfc", "vue-tsc", "typescript"],
+          dev: true
+        )
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
     end
@@ -872,21 +982,110 @@ if Code.ensure_loaded?(Igniter) do
       assets_dir = "assets"
 
       install_cmd =
-        case pkg_manager do
-          "bun" ->
-            "bun add --cwd #{assets_dir} --dev svelte-loader svelte-preprocess typescript"
-
-          "pnpm" ->
-            "pnpm add --dir #{assets_dir} --save-dev svelte-loader svelte-preprocess typescript"
-
-          "yarn" ->
-            "yarn --cwd #{assets_dir} add --dev svelte-loader svelte-preprocess typescript"
-
-          _ ->
-            "npm install --prefix #{assets_dir} --save-dev svelte-loader svelte-preprocess typescript"
-        end
+        package_manager_install_command(
+          pkg_manager,
+          assets_dir,
+          ["svelte-loader", "svelte-preprocess", "typescript"],
+          dev: true
+        )
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
+    end
+
+    @doc false
+    def nb_inertia_client_package_source(igniter) do
+      case Igniter.Project.Deps.get_dep(igniter, :nb_inertia) do
+        {:ok, dep_declaration} when is_binary(dep_declaration) ->
+          npm_source_from_dep_declaration(dep_declaration, "github:nordbeam/nb_inertia")
+
+        _ ->
+          "github:nordbeam/nb_inertia"
+      end
+    end
+
+    @doc false
+    def npm_source_from_dep_declaration(dep_declaration, default_source) do
+      dep_declaration
+      |> parse_dep_declaration()
+      |> dep_source_to_npm_requirement(default_source)
+    end
+
+    defp parse_dep_declaration(dep_declaration) when is_binary(dep_declaration) do
+      dep_declaration
+      |> Code.eval_string()
+      |> elem(0)
+    rescue
+      _ -> nil
+    end
+
+    defp dep_source_to_npm_requirement({_, opts}, default_source) when is_list(opts) do
+      dep_opts_to_npm_requirement(opts, default_source)
+    end
+
+    defp dep_source_to_npm_requirement({_, _version, opts}, default_source) when is_list(opts) do
+      dep_opts_to_npm_requirement(opts, default_source)
+    end
+
+    defp dep_source_to_npm_requirement(_, default_source), do: default_source
+
+    defp dep_opts_to_npm_requirement(opts, default_source) do
+      cond do
+        path = opts[:path] ->
+          "file:#{Path.expand(to_string(path))}"
+
+        github = opts[:github] ->
+          "github:#{github}#{dependency_ref_suffix(opts)}"
+
+        git = opts[:git] ->
+          "#{to_string(git)}#{dependency_ref_suffix(opts)}"
+
+        true ->
+          default_source
+      end
+    end
+
+    defp dependency_ref_suffix(opts) do
+      case opts[:ref] || opts[:tag] || opts[:branch] do
+        nil -> ""
+        ref -> "##{ref}"
+      end
+    end
+
+    defp package_manager_install_command(pkg_manager, assets_dir, packages, opts \\ []) do
+      package_args =
+        packages
+        |> Enum.reject(&is_nil/1)
+        |> Enum.map_join(" ", &shell_escape/1)
+
+      dev_flag =
+        if opts[:dev] do
+          case pkg_manager do
+            "bun" -> " -D"
+            "pnpm" -> " --save-dev"
+            "yarn" -> " -D"
+            _ -> " --save-dev"
+          end
+        else
+          ""
+        end
+
+      case pkg_manager do
+        "bun" ->
+          "bun add --cwd #{shell_escape(assets_dir)}#{dev_flag} #{package_args}"
+
+        "pnpm" ->
+          "pnpm add --dir #{shell_escape(assets_dir)}#{dev_flag} #{package_args}"
+
+        "yarn" ->
+          "yarn --cwd #{shell_escape(assets_dir)} add#{dev_flag} #{package_args}"
+
+        _ ->
+          "npm install --prefix #{shell_escape(assets_dir)}#{dev_flag} #{package_args}"
+      end
+    end
+
+    defp shell_escape(value) do
+      "'" <> String.replace(to_string(value), "'", ~s('"'"')) <> "'"
     end
 
     defp react_tsconfig_json() do
@@ -1485,19 +1684,312 @@ if Code.ensure_loaded?(Igniter) do
     def create_sample_page(igniter) do
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
+      full? = igniter.args.options[:full] || false
 
       case client_framework do
         "react" ->
           extension = if typescript, do: "tsx", else: "jsx"
-          sample_page = sample_react_page(extension, typescript)
 
-          Igniter.create_new_file(igniter, "assets/js/pages/Home.#{extension}", sample_page,
-            on_exists: :skip
-          )
+          sample_page =
+            if full? do
+              full_react_home_page()
+            else
+              sample_react_page(extension, typescript)
+            end
+
+          igniter =
+            Igniter.create_new_file(
+              igniter,
+              "assets/js/pages/Home.#{extension}",
+              sample_page,
+              on_exists: :overwrite
+            )
+
+          if full? do
+            create_full_demo_support(igniter)
+          else
+            igniter
+          end
 
         _ ->
           igniter
       end
+    end
+
+    defp create_full_demo_support(igniter) do
+      web_module = Igniter.Libs.Phoenix.web_module(igniter)
+
+      item_serializer_path =
+        Path.join(["lib", web_dir(igniter), "serializers", "item_serializer.ex"])
+
+      shared_props_path =
+        Path.join(["lib", web_dir(igniter), "inertia_shared", "demo.ex"])
+
+      igniter
+      |> Igniter.create_new_file(
+        item_serializer_path,
+        full_item_serializer_content(web_module),
+        on_exists: :skip
+      )
+      |> Igniter.create_new_file(
+        shared_props_path,
+        full_demo_shared_content(web_module),
+        on_exists: :skip
+      )
+    end
+
+    defp full_item_serializer_content(web_module) do
+      """
+      defmodule #{inspect(web_module)}.Serializers.ItemSerializer do
+        @moduledoc \"\"\"
+        Demo serializer used by the nb_* full-stack Home page.
+
+        Shows:
+        - enum fields
+        - list fields
+        - nullable fields
+        - computed fields
+        - the `~TS` sigil for custom TypeScript types (requires nb_ts)
+        \"\"\"
+        use NbSerializer.Serializer
+        import NbTs.Sigil
+
+        schema do
+          field :id, :number
+          field :name, :string
+          field :status, enum: ["active", "pending", "archived"]
+          field :tags, list: :string
+          field :bio, :string, nullable: true
+          field :excerpt, :string, compute: :make_excerpt
+          field :metadata, type: ~TS"Record<string, string | number>"
+        end
+
+        def make_excerpt(%{bio: nil}, _opts), do: ""
+        def make_excerpt(%{bio: bio}, _opts), do: bio |> String.slice(0, 40) |> Kernel.<>("…")
+      end
+      """
+    end
+
+    defp full_demo_shared_content(web_module) do
+      """
+      defmodule #{inspect(web_module)}.InertiaShared.Demo do
+        @moduledoc \"\"\"
+        Shared props available on every Inertia page in the demo app.
+
+        Demonstrates `NbInertia.SharedProps` with:
+        - primitive types (via atoms)
+        - custom TypeScript types (via `~TS` sigil)
+        \"\"\"
+        use NbInertia.SharedProps
+        import NbTs.Sigil
+
+        inertia_shared do
+          prop :app_name, :string
+          prop :env, type: ~TS"'dev' | 'prod' | 'test'"
+          prop :hmr_enabled, :boolean
+        end
+
+        @impl NbInertia.SharedProps.Behaviour
+        def build_props(_conn, _opts) do
+          %{
+            app_name: Application.get_env(:nb_inertia, :app_name, "Demo"),
+            env: to_string(Mix.env()),
+            hmr_enabled: Application.get_env(:nb_vite, :dev_server, true)
+          }
+        end
+      end
+      """
+    end
+
+    defp full_react_home_page do
+      ~S"""
+import React from "react";
+import { Head, router, useForm, useFlash, usePage } from "@/lib/inertia";
+import type { HomeProps, HomeFormInputs } from "@/types";
+import type { Item } from "@/types/ItemSerializer";
+import { page_contacts, page_homes } from "@/routes";
+import { useFlopParams, flopToQueryParams } from "@/components/flop/useFlopParams";
+
+export default function Home({ items, meta, stats, ping }: HomeProps) {
+  const { props: shared } = usePage<HomeProps>();
+  const { flash } = useFlash<{ notice?: string; success?: string }>();
+
+  const flop = useFlopParams(meta, {
+    onParamsChange: (params) =>
+      router.visit(page_homes.index({ query: flopToQueryParams(params) }), {
+        preserveState: true,
+        preserveScroll: true,
+      }),
+  });
+
+  const form = useForm<HomeFormInputs["contactForm"]>(
+    { name: "", email: "", message: "" },
+    page_contacts.create(),
+  );
+
+  return (
+    <div className="max-w-4xl mx-auto p-8 space-y-6">
+      <Head title="nb_* demo" />
+
+      <header>
+        <h1 className="text-3xl font-bold">{shared.appName} — nb_* feature demo</h1>
+        <div className="mt-2 flex flex-wrap gap-2 text-sm">
+          <span className="badge badge-ghost">env: {shared.env}</span>
+          <span className={`badge ${shared.hmrEnabled ? "badge-success" : "badge-ghost"}`}>
+            HMR: {shared.hmrEnabled ? "on" : "off"}
+          </span>
+          <span className="badge badge-ghost font-mono">ping: {ping}</span>
+        </div>
+      </header>
+
+      {(flash.notice || flash.success) && (
+        <div role="alert" className="alert alert-success">
+          <span>{flash.notice ?? flash.success}</span>
+        </div>
+      )}
+
+      <Section title="nb_inertia · deferred prop" hint="Loads after first paint via `prop :stats, :map, defer: true`">
+        {stats ? (
+          <div className="stats shadow">
+            <div className="stat">
+              <div className="stat-title">Total</div>
+              <div className="stat-value text-primary">{stats.total}</div>
+            </div>
+            <div className="stat">
+              <div className="stat-title">Active</div>
+              <div className="stat-value text-success">{stats.active}</div>
+            </div>
+          </div>
+        ) : (
+          <span className="loading loading-dots loading-md" />
+        )}
+      </Section>
+
+      <Section title="nb_serializer + nb_flop · sortable, paginated table" hint="`{ItemSerializer, items}` with computed excerpt; sort+page via useFlopParams">
+        <div className="overflow-x-auto">
+          <table className="table table-zebra">
+            <thead>
+              <tr>
+                <SortTh field="id" flop={flop}>ID</SortTh>
+                <SortTh field="name" flop={flop}>Name</SortTh>
+                <th>Status</th>
+                <th>Tags</th>
+                <th>Excerpt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => <ItemRow key={item.id} item={item} />)}
+            </tbody>
+          </table>
+        </div>
+        <PagerJoin meta={meta} onPage={flop.setPage} />
+      </Section>
+
+      <Section title="nb_inertia · useForm + precognition (nb_routes-bound)" hint="`useForm(data, page_contacts.create())` · validates on blur">
+        <form onSubmit={(e) => { e.preventDefault(); form.submit({ preserveScroll: true }); }} className="flex flex-col gap-3 max-w-md">
+          <FormField label="Name" value={form.data.name}
+            onChange={(v) => form.setData("name", v)} onBlur={() => form.validate("name")}
+            error={form.errors.name} />
+          <FormField label="Email" value={form.data.email}
+            onChange={(v) => form.setData("email", v)} onBlur={() => form.validate("email")}
+            error={form.errors.email} />
+          <FormField label="Message" value={form.data.message}
+            onChange={(v) => form.setData("message", v)} onBlur={() => form.validate("message")}
+            error={form.errors.message} multiline />
+          <button type="submit" disabled={form.processing} className="btn btn-primary self-start">
+            {form.processing ? "Sending…" : "Send"}
+          </button>
+        </form>
+      </Section>
+
+      <Section title="nb_routes · type-safe RouteResult" hint="Resource-mode helpers with `.url`/`.method`">
+        <div className="mockup-code max-w-md">
+          <pre data-prefix="›"><code>page_homes.index().url → {page_homes.index().url}</code></pre>
+          <pre data-prefix="›"><code>page_contacts.create().method → {page_contacts.create().method}</code></pre>
+        </div>
+        <button onClick={() => router.visit(page_homes.index())} className="btn btn-outline mt-3">
+          router.visit(page_homes.index())
+        </button>
+      </Section>
+    </div>
+  );
+}
+
+function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="card bg-base-100 shadow">
+      <div className="card-body">
+        <h2 className="card-title text-base">{title}</h2>
+        {hint && <p className="text-xs opacity-60 font-mono">{hint}</p>}
+        <div className="mt-2">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+function ItemRow({ item }: { item: Item }) {
+  const badge = item.status === "active" ? "badge-success"
+    : item.status === "pending" ? "badge-warning" : "badge-ghost";
+  return (
+    <tr>
+      <td className="font-mono">{item.id}</td>
+      <td className="font-medium">{item.name}</td>
+      <td><span className={`badge ${badge}`}>{item.status}</span></td>
+      <td>
+        <div className="flex flex-wrap gap-1">
+          {item.tags.map((t) => (
+            <span key={t} className="badge badge-outline badge-sm">{t}</span>
+          ))}
+        </div>
+      </td>
+      <td className="opacity-70 max-w-xs truncate">{item.excerpt || "—"}</td>
+    </tr>
+  );
+}
+
+function SortTh({ field, flop, children }: { field: string; flop: ReturnType<typeof useFlopParams>; children: React.ReactNode }) {
+  const active = flop.params.order_by?.[0] === field;
+  const dir = active ? flop.params.order_directions?.[0] : null;
+  const indicator = !active ? "↕" : dir === "desc" ? "↓" : "↑";
+  return (
+    <th>
+      <button type="button" className="btn btn-ghost btn-xs font-semibold" onClick={() => flop.setOrderBy(field)}>
+        {children} <span className="opacity-60">{indicator}</span>
+      </button>
+    </th>
+  );
+}
+
+function PagerJoin({ meta, onPage }: { meta: HomeProps["meta"]; onPage: (n: number) => void }) {
+  const total = meta.total_pages ?? 1;
+  const current = meta.current_page ?? 1;
+  return (
+    <div className="join mt-3">
+      {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
+        <button key={n} className={`join-item btn btn-sm ${n === current ? "btn-active" : ""}`} onClick={() => onPage(n)}>
+          {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FormField({ label, value, onChange, onBlur, error, multiline }: {
+  label: string; value: string; onChange: (v: string) => void; onBlur: () => void;
+  error?: string; multiline?: boolean;
+}) {
+  const cls = `${multiline ? "textarea" : "input"} ${error ? "input-error textarea-error" : ""} w-full`;
+  return (
+    <label className="form-control">
+      <span className="label label-text">{label}</span>
+      {multiline
+        ? <textarea value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} rows={3} className={cls} />
+        : <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} className={cls} />}
+      {error && <span className="label text-error text-xs">{error}</span>}
+    </label>
+  );
+}
+"""
     end
 
     defp sample_react_page(extension, typescript) do
@@ -1551,8 +2043,11 @@ if Code.ensure_loaded?(Igniter) do
 
     @doc false
     def update_page_controller(igniter) do
-      # Update the PageController to use Inertia rendering instead of Phoenix templates
-      # This makes the sample Home page work out of the box
+      # Rewrite the PageController so the sample Home page renders through NbInertia.
+      # With `--full`, overwrite the whole controller with a demo that exercises every nb_* package.
+      full? = igniter.args.options[:full] || false
+      web_module = Igniter.Libs.Phoenix.web_module(igniter)
+
       controller_path =
         Path.join([
           "lib",
@@ -1561,36 +2056,170 @@ if Code.ensure_loaded?(Igniter) do
           "page_controller.ex"
         ])
 
-      if Igniter.exists?(igniter, controller_path) do
-        igniter
-        |> Igniter.include_existing_file(controller_path)
-        |> Igniter.update_file(controller_path, fn source ->
-          Rewrite.Source.update(source, :content, fn
-            content when is_binary(content) ->
-              # Check if already using Inertia
-              if String.contains?(content, "render_inertia") do
-                content
-              else
-                # Replace the home function to use NbInertia
-                content
-                |> String.replace(
-                  ~r/def home\(conn, _params\) do\s*\n\s*render\(conn, :home\)\s*\n\s*end/,
-                  """
-                  def home(conn, _params) do
-                      render_inertia(conn, "Home", greeting: "Welcome to Inertia.js!")
-                    end
-                  """,
-                  global: false
-                )
-              end
+      cond do
+        not Igniter.exists?(igniter, controller_path) ->
+          igniter
 
-            content ->
-              content
+        full? ->
+          igniter
+          |> Igniter.include_existing_file(controller_path)
+          |> Igniter.update_file(controller_path, fn source ->
+            Rewrite.Source.update(source, :content, fn _ ->
+              full_page_controller_content(web_module)
+            end)
           end)
-        end)
-      else
-        igniter
+
+        true ->
+          igniter
+          |> Igniter.include_existing_file(controller_path)
+          |> Igniter.update_file(controller_path, fn source ->
+            Rewrite.Source.update(source, :content, fn
+              content when is_binary(content) ->
+                if String.contains?(content, "render_inertia") do
+                  content
+                else
+                  String.replace(
+                    content,
+                    ~r/def home\(conn, _params\) do\s*\n\s*render\(conn, :home\)\s*\n\s*end/,
+                    basic_home_action_body(),
+                    global: false
+                  )
+                end
+
+              content ->
+                content
+            end)
+          end)
       end
+    end
+
+    defp basic_home_action_body do
+      """
+        inertia_page :home do
+            prop :greeting, :string
+          end
+
+          def home(conn, _params) do
+            render_inertia(conn, :home, greeting: "Welcome to Inertia.js!")
+          end
+      """
+    end
+
+    defp full_page_controller_content(web_module) do
+      web = inspect(web_module)
+
+      """
+      defmodule #{web}.PageController do
+        use #{web}, :controller
+        use NbInertia.Plugs.Precognition
+
+        alias #{web}.InertiaShared.Demo, as: DemoShared
+        alias #{web}.Serializers.ItemSerializer
+        alias #{web}.Serializers.FlopMetaSerializer
+
+        inertia_shared(DemoShared)
+
+        @items [
+          %{id: 1, name: "Alpha", status: "active", tags: ["ui", "core"],
+            bio: "First sample item used to demo the serializer DSL.",
+            metadata: %{weight: 1, unit: "kg"}},
+          %{id: 2, name: "Bravo", status: "pending", tags: ["docs"],
+            bio: nil, metadata: %{weight: 2, unit: "kg"}},
+          %{id: 3, name: "Charlie", status: "archived", tags: ["legacy", "ops"],
+            bio: "Kept around so we can show archived styling.",
+            metadata: %{weight: 3, unit: "kg"}},
+          %{id: 4, name: "Delta", status: "active", tags: ["data"],
+            bio: "Short bio.", metadata: %{weight: 4, unit: "kg"}},
+          %{id: 5, name: "Echo", status: "pending", tags: ["api", "core"],
+            bio: "Longer bio that will get truncated by the computed field.",
+            metadata: %{weight: 5, unit: "kg"}}
+        ]
+
+        @contact_types %{name: :string, email: :string, message: :string}
+
+        inertia_page :home do
+          prop :items, list: ItemSerializer
+          prop :meta, FlopMetaSerializer
+          prop :stats, :map, defer: true
+          prop :ping, :string, once: true
+
+          form_inputs :contact_form do
+            field :name, :string
+            field :email, :string
+            field :message, :string
+          end
+        end
+
+        def home(conn, params) do
+          page = params |> Map.get("page", "1") |> parse_int(1)
+          page_size = 5
+          meta = build_meta(page, page_size, length(@items))
+
+          conn
+          |> inertia_flash(:notice, "Welcome to the nb_* demo page")
+          |> render_inertia(:home,
+            items: {ItemSerializer, @items},
+            meta: {FlopMetaSerializer, meta},
+            stats: fn -> compute_stats() end,
+            ping: "pong-\#{System.system_time(:second)}"
+          )
+        end
+
+        def contact(conn, params) do
+          changeset = contact_changeset(params)
+
+          precognition(conn, changeset, only: precognition_fields(conn)) do
+            case changeset do
+              %{valid?: true} ->
+                conn
+                |> inertia_flash(:success, "Thanks, \#{params[\\"name\\"]}! We got your message.")
+                |> redirect(to: ~p"/")
+
+              invalid ->
+                conn
+                |> assign_errors(invalid)
+                |> redirect(to: ~p"/")
+            end
+          end
+        end
+
+        defp contact_changeset(params) do
+          {%{}, @contact_types}
+          |> Ecto.Changeset.cast(params, Map.keys(@contact_types))
+          |> Ecto.Changeset.validate_required([:name, :email, :message])
+          |> Ecto.Changeset.validate_format(:email, ~r/@/, message: "must contain @")
+          |> Ecto.Changeset.validate_length(:message, min: 10)
+        end
+
+        defp build_meta(page, page_size, total) do
+          total_pages = max(div(total + page_size - 1, page_size), 1)
+
+          %Flop.Meta{
+            current_page: page,
+            page_size: page_size,
+            total_count: total,
+            total_pages: total_pages,
+            has_previous_page?: page > 1,
+            has_next_page?: page < total_pages,
+            previous_page: if(page > 1, do: page - 1),
+            next_page: if(page < total_pages, do: page + 1),
+            flop: %Flop{page: page, page_size: page_size}
+          }
+        end
+
+        defp compute_stats do
+          Process.sleep(400)
+          %{total: length(@items), active: Enum.count(@items, &(&1.status == "active"))}
+        end
+
+        defp parse_int(value, default) do
+          case Integer.parse(to_string(value)) do
+            {int, _} -> int
+            :error -> default
+          end
+        end
+      end
+      """
     end
 
     @doc false
@@ -1709,6 +2338,8 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));           // Works with RouteResult objects
       //   <Link href={user_path(1)}>User</Link> // Works with RouteResult objects
 
+      export { router } from '@nordbeam/nb-inertia/react/router';
+      export { Link } from '@inertiajs/react';
       export { useForm } from '@nordbeam/nb-inertia/react/useForm';
       export { useHttp } from '@nordbeam/nb-inertia/react/useHttp';
       export { useRoutes } from '@nordbeam/nb-inertia/react/useRoutes';
@@ -1722,6 +2353,7 @@ if Code.ensure_loaded?(Igniter) do
       // Modal components
       export {
         ClientModalLink,
+        Modal,
         HeadlessModal,
         InitialModalHandler,
         ModalLink,
@@ -1729,6 +2361,7 @@ if Code.ensure_loaded?(Igniter) do
         ModalRenderer,
         CloseButton,
         ModalStackProvider,
+        useCurrentModal,
         useIsInModal,
         useModalPageContext,
         useModalStack,
@@ -2141,6 +2774,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp print_next_steps(igniter) do
+      full_install = igniter.args.options[:full] || false
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
       camelize_props = igniter.args.options[:camelize_props] || false
@@ -2247,6 +2881,23 @@ if Code.ensure_loaded?(Igniter) do
           ""
         end
 
+      full_stack_info =
+        if full_install do
+          """
+
+          Full Stack Additions:
+          - Installed and configured nb_vite for Vite + HMR + SSR dev integration
+          - Installed and configured nb_serializer with Phoenix integration and camelized props
+          - Installed and configured nb_routes in resource mode
+          - Queued route helper generation into assets/js/routes
+
+          This `--full` path replaces the older nb_stack installer and is the
+          recommended end-to-end setup for new Phoenix + Inertia projects.
+          """
+        else
+          ""
+        end
+
       lib_inertia_info =
         if client_framework == "react" do
           extension = if typescript, do: "ts", else: "js"
@@ -2322,10 +2973,11 @@ if Code.ensure_loaded?(Igniter) do
         end
 
       next_steps = """
-      NbInertia has been successfully installed!
+      #{if full_install, do: "NbInertia full stack has been successfully installed!", else: "NbInertia has been successfully installed!"}
 
       What was configured:
       - Added {:nb_inertia, "~> 0.4"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}#{if with_flop, do: "\n- Added {:nb_flop, \"~> 0.1\"} and {:flop, \"~> 0.26\"} for pagination, sorting, and filtering", else: ""}
+      #{if full_install, do: "- Added {:nb_vite, ...}, {:nb_routes, ...}, and {:nb_serializer, ...} for the full stack", else: nil}
       - Set up controller helpers (use NbInertia.Controller)
       - Set up HTML helpers (import NbInertia.HTML)
       - Added plug NbInertia.Plug to the browser pipeline
@@ -2333,7 +2985,7 @@ if Code.ensure_loaded?(Igniter) do
       #{bundler_info}
       - Package manager: #{pkg_manager}#{config_info}
       - Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}
-      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{if client_framework == "react", do: "\n- Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)", else: ""}#{typescript_info}#{flop_info}#{lib_inertia_info}#{ssr_info}
+      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{if client_framework == "react", do: "\n- Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)", else: ""}#{full_stack_info}#{typescript_info}#{flop_info}#{lib_inertia_info}#{ssr_info}
 
       Next steps:
       1. Create an Inertia-enabled controller action:
@@ -2403,6 +3055,57 @@ if Code.ensure_loaded?(Igniter) do
 
     defp dep_name({dep, _, _}) when is_atom(dep), do: dep
     defp dep_name({dep, _}) when is_atom(dep), do: dep
+
+    defp companion_dependency_spec(dep, github_repo, extra_opts \\ []) do
+      case local_nb_workspace_dep_path(dep) do
+        {:ok, path} ->
+          {dep, Keyword.put(extra_opts, :path, path)}
+
+        :error ->
+          {dep, Keyword.put(extra_opts, :github, github_repo)}
+      end
+    end
+
+    defp local_nb_workspace_dep_path(dep) do
+      with {:ok, workspace_root} <- local_nb_workspace_root(),
+           dep_path <- Path.join(workspace_root, Atom.to_string(dep)),
+           true <- File.exists?(Path.join(dep_path, "mix.exs")) do
+        {:ok, dep_path}
+      else
+        _ -> :error
+      end
+    end
+
+    defp local_nb_workspace_root do
+      with {:ok, dep_declaration} <- Igniter.Project.Deps.get_dep(Igniter.new(), :nb_inertia),
+           path when is_binary(path) <- local_dep_path_from_declaration(dep_declaration),
+           "nb_inertia" <- Path.basename(path) do
+        {:ok, Path.dirname(path)}
+      else
+        _ -> :error
+      end
+    end
+
+    defp local_dep_path_from_declaration(dep_declaration) when is_binary(dep_declaration) do
+      case parse_dep_declaration(dep_declaration) do
+        {_, opts} when is_list(opts) -> opts[:path] && Path.expand(to_string(opts[:path]))
+        {_, _, opts} when is_list(opts) -> opts[:path] && Path.expand(to_string(opts[:path]))
+        _ -> nil
+      end
+    end
+
+    defp local_dep_path_from_declaration(_), do: nil
+
+    defp refresh_project_loadpaths(igniter) do
+      Mix.Task.reenable("deps.loadpaths")
+      Mix.Task.run("deps.loadpaths", ["--no-deps-check"])
+      Mix.Task.reenable("loadpaths")
+      Mix.Task.run("loadpaths", ["--no-compile"])
+      Mix.Task.reenable("compile")
+      Mix.Task.run("compile", ["--no-compile"])
+
+      igniter
+    end
 
     defp task_name do
       Mix.Task.task_name(__MODULE__)
