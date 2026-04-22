@@ -12,14 +12,21 @@ defmodule NbInertia.PropRuntime do
   end
 
   @spec apply_from_and_defaults(Plug.Conn.t(), map(), [map()] | nil) :: map()
-  def apply_from_and_defaults(_conn, props_map, nil), do: props_map
-
   def apply_from_and_defaults(conn, props_map, prop_configs) do
+    apply_from_and_defaults(conn, props_map, prop_configs, [])
+  end
+
+  @spec apply_from_and_defaults(Plug.Conn.t(), map(), [map()] | nil, Enumerable.t()) :: map()
+  def apply_from_and_defaults(_conn, props_map, nil, _skip_keys), do: props_map
+
+  def apply_from_and_defaults(conn, props_map, prop_configs, skip_keys) do
+    skip_keys = MapSet.new(skip_keys)
+
     Enum.reduce(prop_configs, props_map, fn prop_config, acc ->
       name = prop_config.name
       opts = prop_config[:opts] || []
 
-      if Map.has_key?(acc, name) do
+      if Map.has_key?(acc, name) or MapSet.member?(skip_keys, name) do
         acc
       else
         from = Keyword.get(opts, :from)

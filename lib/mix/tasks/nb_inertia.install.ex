@@ -1030,9 +1030,6 @@ if Code.ensure_loaded?(Igniter) do
 
     defp dep_opts_to_npm_requirement(opts, default_source) do
       cond do
-        path = opts[:path] ->
-          "file:#{Path.expand(to_string(path))}"
-
         github = opts[:github] ->
           "github:#{github}#{dependency_ref_suffix(opts)}"
 
@@ -1803,193 +1800,193 @@ if Code.ensure_loaded?(Igniter) do
 
     defp full_react_home_page do
       ~S"""
-import React from "react";
-import { Head, router, useForm, useFlash, usePage } from "@/lib/inertia";
-import type { HomeProps, HomeFormInputs } from "@/types";
-import type { Item } from "@/types/ItemSerializer";
-import { page_contacts, page_homes } from "@/routes";
-import { useFlopParams, flopToQueryParams } from "@/components/flop/useFlopParams";
+      import React from "react";
+      import { Head, router, useForm, useFlash, usePage } from "@/lib/inertia";
+      import type { HomeProps } from "@/types";
+      import type { Item } from "@/types/ItemSerializer";
+      import { page_contacts, page_homes } from "@/routes";
+      import { useFlopParams, flopToQueryParams } from "@/components/flop/useFlopParams";
 
-export default function Home({ items, meta, stats, ping }: HomeProps) {
-  const { props: shared } = usePage<HomeProps>();
-  const { flash } = useFlash<{ notice?: string; success?: string }>();
+      export default function Home({ items, meta, stats, ping }: HomeProps) {
+        const { props: shared } = usePage<HomeProps>();
+        const { flash } = useFlash<{ notice?: string; success?: string }>();
 
-  const flop = useFlopParams(meta, {
-    onParamsChange: (params) =>
-      router.visit(page_homes.index({ query: flopToQueryParams(params) }), {
-        preserveState: true,
-        preserveScroll: true,
-      }),
-  });
+        const flop = useFlopParams(meta, {
+          onParamsChange: (params) =>
+            router.visit(page_homes.index({ query: flopToQueryParams(params) }), {
+              preserveState: true,
+              preserveScroll: true,
+            }),
+        });
 
-  const form = useForm<HomeFormInputs["contactForm"]>(
-    { name: "", email: "", message: "" },
-    page_contacts.create(),
-  );
+        const form = useForm<HomeProps["contactForm"]>(
+          { name: "", email: "", message: "" },
+          page_contacts.create(),
+        );
 
-  return (
-    <div className="max-w-4xl mx-auto p-8 space-y-6">
-      <Head title="nb_* demo" />
+        return (
+          <div className="max-w-4xl mx-auto p-8 space-y-6">
+            <Head title="nb_* demo" />
 
-      <header>
-        <h1 className="text-3xl font-bold">{shared.appName} — nb_* feature demo</h1>
-        <div className="mt-2 flex flex-wrap gap-2 text-sm">
-          <span className="badge badge-ghost">env: {shared.env}</span>
-          <span className={`badge ${shared.hmrEnabled ? "badge-success" : "badge-ghost"}`}>
-            HMR: {shared.hmrEnabled ? "on" : "off"}
-          </span>
-          <span className="badge badge-ghost font-mono">ping: {ping}</span>
-        </div>
-      </header>
+            <header>
+              <h1 className="text-3xl font-bold">{shared.appName} — nb_* feature demo</h1>
+              <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                <span className="badge badge-ghost">env: {shared.env}</span>
+                <span className={`badge ${shared.hmrEnabled ? "badge-success" : "badge-ghost"}`}>
+                  HMR: {shared.hmrEnabled ? "on" : "off"}
+                </span>
+                <span className="badge badge-ghost font-mono">ping: {ping}</span>
+              </div>
+            </header>
 
-      {(flash.notice || flash.success) && (
-        <div role="alert" className="alert alert-success">
-          <span>{flash.notice ?? flash.success}</span>
-        </div>
-      )}
+            {(flash.notice || flash.success) && (
+              <div role="alert" className="alert alert-success">
+                <span>{flash.notice ?? flash.success}</span>
+              </div>
+            )}
 
-      <Section title="nb_inertia · deferred prop" hint="Loads after first paint via `prop :stats, :map, defer: true`">
-        {stats ? (
-          <div className="stats shadow">
-            <div className="stat">
-              <div className="stat-title">Total</div>
-              <div className="stat-value text-primary">{stats.total}</div>
-            </div>
-            <div className="stat">
-              <div className="stat-title">Active</div>
-              <div className="stat-value text-success">{stats.active}</div>
-            </div>
+            <Section title="nb_inertia · deferred prop" hint="Loads after first paint via `prop :stats, :map, defer: true`">
+              {stats ? (
+                <div className="stats shadow">
+                  <div className="stat">
+                    <div className="stat-title">Total</div>
+                    <div className="stat-value text-primary">{stats.total}</div>
+                  </div>
+                  <div className="stat">
+                    <div className="stat-title">Active</div>
+                    <div className="stat-value text-success">{stats.active}</div>
+                  </div>
+                </div>
+              ) : (
+                <span className="loading loading-dots loading-md" />
+              )}
+            </Section>
+
+            <Section title="nb_serializer + nb_flop · sortable, paginated table" hint="`{ItemSerializer, items}` with computed excerpt; sort+page via useFlopParams">
+              <div className="overflow-x-auto">
+                <table className="table table-zebra">
+                  <thead>
+                    <tr>
+                      <SortTh field="id" flop={flop}>ID</SortTh>
+                      <SortTh field="name" flop={flop}>Name</SortTh>
+                      <th>Status</th>
+                      <th>Tags</th>
+                      <th>Excerpt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => <ItemRow key={item.id} item={item} />)}
+                  </tbody>
+                </table>
+              </div>
+              <PagerJoin meta={meta} onPage={flop.setPage} />
+            </Section>
+
+            <Section title="nb_inertia · useForm + precognition (nb_routes-bound)" hint="`useForm(data, page_contacts.create())` · validates on blur">
+              <form onSubmit={(e) => { e.preventDefault(); form.submit({ preserveScroll: true }); }} className="flex flex-col gap-3 max-w-md">
+                <FormField label="Name" value={form.data.name}
+                  onChange={(v) => form.setData("name", v)} onBlur={() => form.validate("name")}
+                  error={form.errors.name} />
+                <FormField label="Email" value={form.data.email}
+                  onChange={(v) => form.setData("email", v)} onBlur={() => form.validate("email")}
+                  error={form.errors.email} />
+                <FormField label="Message" value={form.data.message}
+                  onChange={(v) => form.setData("message", v)} onBlur={() => form.validate("message")}
+                  error={form.errors.message} multiline />
+                <button type="submit" disabled={form.processing} className="btn btn-primary self-start">
+                  {form.processing ? "Sending…" : "Send"}
+                </button>
+              </form>
+            </Section>
+
+            <Section title="nb_routes · type-safe RouteResult" hint="Resource-mode helpers with `.url`/`.method`">
+              <div className="mockup-code max-w-md">
+                <pre data-prefix="›"><code>page_homes.index().url → {page_homes.index().url}</code></pre>
+                <pre data-prefix="›"><code>page_contacts.create().method → {page_contacts.create().method}</code></pre>
+              </div>
+              <button onClick={() => router.visit(page_homes.index())} className="btn btn-outline mt-3">
+                router.visit(page_homes.index())
+              </button>
+            </Section>
           </div>
-        ) : (
-          <span className="loading loading-dots loading-md" />
-        )}
-      </Section>
+        );
+      }
 
-      <Section title="nb_serializer + nb_flop · sortable, paginated table" hint="`{ItemSerializer, items}` with computed excerpt; sort+page via useFlopParams">
-        <div className="overflow-x-auto">
-          <table className="table table-zebra">
-            <thead>
-              <tr>
-                <SortTh field="id" flop={flop}>ID</SortTh>
-                <SortTh field="name" flop={flop}>Name</SortTh>
-                <th>Status</th>
-                <th>Tags</th>
-                <th>Excerpt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => <ItemRow key={item.id} item={item} />)}
-            </tbody>
-          </table>
-        </div>
-        <PagerJoin meta={meta} onPage={flop.setPage} />
-      </Section>
+      function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+        return (
+          <section className="card bg-base-100 shadow">
+            <div className="card-body">
+              <h2 className="card-title text-base">{title}</h2>
+              {hint && <p className="text-xs opacity-60 font-mono">{hint}</p>}
+              <div className="mt-2">{children}</div>
+            </div>
+          </section>
+        );
+      }
 
-      <Section title="nb_inertia · useForm + precognition (nb_routes-bound)" hint="`useForm(data, page_contacts.create())` · validates on blur">
-        <form onSubmit={(e) => { e.preventDefault(); form.submit({ preserveScroll: true }); }} className="flex flex-col gap-3 max-w-md">
-          <FormField label="Name" value={form.data.name}
-            onChange={(v) => form.setData("name", v)} onBlur={() => form.validate("name")}
-            error={form.errors.name} />
-          <FormField label="Email" value={form.data.email}
-            onChange={(v) => form.setData("email", v)} onBlur={() => form.validate("email")}
-            error={form.errors.email} />
-          <FormField label="Message" value={form.data.message}
-            onChange={(v) => form.setData("message", v)} onBlur={() => form.validate("message")}
-            error={form.errors.message} multiline />
-          <button type="submit" disabled={form.processing} className="btn btn-primary self-start">
-            {form.processing ? "Sending…" : "Send"}
-          </button>
-        </form>
-      </Section>
+      function ItemRow({ item }: { item: Item }) {
+        const badge = item.status === "active" ? "badge-success"
+          : item.status === "pending" ? "badge-warning" : "badge-ghost";
+        return (
+          <tr>
+            <td className="font-mono">{item.id}</td>
+            <td className="font-medium">{item.name}</td>
+            <td><span className={`badge ${badge}`}>{item.status}</span></td>
+            <td>
+              <div className="flex flex-wrap gap-1">
+                {item.tags.map((t) => (
+                  <span key={t} className="badge badge-outline badge-sm">{t}</span>
+                ))}
+              </div>
+            </td>
+            <td className="opacity-70 max-w-xs truncate">{item.excerpt || "—"}</td>
+          </tr>
+        );
+      }
 
-      <Section title="nb_routes · type-safe RouteResult" hint="Resource-mode helpers with `.url`/`.method`">
-        <div className="mockup-code max-w-md">
-          <pre data-prefix="›"><code>page_homes.index().url → {page_homes.index().url}</code></pre>
-          <pre data-prefix="›"><code>page_contacts.create().method → {page_contacts.create().method}</code></pre>
-        </div>
-        <button onClick={() => router.visit(page_homes.index())} className="btn btn-outline mt-3">
-          router.visit(page_homes.index())
-        </button>
-      </Section>
-    </div>
-  );
-}
+      function SortTh({ field, flop, children }: { field: string; flop: ReturnType<typeof useFlopParams>; children: React.ReactNode }) {
+        const active = flop.params.order_by?.[0] === field;
+        const dir = active ? flop.params.order_directions?.[0] : null;
+        const indicator = !active ? "↕" : dir === "desc" ? "↓" : "↑";
+        return (
+          <th>
+            <button type="button" className="btn btn-ghost btn-xs font-semibold" onClick={() => flop.setOrderBy(field)}>
+              {children} <span className="opacity-60">{indicator}</span>
+            </button>
+          </th>
+        );
+      }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="card bg-base-100 shadow">
-      <div className="card-body">
-        <h2 className="card-title text-base">{title}</h2>
-        {hint && <p className="text-xs opacity-60 font-mono">{hint}</p>}
-        <div className="mt-2">{children}</div>
-      </div>
-    </section>
-  );
-}
+      function PagerJoin({ meta, onPage }: { meta: HomeProps["meta"]; onPage: (n: number) => void }) {
+        const total = meta.total_pages ?? 1;
+        const current = meta.current_page ?? 1;
+        return (
+          <div className="join mt-3">
+            {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
+              <button key={n} className={`join-item btn btn-sm ${n === current ? "btn-active" : ""}`} onClick={() => onPage(n)}>
+                {n}
+              </button>
+            ))}
+          </div>
+        );
+      }
 
-function ItemRow({ item }: { item: Item }) {
-  const badge = item.status === "active" ? "badge-success"
-    : item.status === "pending" ? "badge-warning" : "badge-ghost";
-  return (
-    <tr>
-      <td className="font-mono">{item.id}</td>
-      <td className="font-medium">{item.name}</td>
-      <td><span className={`badge ${badge}`}>{item.status}</span></td>
-      <td>
-        <div className="flex flex-wrap gap-1">
-          {item.tags.map((t) => (
-            <span key={t} className="badge badge-outline badge-sm">{t}</span>
-          ))}
-        </div>
-      </td>
-      <td className="opacity-70 max-w-xs truncate">{item.excerpt || "—"}</td>
-    </tr>
-  );
-}
-
-function SortTh({ field, flop, children }: { field: string; flop: ReturnType<typeof useFlopParams>; children: React.ReactNode }) {
-  const active = flop.params.order_by?.[0] === field;
-  const dir = active ? flop.params.order_directions?.[0] : null;
-  const indicator = !active ? "↕" : dir === "desc" ? "↓" : "↑";
-  return (
-    <th>
-      <button type="button" className="btn btn-ghost btn-xs font-semibold" onClick={() => flop.setOrderBy(field)}>
-        {children} <span className="opacity-60">{indicator}</span>
-      </button>
-    </th>
-  );
-}
-
-function PagerJoin({ meta, onPage }: { meta: HomeProps["meta"]; onPage: (n: number) => void }) {
-  const total = meta.total_pages ?? 1;
-  const current = meta.current_page ?? 1;
-  return (
-    <div className="join mt-3">
-      {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
-        <button key={n} className={`join-item btn btn-sm ${n === current ? "btn-active" : ""}`} onClick={() => onPage(n)}>
-          {n}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function FormField({ label, value, onChange, onBlur, error, multiline }: {
-  label: string; value: string; onChange: (v: string) => void; onBlur: () => void;
-  error?: string; multiline?: boolean;
-}) {
-  const cls = `${multiline ? "textarea" : "input"} ${error ? "input-error textarea-error" : ""} w-full`;
-  return (
-    <label className="form-control">
-      <span className="label label-text">{label}</span>
-      {multiline
-        ? <textarea value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} rows={3} className={cls} />
-        : <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} className={cls} />}
-      {error && <span className="label text-error text-xs">{error}</span>}
-    </label>
-  );
-}
-"""
+      function FormField({ label, value, onChange, onBlur, error, multiline }: {
+        label: string; value: string; onChange: (v: string) => void; onBlur: () => void;
+        error?: string; multiline?: boolean;
+      }) {
+        const cls = `${multiline ? "textarea" : "input"} ${error ? "input-error textarea-error" : ""} w-full`;
+        return (
+          <label className="form-control">
+            <span className="label label-text">{label}</span>
+            {multiline
+              ? <textarea value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} rows={3} className={cls} />
+              : <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} className={cls} />}
+            {error && <span className="label text-error text-xs">{error}</span>}
+          </label>
+        );
+      }
+      """
     end
 
     defp sample_react_page(extension, typescript) do
@@ -2141,6 +2138,7 @@ function FormField({ label, value, onChange, onBlur, error, multiline }: {
           prop :items, list: ItemSerializer
           prop :meta, FlopMetaSerializer
           prop :stats, :map, defer: true
+          prop :contact_form, :map, default: %{}
           prop :ping, :string, once: true
 
           form_inputs :contact_form do
@@ -3057,44 +3055,8 @@ function FormField({ label, value, onChange, onBlur, error, multiline }: {
     defp dep_name({dep, _}) when is_atom(dep), do: dep
 
     defp companion_dependency_spec(dep, github_repo, extra_opts \\ []) do
-      case local_nb_workspace_dep_path(dep) do
-        {:ok, path} ->
-          {dep, Keyword.put(extra_opts, :path, path)}
-
-        :error ->
-          {dep, Keyword.put(extra_opts, :github, github_repo)}
-      end
+      {dep, Keyword.put(extra_opts, :github, github_repo)}
     end
-
-    defp local_nb_workspace_dep_path(dep) do
-      with {:ok, workspace_root} <- local_nb_workspace_root(),
-           dep_path <- Path.join(workspace_root, Atom.to_string(dep)),
-           true <- File.exists?(Path.join(dep_path, "mix.exs")) do
-        {:ok, dep_path}
-      else
-        _ -> :error
-      end
-    end
-
-    defp local_nb_workspace_root do
-      with {:ok, dep_declaration} <- Igniter.Project.Deps.get_dep(Igniter.new(), :nb_inertia),
-           path when is_binary(path) <- local_dep_path_from_declaration(dep_declaration),
-           "nb_inertia" <- Path.basename(path) do
-        {:ok, Path.dirname(path)}
-      else
-        _ -> :error
-      end
-    end
-
-    defp local_dep_path_from_declaration(dep_declaration) when is_binary(dep_declaration) do
-      case parse_dep_declaration(dep_declaration) do
-        {_, opts} when is_list(opts) -> opts[:path] && Path.expand(to_string(opts[:path]))
-        {_, _, opts} when is_list(opts) -> opts[:path] && Path.expand(to_string(opts[:path]))
-        _ -> nil
-      end
-    end
-
-    defp local_dep_path_from_declaration(_), do: nil
 
     defp refresh_project_loadpaths(igniter) do
       Mix.Task.reenable("deps.loadpaths")

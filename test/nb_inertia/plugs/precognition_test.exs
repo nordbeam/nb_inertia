@@ -149,6 +149,22 @@ defmodule NbInertia.Plugs.PrecognitionTest do
       assert body["errors"]["email"] == ["is invalid"]
     end
 
+    test "automatically filters errors using Precognition-Validate-Only header" do
+      conn =
+        conn(:post, "/users")
+        |> put_req_header("precognition", "true")
+        |> put_req_header("precognition-validate-only", "name")
+        |> Precognition.call([])
+
+      errors = %{name: ["is required"], email: ["is invalid"]}
+
+      {:precognition, result_conn} = Precognition.validate_precognition(conn, errors)
+
+      body = Jason.decode!(result_conn.resp_body)
+      assert body["errors"]["name"] == ["is required"]
+      refute Map.has_key?(body["errors"], "email")
+    end
+
     test "filters errors when :only option provided" do
       conn =
         conn(:post, "/users")
@@ -235,6 +251,22 @@ defmodule NbInertia.Plugs.PrecognitionTest do
       body = Jason.decode!(result_conn.resp_body)
       assert body["errors"]["name"] != nil
       assert body["errors"]["email"] != nil
+    end
+
+    test "automatically filters changeset errors using Precognition-Validate-Only header" do
+      conn =
+        conn(:post, "/users")
+        |> put_req_header("precognition", "true")
+        |> put_req_header("precognition-validate-only", "name")
+        |> Precognition.call([])
+
+      changeset = TestSchema.changeset(%TestSchema{}, %{name: "ab", email: "invalid"})
+
+      {:precognition, result_conn} = Precognition.validate_precognition(conn, changeset)
+
+      body = Jason.decode!(result_conn.resp_body)
+      assert body["errors"]["name"] != nil
+      refute Map.has_key?(body["errors"], "email")
     end
 
     test "returns 204 for valid changeset" do
@@ -338,6 +370,21 @@ defmodule NbInertia.Plugs.PrecognitionTest do
 
       assert result_conn.status == 422
       assert result_conn.halted == true
+    end
+
+    test "filters macro responses from Precognition-Validate-Only header by default" do
+      conn =
+        conn(:post, "/users")
+        |> put_req_header("precognition", "true")
+        |> put_req_header("precognition-validate-only", "name")
+        |> Precognition.call([])
+
+      result_conn =
+        TestController.create_with_errors(conn, %{name: ["is required"], email: ["is invalid"]})
+
+      body = Jason.decode!(result_conn.resp_body)
+      assert Map.has_key?(body["errors"], "name")
+      refute Map.has_key?(body["errors"], "email")
     end
 
     test "handles Precognition request with no errors" do

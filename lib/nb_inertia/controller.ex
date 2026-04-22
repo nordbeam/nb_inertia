@@ -48,6 +48,9 @@ defmodule NbInertia.Controller do
   frontend TypeScript types during development, with no manual intervention required.
   """
 
+  @component_render_opts [:ssr]
+  @page_render_opts [:deep_merge] ++ @component_render_opts
+
   @doc false
   defmacro __using__(_opts) do
     quote do
@@ -93,6 +96,10 @@ defmodule NbInertia.Controller do
   @doc """
   Declares an Inertia page with its props.
 
+  When a `form_inputs/2` block uses the same name as a generic page prop (`:map` or `:any`),
+  `nb_ts` inlines those field definitions into the generated `*Props` interface for that prop.
+  Forms without a matching generic prop are emitted on a separate `*FormInputs` interface.
+
   ## Examples
 
       inertia_page :users_index do
@@ -104,10 +111,34 @@ defmodule NbInertia.Controller do
         prop :user, :map
       end
 
+      # Component names are inferred from the page atom by convention
+      # :users_index -> "Users/Index"
+      inertia_page :users_index do
+        prop :users, list: UserSerializer
+      end
+
       # Override TypeScript type name to avoid collisions
       inertia_page :preview, component: "Public/WidgetShow", type_name: "WidgetPreviewProps" do
         prop :widget, WidgetSerializer
       end
+
+      inertia_page :users_new do
+        prop :user, :map, default: %{}
+
+        form_inputs :user do
+          field :name, :string
+          field :email, :string
+        end
+      end
+
+  This generates:
+
+      export interface UsersNewProps {
+        user: {
+          name: string;
+          email: string;
+        };
+      }
   """
   defmacro inertia_page(page_name, opts \\ [], do: block) do
     quote do
@@ -289,6 +320,10 @@ defmodule NbInertia.Controller do
 
   Register SharedProps module:
 
+      include_shared_props(MyAppWeb.InertiaShared.Auth)
+
+  Backwards-compatible alias:
+
       inertia_shared(MyAppWeb.InertiaShared.Auth)
 
   Conditional sharing (matches Phoenix plug pattern):
@@ -317,11 +352,9 @@ defmodule NbInertia.Controller do
         conn.assigns[:current_user]?.role == :admin
       end
   """
-  defmacro inertia_shared(module_or_block, opts \\ [])
+  defmacro include_shared_props(module, opts \\ [])
 
-  # Handle SharedProps module registration: inertia_shared(MyModule, opts)
-  # Note: Module can be an atom (literal) or {:__aliases__, _, _} (alias)
-  defmacro inertia_shared(module, opts)
+  defmacro include_shared_props(module, opts)
            when is_atom(module) or (is_tuple(module) and elem(module, 0) == :__aliases__) do
     quote do
       config = %{
@@ -332,6 +365,17 @@ defmodule NbInertia.Controller do
       }
 
       Module.put_attribute(__MODULE__, :inertia_shared_modules, config)
+    end
+  end
+
+  defmacro inertia_shared(module_or_block, opts \\ [])
+
+  # Handle SharedProps module registration: inertia_shared(MyModule, opts)
+  # Note: Module can be an atom (literal) or {:__aliases__, _, _} (alias)
+  defmacro inertia_shared(module, opts)
+           when is_atom(module) or (is_tuple(module) and elem(module, 0) == :__aliases__) do
+    quote do
+      include_shared_props(unquote(module), unquote(opts))
     end
   end
 
@@ -372,6 +416,10 @@ defmodule NbInertia.Controller do
   This macro does NOT perform any validation - it is purely for type generation.
   All validation should be handled by changesets on the server.
 
+  When the form name matches a generic page prop (`:map` or `:any`), the generated
+  TypeScript fields are inlined into that prop on the page's `*Props` interface.
+  Otherwise, the form is emitted under a standalone `*FormInputs` interface.
+
   ## Examples
 
       inertia_page :users_new do
@@ -386,13 +434,16 @@ defmodule NbInertia.Controller do
 
   This generates:
 
-      export interface UsersNewFormInputs {
+      export interface UsersNewProps {
         user: {
           name: string;
           email: string;
           age?: number;
-        }
+        };
       }
+
+  Without a matching `prop :user, :map` or `prop :user, :any`, the same form would
+  instead be emitted on `UsersNewFormInputs`.
   """
   defmacro form_inputs(name, do: block) when is_atom(name) do
     quote do
@@ -416,6 +467,32 @@ defmodule NbInertia.Controller do
       Module.delete_attribute(__MODULE__, :current_form_name)
       Module.delete_attribute(__MODULE__, :current_form_fields)
     end
+  end
+
+  @doc """
+  Builds an explicit serializer tuple for Inertia props.
+
+  This is equivalent to the positional tuple forms accepted by `render_inertia/3`,
+  `render_inertia_modal/3`, realtime payloads, and page prop maps, but gives a
+  clearer call site and editor-visible function signature.
+
+  ## Examples
+
+      render_inertia(conn, :users_index,
+        users: serialize(UserSerializer, users),
+        meta: serialize(MetaSerializer, meta, opts: [schema: User])
+      )
+  """
+  @spec serialize(module(), any()) :: {module(), any()}
+  @spec serialize(module(), any(), keyword()) :: {module(), any(), keyword()}
+  def serialize(serializer, data, opts \\ [])
+
+  def serialize(serializer, data, []) when is_atom(serializer) do
+    {serializer, data}
+  end
+
+  def serialize(serializer, data, opts) when is_atom(serializer) and is_list(opts) do
+    {serializer, data, opts}
   end
 
   @doc """
@@ -969,6 +1046,7 @@ defmodule NbInertia.Controller do
 
     * `:deep_merge` - When `true`, recursively merges nested maps in shared props with page props.
       Overrides the global `deep_merge_shared_props` config setting.
+    * `:ssr` - Enables or disables SSR for the current render.
 
   ## Examples
 
@@ -990,6 +1068,9 @@ defmodule NbInertia.Controller do
       |> assign_prop(:total_count, 42)
       |> render_inertia(:users_index)
 
+      # Explicit component renders can use keyword or map props
+      render_inertia_component(conn, "Users/Index", users: users)
+
       # Backward compatible with strings
       conn
       |> assign_prop(:data, "test")
@@ -999,73 +1080,14 @@ defmodule NbInertia.Controller do
 
   # 4-arity: All-in-one with props and options
   defmacro render_inertia(conn, page_ref, props, opts) when is_atom(page_ref) and is_list(opts) do
-    # Perform compile-time validation if in dev/test
-    # This runs during macro expansion, not at runtime
-    if Mix.env() in [:dev, :test] and is_list(props) and props != [] do
-      # Get the page config directly from module attributes
-      # (can't use inertia_page_config/1 because @before_compile hasn't run yet)
-      pages = Module.get_attribute(__CALLER__.module, :inertia_pages) || %{}
-      page_config = Map.get(pages, page_ref)
-
-      if page_config do
-        # Validate props at compile-time
-        declared_props = page_config.props
-        provided_prop_names = Keyword.keys(props) |> MapSet.new()
-        declared_prop_names = Enum.map(declared_props, & &1.name) |> MapSet.new()
-
-        # Find required props (exclude partial, lazy, defer, and from: :assigns)
-        required_props =
-          declared_props
-          |> Enum.reject(fn prop ->
-            Keyword.get(prop.opts, :partial, false) ||
-              Keyword.get(prop.opts, :lazy, false) ||
-              Keyword.get(prop.opts, :defer, false) ||
-              Keyword.get(prop.opts, :from, nil) == :assigns
-          end)
-          |> MapSet.new(& &1.name)
-
-        # Check for missing required props
-        missing_props = MapSet.difference(required_props, provided_prop_names)
-
-        if MapSet.size(missing_props) > 0 do
-          missing_list = MapSet.to_list(missing_props) |> Enum.map_join(", ", &inspect/1)
-
-          raise CompileError,
-            description: """
-            Missing required props for Inertia page :#{page_ref}
-
-            Missing props: #{missing_list}
-
-            Add the missing props to your render_inertia call or mark them as partial.
-            """,
-            file: __CALLER__.file,
-            line: __CALLER__.line
-        end
-
-        # Check for undeclared props
-        extra_props = MapSet.difference(provided_prop_names, declared_prop_names)
-
-        if MapSet.size(extra_props) > 0 do
-          extra_list = MapSet.to_list(extra_props) |> Enum.map_join(", ", &inspect/1)
-
-          raise CompileError,
-            description: """
-            Undeclared props provided for Inertia page :#{page_ref}
-
-            Undeclared props: #{extra_list}
-
-            Remove these props or declare them in your inertia_page block.
-            """,
-            file: __CALLER__.file,
-            line: __CALLER__.line
-        end
-      end
-    end
+    maybe_validate_literal_page_props!(__CALLER__, page_ref, props)
 
     quote do
       conn_value = unquote(conn)
       page_ref = unquote(page_ref)
-      props = unquote(props)
+
+      {props_map, render_opts} =
+        NbInertia.Controller.normalize_render_args!(:page, unquote(props), unquote(opts))
 
       # Look up the component name (will raise at runtime if page not declared)
       component = page(page_ref)
@@ -1077,6 +1099,13 @@ defmodule NbInertia.Controller do
           nil -> []
           page_config -> page_config.props
         end
+
+      {props_map, saved_errors} =
+        NbInertia.Controller.prepare_page_props_for_render(
+          conn_value,
+          props_map,
+          page_prop_configs
+        )
 
       inline_shared_configs = inertia_shared_props()
 
@@ -1091,7 +1120,9 @@ defmodule NbInertia.Controller do
 
       # Determine if we should use deep merge
       deep_merge? =
-        Keyword.get(unquote(opts), :deep_merge, NbInertia.Config.deep_merge_shared_props())
+        Keyword.get(render_opts, :deep_merge, NbInertia.Config.deep_merge_shared_props())
+
+      render_opts = Keyword.delete(render_opts, :deep_merge)
 
       shared_props =
         NbInertia.PropRuntime.resolve_shared_props(
@@ -1107,11 +1138,15 @@ defmodule NbInertia.Controller do
       conn_value =
         NbInertia.PropRuntime.mark_shared_prop_keys(conn_value, shared_props)
 
+      NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props_map)
+
       # Combine shared props with provided page props
       all_props_map =
-        NbInertia.PropRuntime.merge_props(shared_props, Enum.into(props, %{}), deep_merge?)
+        NbInertia.PropRuntime.merge_props(shared_props, props_map, deep_merge?)
 
       conn_value = NbInertia.PropRuntime.assign_props(conn_value, all_props_map, dsl_opts_map)
+      conn_value = NbInertia.Controller.restore_render_errors(conn_value, saved_errors)
+      conn_value = NbInertia.Controller.apply_render_opts(conn_value, render_opts)
 
       # Apply camelization if configured
       conn_value =
@@ -1122,17 +1157,29 @@ defmodule NbInertia.Controller do
         end
 
       # Don't delegate to Inertia.Controller for final render - handle SSR ourselves
-      NbInertia.Controller.do_render_inertia(conn_value, component)
+      NbInertia.Controller.do_render_inertia(conn_value, component, render_opts)
     end
   end
 
   # 2-arity, 3-arity with empty props, or non-atom page: Pipe-friendly pattern or string component
-  defmacro render_inertia(conn, component_or_page, _props, _opts) do
+  defmacro render_inertia(conn, component_or_page, props_or_opts, opts) do
     cond do
-      # If it's a string literal, pass through directly
+      # If it's a string literal, normalize explicit component props at runtime
       is_binary(component_or_page) ->
+        maybe_validate_literal_component_render_args!(__CALLER__, props_or_opts, opts)
+
         quote do
           conn_value = unquote(conn)
+
+          {props_map, render_opts} =
+            NbInertia.Controller.normalize_render_args!(
+              :component,
+              unquote(props_or_opts),
+              unquote(opts)
+            )
+
+          conn_value = NbInertia.PropRuntime.assign_props(conn_value, props_map, %{})
+          conn_value = NbInertia.Controller.apply_render_opts(conn_value, render_opts)
 
           conn_value =
             if NbInertia.Config.camelize_props?() do
@@ -1141,7 +1188,11 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          NbInertia.Controller.do_render_inertia(conn_value, unquote(component_or_page))
+          NbInertia.Controller.do_render_inertia(
+            conn_value,
+            unquote(component_or_page),
+            render_opts
+          )
         end
 
       # If it's an atom literal
@@ -1150,6 +1201,13 @@ defmodule NbInertia.Controller do
           conn_value = unquote(conn)
           page_ref = unquote(component_or_page)
 
+          {props_map, render_opts} =
+            NbInertia.Controller.normalize_render_args!(
+              :page,
+              unquote(props_or_opts),
+              unquote(opts)
+            )
+
           # Look up the component name
           component = __MODULE__.page(page_ref)
 
@@ -1157,8 +1215,26 @@ defmodule NbInertia.Controller do
           shared_modules = __MODULE__.__inertia_shared_modules__()
           inline_shared_configs = __MODULE__.inertia_shared_props()
 
+          page_prop_configs =
+            case inertia_page_config(page_ref) do
+              nil -> []
+              page_config -> page_config.props
+            end
+
+          {props_map, saved_errors} =
+            NbInertia.Controller.prepare_page_props_for_render(
+              conn_value,
+              props_map,
+              page_prop_configs
+            )
+
           # Get current action name for conditional filtering
           action = Phoenix.Controller.action_name(conn_value)
+
+          deep_merge? =
+            Keyword.get(render_opts, :deep_merge, NbInertia.Config.deep_merge_shared_props())
+
+          render_opts = Keyword.delete(render_opts, :deep_merge)
 
           shared_props =
             NbInertia.PropRuntime.resolve_shared_props(
@@ -1166,17 +1242,26 @@ defmodule NbInertia.Controller do
               shared_modules,
               inline_shared_configs,
               action: action,
-              controller_module: __MODULE__
+              controller_module: __MODULE__,
+              deep_merge: deep_merge?
             )
 
           conn_value = NbInertia.PropRuntime.mark_shared_prop_keys(conn_value, shared_props)
 
+          NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props_map)
+
+          all_props_map =
+            NbInertia.PropRuntime.merge_props(shared_props, props_map, deep_merge?)
+
           conn_value =
             NbInertia.PropRuntime.assign_props(
               conn_value,
-              shared_props,
-              NbInertia.PropRuntime.dsl_opts_map(inline_shared_configs)
+              all_props_map,
+              NbInertia.PropRuntime.dsl_opts_map(page_prop_configs ++ inline_shared_configs)
             )
+
+          conn_value = NbInertia.Controller.restore_render_errors(conn_value, saved_errors)
+          conn_value = NbInertia.Controller.apply_render_opts(conn_value, render_opts)
 
           # Apply camelization if configured
           conn_value =
@@ -1186,13 +1271,23 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          NbInertia.Controller.do_render_inertia(conn_value, component)
+          NbInertia.Controller.do_render_inertia(conn_value, component, render_opts)
         end
 
       # Default: pass through
       true ->
         quote do
           conn_value = unquote(conn)
+
+          {props_map, render_opts} =
+            NbInertia.Controller.normalize_render_args!(
+              :component,
+              unquote(props_or_opts),
+              unquote(opts)
+            )
+
+          conn_value = NbInertia.PropRuntime.assign_props(conn_value, props_map, %{})
+          conn_value = NbInertia.Controller.apply_render_opts(conn_value, render_opts)
 
           conn_value =
             if NbInertia.Config.camelize_props?() do
@@ -1201,10 +1296,254 @@ defmodule NbInertia.Controller do
               conn_value
             end
 
-          NbInertia.Controller.do_render_inertia(conn_value, unquote(component_or_page))
+          NbInertia.Controller.do_render_inertia(
+            conn_value,
+            unquote(component_or_page),
+            render_opts
+          )
         end
     end
   end
+
+  @doc """
+  Renders an explicit component path with props.
+
+  Unlike `render_inertia/3`, the third argument here is always treated as props,
+  so keyword lists are never reinterpreted as render options.
+
+  Use `render_inertia_component/4` when you want to pass both props and options.
+  """
+  defmacro render_inertia_component(conn, component, props \\ [], opts \\ []) do
+    quote do
+      conn_value = unquote(conn)
+
+      {props_map, render_opts} =
+        NbInertia.Controller.normalize_explicit_component_render_args!(
+          unquote(props),
+          unquote(opts)
+        )
+
+      conn_value = NbInertia.PropRuntime.assign_props(conn_value, props_map, %{})
+      conn_value = NbInertia.Controller.apply_render_opts(conn_value, render_opts)
+
+      conn_value =
+        if NbInertia.Config.camelize_props?() do
+          NbInertia.CoreController.camelize_props(conn_value, true)
+        else
+          conn_value
+        end
+
+      NbInertia.Controller.do_render_inertia(conn_value, unquote(component), render_opts)
+    end
+  end
+
+  @doc false
+  def normalize_render_args!(kind, props_or_opts, opts \\ [])
+
+  def normalize_render_args!(_kind, %{} = props, opts) when is_list(opts) do
+    {props, opts}
+  end
+
+  def normalize_render_args!(kind, props_or_opts, opts)
+      when is_list(props_or_opts) and is_list(opts) do
+    unless Keyword.keyword?(props_or_opts) do
+      raise ArgumentError,
+            "render_inertia props must be a map or keyword list, got: #{inspect(props_or_opts)}"
+    end
+
+    cond do
+      opts != [] ->
+        {Enum.into(props_or_opts, %{}), opts}
+
+      props_or_opts == [] ->
+        {%{}, []}
+
+      render_opts_only?(kind, props_or_opts) ->
+        {%{}, props_or_opts}
+
+      ambiguous_render_keywords?(kind, props_or_opts) ->
+        raise ArgumentError,
+              "ambiguous render_inertia keyword list: #{inspect(props_or_opts)}. " <>
+                "Pass props and options separately, or use render_inertia_component/3 for explicit components."
+
+      true ->
+        {Enum.into(props_or_opts, %{}), []}
+    end
+  end
+
+  def normalize_render_args!(_kind, nil, []), do: {%{}, []}
+
+  def normalize_render_args!(_kind, props_or_opts, _opts) do
+    raise ArgumentError,
+          "render_inertia props must be a map or keyword list, got: #{inspect(props_or_opts)}"
+  end
+
+  @doc false
+  def normalize_explicit_component_render_args!(props, opts \\ [])
+
+  def normalize_explicit_component_render_args!(%{} = props, opts) when is_list(opts) do
+    {props, opts}
+  end
+
+  def normalize_explicit_component_render_args!(props, opts)
+      when is_list(props) and is_list(opts) do
+    unless Keyword.keyword?(props) do
+      raise ArgumentError,
+            "render_inertia_component props must be a map or keyword list, got: #{inspect(props)}"
+    end
+
+    {Enum.into(props, %{}), opts}
+  end
+
+  def normalize_explicit_component_render_args!(nil, []), do: {%{}, []}
+
+  def normalize_explicit_component_render_args!(props, _opts) do
+    raise ArgumentError,
+          "render_inertia_component props must be a map or keyword list, got: #{inspect(props)}"
+  end
+
+  @doc false
+  def apply_render_opts(conn, opts) when is_list(opts) do
+    case Keyword.fetch(opts, :ssr) do
+      {:ok, true} -> enable_ssr(conn)
+      {:ok, false} -> disable_ssr(conn)
+      :error -> conn
+    end
+  end
+
+  defp maybe_validate_literal_page_props!(caller, page_ref, props_ast) do
+    if Mix.env() in [:dev, :test] do
+      case literal_props_for_validation(props_ast, :page) do
+        {:ok, provided_prop_names} ->
+          pages = Module.get_attribute(caller.module, :inertia_pages) || %{}
+          page_config = Map.get(pages, page_ref)
+
+          if page_config do
+            declared_props = page_config.props
+            declared_prop_names = MapSet.new(declared_props, &to_string(&1.name))
+
+            required_props =
+              declared_props
+              |> Enum.reject(&optional_runtime_prop?/1)
+              |> MapSet.new(&to_string(&1.name))
+
+            missing_props = MapSet.difference(required_props, provided_prop_names)
+
+            if MapSet.size(missing_props) > 0 do
+              missing_list = format_prop_name_list(MapSet.to_list(missing_props))
+
+              raise CompileError,
+                description: """
+                Missing required props for Inertia page :#{page_ref}
+
+                Missing props: #{missing_list}
+
+                Add the missing props to your render_inertia call or mark them as partial.
+                """,
+                file: caller.file,
+                line: caller.line
+            end
+
+            extra_props = MapSet.difference(provided_prop_names, declared_prop_names)
+
+            if MapSet.size(extra_props) > 0 do
+              extra_list = format_prop_name_list(MapSet.to_list(extra_props))
+
+              raise CompileError,
+                description: """
+                Undeclared props provided for Inertia page :#{page_ref}
+
+                Undeclared props: #{extra_list}
+
+                Remove these props or declare them in your inertia_page block.
+                """,
+                file: caller.file,
+                line: caller.line
+            end
+          end
+
+        :skip ->
+          :ok
+      end
+    end
+  end
+
+  defp maybe_validate_literal_component_render_args!(caller, props_ast, opts_ast) do
+    if Mix.env() in [:dev, :test] do
+      cond do
+        not (is_list(opts_ast) and opts_ast == []) ->
+          :ok
+
+        not (is_list(props_ast) and Keyword.keyword?(props_ast)) ->
+          :ok
+
+        ambiguous_render_keywords?(:component, props_ast) ->
+          raise CompileError,
+            description: """
+            Ambiguous keyword list passed to render_inertia/3 for an explicit component
+
+            Keyword list: #{inspect(props_ast)}
+
+            With string component names, keyword lists can be interpreted as either props or render options.
+            Use one of these explicit forms instead:
+
+              render_inertia(conn, "Users/Index", %{users: users}, ssr: true)
+              render_inertia_component(conn, "Users/Index", users: users, ssr: true)
+            """,
+            file: caller.file,
+            line: caller.line
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp literal_props_for_validation(props_ast, kind) do
+    cond do
+      is_list(props_ast) and Keyword.keyword?(props_ast) ->
+        if props_ast == [] or render_opts_only?(kind, props_ast) do
+          :skip
+        else
+          {:ok, MapSet.new(Keyword.keys(props_ast), &to_string/1)}
+        end
+
+      match?({:%{}, _, _}, props_ast) ->
+        literal_map_prop_names(props_ast)
+
+      true ->
+        :skip
+    end
+  end
+
+  defp literal_map_prop_names({:%{}, _, entries}) do
+    names =
+      Enum.reduce_while(entries, [], fn
+        {key, _value}, acc when is_atom(key) or is_binary(key) ->
+          {:cont, [to_string(key) | acc]}
+
+        _, _acc ->
+          {:halt, :dynamic}
+      end)
+
+    case names do
+      :dynamic -> :skip
+      keys -> {:ok, MapSet.new(keys)}
+    end
+  end
+
+  defp render_opts_only?(kind, keyword_list) when is_list(keyword_list) do
+    keys = Keyword.keys(keyword_list)
+    keys != [] and Enum.all?(keys, &(&1 in render_opt_keys(kind)))
+  end
+
+  defp ambiguous_render_keywords?(kind, keyword_list) when is_list(keyword_list) do
+    keys = Keyword.keys(keyword_list)
+    Enum.any?(keys, &(&1 in render_opt_keys(kind))) and not render_opts_only?(kind, keyword_list)
+  end
+
+  defp render_opt_keys(:component), do: @component_render_opts
+  defp render_opt_keys(:page), do: @page_render_opts
 
   @doc """
   Validates that the provided props match the declared props for a page.
@@ -1215,30 +1554,31 @@ defmodule NbInertia.Controller do
 
   Partial props (with `partial: true`) are allowed to be omitted.
   """
-  @spec validate_page_props!(module(), atom(), keyword()) :: :ok
+  @spec validate_page_props!(module(), atom(), keyword() | map()) :: :ok
   def validate_page_props!(module, page_name, provided_props) do
     page_config = module.inertia_page_config(page_name)
     declared_props = page_config.props
 
     # Get prop names
-    provided_prop_names = Keyword.keys(provided_props) |> MapSet.new()
-    declared_prop_names = Enum.map(declared_props, & &1.name) |> MapSet.new()
+    provided_prop_names =
+      case provided_props do
+        props when is_list(props) -> Keyword.keys(props) |> MapSet.new(&to_string/1)
+        props when is_map(props) -> Map.keys(props) |> MapSet.new(&to_string/1)
+      end
 
-    # Find required props (not partial, lazy, or defer)
+    declared_prop_names = Enum.map(declared_props, &to_string(&1.name)) |> MapSet.new()
+
+    # Find required props (not partial, lazy, defer, default-backed, or from assigns)
     required_props =
       declared_props
-      |> Enum.reject(fn prop ->
-        Keyword.get(prop.opts, :partial, false) ||
-          Keyword.get(prop.opts, :lazy, false) ||
-          Keyword.get(prop.opts, :defer, false)
-      end)
-      |> MapSet.new(& &1.name)
+      |> Enum.reject(&optional_runtime_prop?/1)
+      |> MapSet.new(&to_string(&1.name))
 
     # Check for missing required props
     missing_props = MapSet.difference(required_props, provided_prop_names)
 
     if MapSet.size(missing_props) > 0 do
-      missing_list = MapSet.to_list(missing_props) |> Enum.map_join(", ", &inspect/1)
+      missing_list = format_prop_name_list(MapSet.to_list(missing_props))
 
       raise ArgumentError, """
       Missing required props for Inertia page
@@ -1273,7 +1613,7 @@ defmodule NbInertia.Controller do
     extra_props = MapSet.difference(provided_prop_names, declared_prop_names)
 
     if MapSet.size(extra_props) > 0 do
-      extra_list = MapSet.to_list(extra_props) |> Enum.map_join(", ", &inspect/1)
+      extra_list = format_prop_name_list(MapSet.to_list(extra_props))
 
       raise ArgumentError, """
       Undeclared props provided for Inertia page
@@ -1307,6 +1647,55 @@ defmodule NbInertia.Controller do
     end
 
     :ok
+  end
+
+  defp optional_runtime_prop?(prop) do
+    opts = prop[:opts] || []
+
+    Keyword.get(opts, :partial, false) ||
+      Keyword.get(opts, :lazy, false) ||
+      Keyword.get(opts, :defer, false) ||
+      not is_nil(Keyword.get(opts, :from)) ||
+      Keyword.has_key?(opts, :default)
+  end
+
+  defp format_prop_name_list(prop_names) do
+    prop_names
+    |> Enum.sort()
+    |> Enum.map_join(", ", &format_prop_name/1)
+  end
+
+  defp format_prop_name(name) when is_atom(name), do: inspect(name)
+
+  defp format_prop_name(name) when is_binary(name) do
+    if String.match?(name, ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/) do
+      ":#{name}"
+    else
+      inspect(name)
+    end
+  end
+
+  @doc false
+  def prepare_page_props_for_render(conn, props_map, page_prop_configs) do
+    shared = conn.private[:inertia_shared] || %{}
+
+    {
+      NbInertia.PropRuntime.apply_from_and_defaults(
+        conn,
+        props_map,
+        page_prop_configs,
+        Map.keys(shared)
+      ),
+      Map.get(shared, :errors)
+    }
+  end
+
+  @doc false
+  def restore_render_errors(conn, nil), do: conn
+
+  def restore_render_errors(conn, saved_errors) do
+    shared = conn.private[:inertia_shared] || %{}
+    Plug.Conn.put_private(conn, :inertia_shared, Map.put(shared, :errors, saved_errors))
   end
 
   # Helper functions for formatting error messages
@@ -2043,15 +2432,30 @@ defmodule NbInertia.Controller do
 
   defp apply_modal_config_options(modal, opts) do
     Enum.reduce(opts, modal, fn
-      {:size, size}, acc -> NbInertia.Modal.size(acc, size)
-      {:position, position}, acc -> NbInertia.Modal.position(acc, position)
-      {:slideover, enabled}, acc -> NbInertia.Modal.slideover(acc, enabled)
-      {:close_button, enabled}, acc -> NbInertia.Modal.close_button(acc, enabled)
-      {:close_explicitly, enabled}, acc -> NbInertia.Modal.close_explicitly(acc, enabled)
-      {:close_on_click_outside, enabled}, acc -> NbInertia.Modal.close_on_click_outside(acc, enabled)
-      {:base_url, _}, acc -> acc
+      {:size, size}, acc ->
+        NbInertia.Modal.size(acc, size)
+
+      {:position, position}, acc ->
+        NbInertia.Modal.position(acc, position)
+
+      {:slideover, enabled}, acc ->
+        NbInertia.Modal.slideover(acc, enabled)
+
+      {:close_button, enabled}, acc ->
+        NbInertia.Modal.close_button(acc, enabled)
+
+      {:close_explicitly, enabled}, acc ->
+        NbInertia.Modal.close_explicitly(acc, enabled)
+
+      {:close_on_click_outside, enabled}, acc ->
+        NbInertia.Modal.close_on_click_outside(acc, enabled)
+
+      {:base_url, _}, acc ->
+        acc
+
       # Ignore unknown options
-      _, acc -> acc
+      _, acc ->
+        acc
     end)
   end
 
@@ -2344,7 +2748,7 @@ defmodule NbInertia.Controller do
   defp apply_as_opt(prop, as), do: NbInertia.CoreController.once_as(prop, as)
 
   @doc false
-  def do_render_inertia(conn, component) do
+  def do_render_inertia(conn, component, render_opts \\ []) do
     # Emit telemetry for render start
     action = Phoenix.Controller.action_name(conn)
     controller = Phoenix.Controller.controller_module(conn)
@@ -2368,10 +2772,13 @@ defmodule NbInertia.Controller do
       result =
         if ssr_enabled?(conn) do
           # Handle SSR ourselves with NbInertia.SSR
-          do_render_with_ssr(conn, component)
+          do_render_with_ssr(conn, component, render_opts)
         else
           # Let Inertia.Controller handle CSR
-          NbInertia.CoreController.render_inertia(conn, component)
+          case render_opts do
+            [] -> NbInertia.CoreController.render_inertia(conn, component)
+            opts -> NbInertia.CoreController.render_inertia(conn, component, opts)
+          end
         end
 
       # Emit telemetry for successful render
@@ -2409,9 +2816,13 @@ defmodule NbInertia.Controller do
     end
   end
 
-  defp do_render_with_ssr(conn, component) do
+  defp do_render_with_ssr(conn, component, render_opts) do
     # Use CoreController.render_inertia with SSR enabled
     # It will handle prop resolution, deferred props, etc.
-    NbInertia.CoreController.render_inertia(conn, component, ssr: true)
+    NbInertia.CoreController.render_inertia(
+      conn,
+      component,
+      Keyword.put(render_opts, :ssr, true)
+    )
   end
 end

@@ -22,7 +22,10 @@ defmodule NbInertia.Extractor.Preamble do
   | `prop :user, UserSerializer` | `user: User` | `import type { User } from '@/types'` |
   | `prop :status, enum: ["a","b"]` | `status: 'a' \\| 'b'` | -- |
   | `prop :x, :map, nullable: true` | `x: Record<string, any> \\| null` | -- |
-  | `prop :x, :string, default: ""` | `x?: string` | -- (optional with ?) |
+  | `prop :x, :string, default: ""` | `x: string` | -- |
+  | `prop :x, :string, partial: true` | `x?: string` | -- (optional with ?) |
+  | `prop :x, :string, defer: true` | `x?: string` | -- (optional with ?) |
+  | `prop :x, :string, lazy: true` | `x: string` | -- |
   """
 
   @primitive_types [:string, :integer, :float, :boolean, :map, :list, :number, :any]
@@ -228,13 +231,20 @@ defmodule NbInertia.Extractor.Preamble do
   defp format_interface_field(prop) do
     name = to_string(prop[:name] || prop.name)
     ts_type = prop_to_ts_type(prop)
-    has_default? = Keyword.has_key?(prop[:opts] || [], :default)
+    optional? = ts_optional_field?(prop[:opts] || [])
 
-    if has_default? do
+    if optional? do
       "  #{name}?: #{ts_type}"
     else
       "  #{name}: #{ts_type}"
     end
+  end
+
+  defp ts_optional_field?(opts) do
+    partial? = Keyword.get(opts, :partial, Keyword.get(opts, :optional, false))
+    defer? = Keyword.get(opts, :defer, false)
+
+    partial? || defer?
   end
 
   # ── Type Resolution ──────────────────────────────────

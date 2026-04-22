@@ -168,6 +168,8 @@ defmodule NbInertia.Page do
           prop: 2,
           prop: 3,
           form_inputs: 2,
+          serialize: 2,
+          serialize: 3,
           field: 2,
           field: 3,
           field: 4

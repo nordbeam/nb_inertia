@@ -352,7 +352,7 @@ defmodule NbInertia.ExtractorTest do
       assert result =~ "// Source: lib/my_app_web/inertia/users_page/index.ex"
     end
 
-    test "optional fields use ? syntax" do
+    test "default-backed fields stay required" do
       props = [
         %{name: :name, type: :string, opts: []},
         %{name: :theme, type: :string, opts: [default: "light"]}
@@ -361,7 +361,23 @@ defmodule NbInertia.ExtractorTest do
       result = Preamble.generate(props)
 
       assert result =~ "  name: string"
-      assert result =~ "  theme?: string"
+      assert result =~ "  theme: string"
+      refute result =~ "  theme?: string"
+    end
+
+    test "partial and deferred fields use ? syntax while lazy stays required" do
+      props = [
+        %{name: :partial_data, type: :map, opts: [partial: true]},
+        %{name: :deferred_data, type: :map, opts: [defer: true]},
+        %{name: :lazy_data, type: :map, opts: [lazy: true]}
+      ]
+
+      result = Preamble.generate(props)
+
+      assert result =~ "  partial_data?: Record<string, any>"
+      assert result =~ "  deferred_data?: Record<string, any>"
+      assert result =~ "  lazy_data: Record<string, any>"
+      refute result =~ "  lazy_data?: Record<string, any>"
     end
 
     test "nullable fields use union syntax" do
@@ -506,7 +522,7 @@ defmodule NbInertia.ExtractorTest do
       assert content =~ "labels: string[]"
       assert content =~ "status: 'active' | 'inactive'"
       assert content =~ "nullable_field: Record<string, any> | null"
-      assert content =~ "optional_field?: string"
+      assert content =~ "optional_field: string"
     end
 
     test "creates nested directories as needed", %{output_dir: output_dir} do

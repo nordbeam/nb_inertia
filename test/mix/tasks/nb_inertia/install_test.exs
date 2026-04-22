@@ -82,14 +82,14 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   end
 
   describe "npm_source_from_dep_declaration/2" do
-    test "uses a local file source when nb_inertia is installed from path" do
+    test "falls back to the github source when nb_inertia is installed from path" do
       source =
         Install.npm_source_from_dep_declaration(
           "{:nb_inertia, [path: \"../nb_inertia\", override: true]}",
           "github:nordbeam/nb_inertia"
         )
 
-      assert source == "file:#{Path.expand("../nb_inertia")}"
+      assert source == "github:nordbeam/nb_inertia"
     end
 
     test "preserves github refs when nb_inertia is installed from github" do
@@ -187,5 +187,17 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     assert source =~ ~s(import { createInertiaApp, http } from "@/lib/inertia";)
     assert source =~ "http.onRequest((config) => {"
     refute source =~ "axios.defaults.xsrfHeaderName"
+  end
+
+  test "full installer demo inlines contact form types into HomeProps" do
+    source =
+      Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+      |> File.read!()
+
+    assert source =~ ~s(import type { HomeProps } from "@/types";)
+    assert source =~ ~s(const form = useForm<HomeProps["contactForm"]>()
+    assert source =~ "prop :contact_form, :map, default: %{}"
+    refute source =~ ~s(import type { HomeProps, HomeFormInputs } from "@/types";)
+    refute source =~ ~s(useForm<HomeFormInputs["contactForm"]>)
   end
 end

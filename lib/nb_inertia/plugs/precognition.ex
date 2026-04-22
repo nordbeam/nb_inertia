@@ -94,16 +94,13 @@ defmodule NbInertia.Plugs.Precognition do
 
   ## Respecting Precognition-Validate-Only
 
-  The `Precognition-Validate-Only` header specifies which fields to validate.
-  Use the `:only` option with `precognition_fields/1` to respect this:
+  The `Precognition-Validate-Only` header is respected automatically by
+  `precognition/3` and `validate_precognition/3`. You can still override it
+  explicitly with `:only` if you need custom filtering behavior:
 
-      precognition conn, changeset, only: precognition_fields(conn) do
+      precognition conn, changeset, only: ["email"] do
         # ...
       end
-
-  Or with validate_precognition/3:
-
-      validate_precognition(conn, changeset, only: precognition_fields(conn))
 
   ## With Custom Validation
 
@@ -237,7 +234,8 @@ defmodule NbInertia.Plugs.Precognition do
 
   ## Options
 
-    * `:only` - List of fields to validate (from `precognition_fields/1`)
+    * `:only` - List of fields to validate. Defaults to `precognition_fields(conn)`
+      when not explicitly provided.
     * `:camelize` - Whether to camelize error keys (default: from config)
 
   ## Returns
@@ -253,8 +251,8 @@ defmodule NbInertia.Plugs.Precognition do
         {:ok, conn} -> # proceed with normal logic
       end
 
-      # With field filtering
-      case validate_precognition(conn, changeset, only: precognition_fields(conn)) do
+      # With explicit field filtering override
+      case validate_precognition(conn, changeset, only: ["email"]) do
         {:precognition, conn} -> conn
         {:ok, conn} -> # proceed with normal logic
       end
@@ -265,7 +263,7 @@ defmodule NbInertia.Plugs.Precognition do
 
   def validate_precognition(conn, %Ecto.Changeset{} = changeset, opts) do
     if precognition_request?(conn) do
-      errors = extract_changeset_errors(changeset, opts)
+      errors = extract_changeset_errors(changeset, normalize_validation_opts(conn, opts))
       {:precognition, send_precognition_response(conn, errors)}
     else
       {:ok, conn}
@@ -274,7 +272,7 @@ defmodule NbInertia.Plugs.Precognition do
 
   def validate_precognition(conn, errors, opts) when is_map(errors) do
     if precognition_request?(conn) do
-      filtered_errors = filter_errors(errors, opts)
+      filtered_errors = filter_errors(errors, normalize_validation_opts(conn, opts))
       {:precognition, send_precognition_response(conn, filtered_errors)}
     else
       {:ok, conn}
@@ -383,7 +381,7 @@ defmodule NbInertia.Plugs.Precognition do
       end
 
       # With options
-      precognition conn, changeset, only: precognition_fields(conn) do
+      precognition conn, changeset, only: ["email"] do
         # ...
       end
   """
@@ -429,6 +427,10 @@ defmodule NbInertia.Plugs.Precognition do
       end)
 
     filter_errors(errors, opts)
+  end
+
+  defp normalize_validation_opts(conn, opts) do
+    Keyword.put_new(opts, :only, precognition_fields(conn))
   end
 
   defp filter_errors(errors, opts) do
