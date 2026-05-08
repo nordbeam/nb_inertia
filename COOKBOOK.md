@@ -32,7 +32,7 @@ defmodule MyAppWeb do
       use NbInertia.Controller
 
       # Auto-register base shared props for ALL controllers
-      inertia_shared(MyAppWeb.InertiaShared.Base)
+      include_shared_props(MyAppWeb.InertiaShared.Base)
 
       import Plug.Conn
       import MyAppWeb.Gettext
@@ -89,10 +89,10 @@ defmodule MyAppWeb.Admin.DashboardController do
   use MyAppWeb, :controller
 
   # Only include admin data for index and show actions
-  inertia_shared(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
+  include_shared_props(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
 
   # Exclude sensitive data from public-facing actions
-  inertia_shared(MyAppWeb.InertiaShared.Internal, except: [:public_stats])
+  include_shared_props(MyAppWeb.InertiaShared.Internal, except: [:public_stats])
 
   # ... rest of controller
 end
@@ -109,10 +109,10 @@ defmodule MyAppWeb.UserController do
   use MyAppWeb, :controller
 
   # Only include admin props when user is admin
-  inertia_shared(MyAppWeb.InertiaShared.Admin, when: :admin?)
+  include_shared_props(MyAppWeb.InertiaShared.Admin, when: :admin?)
 
   # Include feature flags for beta testers
-  inertia_shared(MyAppWeb.InertiaShared.BetaFeatures, when: :beta_tester?)
+  include_shared_props(MyAppWeb.InertiaShared.BetaFeatures, when: :beta_tester?)
 
   # Guard functions
   defp admin?(conn) do
@@ -139,7 +139,7 @@ defmodule MyAppWeb.ReportsController do
   use MyAppWeb, :controller
 
   # Only on index, and only when feature is enabled
-  inertia_shared(MyAppWeb.InertiaShared.Analytics,
+  include_shared_props(MyAppWeb.InertiaShared.Analytics,
     only: [:index],
     when: :analytics_enabled?
   )
@@ -170,8 +170,8 @@ defmodule MyAppWeb.InertiaShared.Auth do
   use NbInertia.SharedProps
 
   inertia_shared do
-    prop :current_user, MyApp.UserSerializer
-    prop :permissions, list: :string
+    prop :current_user, ref(MyApp.UserSerializer)
+    prop :permissions, list_of(:string)
   end
 
   def build_props(conn, _opts) do
@@ -238,7 +238,7 @@ defmodule MyAppWeb.SettingsController do
     # Page:   %{settings: %{theme: "light"}}
     # With deep merge: %{settings: %{theme: "light", notifications: true, language: "en"}}
 
-    render_inertia(conn, :settings_index,
+    render_inertia_page(conn, :settings_index,
       [settings: %{theme: "light"}],
       deep_merge: true
     )
@@ -262,16 +262,16 @@ defmodule MyAppWeb.UserController do
   use MyAppWeb, :controller
 
   inertia_page :users_index do
-    prop :users, list: UserSerializer
+    prop :users, list_of(ref(UserSerializer))
     prop :total_count, :integer
-    prop :filters, :map, optional: true
+    prop :filters, :map, partial: true
   end
 
   def index(conn, params) do
     users = Accounts.list_users(params)
 
-    render_inertia(conn, :users_index,
-      users: {UserSerializer, users},
+    render_inertia_page(conn, :users_index,
+      users: serialize(UserSerializer, users),
       total_count: length(users),
       filters: params["filters"]
     )
@@ -288,13 +288,13 @@ defmodule MyAppWeb.DashboardController do
 
   inertia_page :dashboard do
     prop :stats, type: ~TS"{ total: number; active: number; pending: number }"
-    prop :recent_activity, list: ActivitySerializer
+    prop :recent_activity, list_of(ref(ActivitySerializer))
   end
 
   def index(conn, _params) do
-    render_inertia(conn, :dashboard,
+    render_inertia_page(conn, :dashboard,
       stats: Dashboard.get_stats(),
-      recent_activity: {ActivitySerializer, Dashboard.recent_activity()}
+      recent_activity: serialize(ActivitySerializer, Dashboard.recent_activity())
     )
   end
 end
@@ -430,7 +430,7 @@ def controller do
     use Phoenix.Controller
     use NbInertia.Controller
 
-    inertia_shared(MyAppWeb.InertiaShared.Flash)
+    include_shared_props(MyAppWeb.InertiaShared.Flash)
     # ...
   end
 end
@@ -599,7 +599,7 @@ export default function NotificationBadge() {
 **Good:**
 ```elixir
 inertia_shared do
-  prop :auth_user, UserSerializer
+  prop :auth_user, ref(UserSerializer)
   prop :global_flash, :map
   prop :app_version, :string
 end
@@ -608,7 +608,7 @@ end
 **Bad:**
 ```elixir
 inertia_shared do
-  prop :user, UserSerializer  # Might collide with page prop
+  prop :user, ref(UserSerializer)  # Might collide with page prop
   prop :flash, :map           # Might collide with page prop
   prop :version, :string      # Too generic
 end
@@ -623,7 +623,7 @@ defmodule MyAppWeb.InertiaShared.Auth do
   # ...
 end
 
-inertia_shared(MyAppWeb.InertiaShared.Auth)
+include_shared_props(MyAppWeb.InertiaShared.Auth)
 ```
 
 **Bad (hard to test, not reusable):**
@@ -661,10 +661,10 @@ Shared props are included in **every response**. Keep them small and only includ
 
 ```elixir
 # Only include admin data on admin pages
-inertia_shared(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
+include_shared_props(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
 
 # Only include when user is authenticated
-inertia_shared(MyAppWeb.InertiaShared.Auth, when: :authenticated?)
+include_shared_props(MyAppWeb.InertiaShared.Auth, when: :authenticated?)
 ```
 
 ### 5. Test Shared Props

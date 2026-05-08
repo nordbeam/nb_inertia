@@ -34,7 +34,7 @@ defmodule NbInertia.SharedProps do
 
         inertia_shared do
           prop :locale, :string
-          prop :current_user, MyApp.UserSerializer
+          prop :current_user, ref(MyApp.UserSerializer)
           prop :flash, :map
         end
 
@@ -52,7 +52,7 @@ defmodule NbInertia.SharedProps do
 
   ## Features
 
-  - Define props with primitive types or serializers
+  - Define props with primitive types or explicit `ref(...)` references
   - Compile-time validation of returned map keys
   - Optional runtime serialization with NbSerializer
   - Introspection via `__inertia_shared_props__/0`
@@ -65,6 +65,7 @@ defmodule NbInertia.SharedProps do
 
       import NbInertia.SharedProps
       import NbInertia.Controller, only: [prop: 2, prop: 3]
+      import NbInertia.Type
 
       Module.register_attribute(__MODULE__, :inertia_shared_props, accumulate: true)
       Module.register_attribute(__MODULE__, :current_props, accumulate: true)

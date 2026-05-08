@@ -183,6 +183,22 @@ defmodule NbInertia.Credo.ChecksTest do
       issues = run_check(PropFromAssigns, source)
       assert issues == []
     end
+
+    test "also checks render_inertia_page/3" do
+      source = """
+      defmodule MyAppWeb.DashboardController do
+        def index(conn, _params) do
+          render_inertia_page(conn, :dashboard,
+            current_user: conn.assigns.current_user
+          )
+        end
+      end
+      """
+
+      issues = run_check(PropFromAssigns, source)
+      assert length(issues) == 1
+      assert hd(issues).message =~ "from: :assigns"
+    end
   end
 
   describe "DeclareInertiaPage" do
@@ -257,6 +273,22 @@ defmodule NbInertia.Credo.ChecksTest do
       issues = run_check(DeclareInertiaPage, source)
       assert issues == []
     end
+
+    test "also checks render_inertia_page/3 with atom page refs" do
+      source = """
+      defmodule MyAppWeb.UserController do
+        use MyAppWeb, :controller
+
+        def index(conn, _params) do
+          render_inertia_page(conn, :users_index, users: [])
+        end
+      end
+      """
+
+      issues = run_check(DeclareInertiaPage, source)
+      assert length(issues) == 1
+      assert hd(issues).message =~ "requires `use NbInertia.Controller`"
+    end
   end
 
   describe "MissingInertiaPageProps" do
@@ -318,6 +350,29 @@ defmodule NbInertia.Credo.ChecksTest do
 
       issues = run_check(MissingInertiaPageProps, source)
       assert issues == []
+    end
+
+    test "also checks render_inertia_page/3" do
+      source = """
+      defmodule MyAppWeb.UserController do
+        use NbInertia.Controller
+
+        inertia_page :users_show do
+          prop :user, ref(UserSerializer)
+        end
+
+        def show(conn, _params) do
+          render_inertia_page(conn, :users_show,
+            user: %{},
+            extra_field: "not declared"
+          )
+        end
+      end
+      """
+
+      issues = run_check(MissingInertiaPageProps, source)
+      assert length(issues) == 1
+      assert hd(issues).message =~ ":extra_field"
     end
   end
 
@@ -392,7 +447,7 @@ defmodule NbInertia.Credo.ChecksTest do
   end
 
   describe "MissingSerializerInertiaProps" do
-    test "warns when prop uses dot access without serializer" do
+    test "warns when prop uses dot access without explicit serialization" do
       source = """
       defmodule MyAppWeb.UserController do
         def show(conn, _params) do
@@ -406,7 +461,7 @@ defmodule NbInertia.Credo.ChecksTest do
       issues = run_check(MissingSerializerInertiaProps, source)
       assert length(issues) == 1
       assert hd(issues).message =~ ":config"
-      assert hd(issues).message =~ "serializer"
+      assert hd(issues).message =~ "serialize("
     end
 
     test "does not warn when using serializer tuple" do
@@ -415,6 +470,21 @@ defmodule NbInertia.Credo.ChecksTest do
         def show(conn, _params) do
           render_inertia(conn, :show,
             user: {UserSerializer, user}
+          )
+        end
+      end
+      """
+
+      issues = run_check(MissingSerializerInertiaProps, source)
+      assert issues == []
+    end
+
+    test "does not warn when using serialize helper" do
+      source = """
+      defmodule MyAppWeb.UserController do
+        def show(conn, _params) do
+          render_inertia_page(conn, :show,
+            user: serialize(UserSerializer, user)
           )
         end
       end
@@ -472,6 +542,27 @@ defmodule NbInertia.Credo.ChecksTest do
         inertia_shared(Auth)
         inertia_shared(FormErrors)
         inertia_shared(UIPreferences)
+
+        inertia_page :index do
+          prop :items, :list
+        end
+      end
+      """
+
+      issues =
+        run_check(MissingInertiaSharedProps, source, expected: [Auth, FormErrors, UIPreferences])
+
+      assert issues == []
+    end
+
+    test "accepts include_shared_props/1 as the preferred declaration" do
+      source = """
+      defmodule MyAppWeb.ItemsController do
+        use NbInertia.Controller
+
+        include_shared_props(Auth)
+        include_shared_props(FormErrors)
+        include_shared_props(UIPreferences)
 
         inertia_page :index do
           prop :items, :list
@@ -587,6 +678,28 @@ defmodule NbInertia.Credo.ChecksTest do
 
         def edit(conn, _params) do
           render_inertia(conn, :edit,
+            workflow: nil,
+            conflict: nil
+          )
+        end
+      end
+      """
+
+      issues = run_check(InconsistentOptionalProps, source)
+      assert length(issues) == 1
+      assert hd(issues).message =~ ":workflow"
+    end
+
+    test "also checks render_inertia_page/3" do
+      source = """
+      defmodule MyAppWeb.WorkflowController do
+        inertia_page :edit, component: "WorkflowEdit" do
+          prop(:workflow, WorkflowSerializer)
+          prop(:conflict, ConflictSerializer, nullable: true)
+        end
+
+        def edit(conn, _params) do
+          render_inertia_page(conn, :edit,
             workflow: nil,
             conflict: nil
           )

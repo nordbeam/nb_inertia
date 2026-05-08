@@ -30,7 +30,7 @@ if Code.ensure_loaded?(Credo.Check) do
         end
 
         def index(conn, _params) do
-          render_inertia(conn, :users_index, users: list_users())
+          render_inertia_page(conn, :users_index, users: list_users())
         end
 
     """
@@ -47,7 +47,7 @@ if Code.ensure_loaded?(Credo.Check) do
             Inertia.Controller.render_inertia(conn, "Component", %{...})
 
         Use the imported version from NbInertia.Controller:
-            render_inertia(conn, :page_name, prop: value)
+            render_inertia_page(conn, :page_name, prop: value)
 
         This requires:
         1. Adding `use NbInertia.Controller` to your controller

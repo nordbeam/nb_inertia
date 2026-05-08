@@ -52,7 +52,7 @@ jobs:
         run: mix compile --warnings-as-errors
 
       - name: Generate TypeScript types
-        run: mix nb_ts.gen.types
+        run: mix nb_ts.gen
 
       - name: Check types are up to date
         run: |
@@ -60,7 +60,7 @@ jobs:
             echo "❌ TypeScript types are out of date!"
             echo ""
             echo "Generated types differ from committed types."
-            echo "Run 'mix nb_ts.gen.types' and commit the changes."
+            echo "Run 'mix nb_ts.gen' and commit the changes."
             echo ""
             git diff assets/js/types/
             exit 1
@@ -83,7 +83,7 @@ jobs:
 vim lib/my_app_web/controllers/user_controller.ex
 
 # Regenerate types
-mix nb_ts.gen.types
+mix nb_ts.gen
 
 # Commit both backend and types together
 git add lib/ assets/js/types/
@@ -127,7 +127,7 @@ jobs:
         run: mix deps.get
 
       - name: Generate TypeScript types
-        run: mix nb_ts.gen.types
+        run: mix nb_ts.gen
 
       - name: Commit changes if any
         run: |
@@ -168,7 +168,7 @@ jobs:
 // package.json
 {
   "scripts": {
-    "types": "cd .. && mix nb_ts.gen.types"
+    "types": "cd .. && mix nb_ts.gen"
   },
   "husky": {
     "hooks": {
@@ -185,7 +185,7 @@ jobs:
 #!/bin/sh
 
 echo "🔄 Regenerating TypeScript types..."
-mix nb_ts.gen.types
+mix nb_ts.gen
 
 # Check if types changed
 if [ -n "$(git diff --cached --name-only | grep 'assets/js/types/')" ]; then
@@ -221,11 +221,11 @@ check-types:
     - mix deps.get
   script:
     - mix compile
-    - mix nb_ts.gen.types
+    - mix nb_ts.gen
     - |
       if [ -n "$(git status --porcelain assets/js/types/)" ]; then
         echo "❌ TypeScript types are out of date!"
-        echo "Run 'mix nb_ts.gen.types' and commit changes."
+        echo "Run 'mix nb_ts.gen' and commit changes."
         git diff assets/js/types/
         exit 1
       fi
@@ -246,12 +246,12 @@ check-types:
 
 types:
 	@echo "🔄 Generating TypeScript types..."
-	@mix nb_ts.gen.types
+	@mix nb_ts.gen
 	@echo "✅ Types generated"
 
 check-types:
 	@echo "🔍 Checking TypeScript types..."
-	@mix nb_ts.gen.types
+	@mix nb_ts.gen
 	@if [ -n "$$(git status --porcelain assets/js/types/)" ]; then \
 		echo "❌ Types are out of date!"; \
 		git diff assets/js/types/; \
@@ -304,14 +304,14 @@ TypeScript types are auto-generated from backend code.
 ### Generating Types
 
 ```bash
-mix nb_ts.gen.types
+mix nb_ts.gen
 ```
 
 ### CI/CD
 
 Our CI pipeline checks that types are up to date. If CI fails:
 
-1. Run `mix nb_ts.gen.types`
+1. Run `mix nb_ts.gen`
 2. Commit the changes: `git add assets/js/types/ && git commit -m "Update TS types"`
 3. Push again
 ```
@@ -341,7 +341,7 @@ Add to your PR template:
 ```markdown
 ## Checklist
 
-- [ ] TypeScript types are up to date (`mix nb_ts.gen.types`)
+- [ ] TypeScript types are up to date (`mix nb_ts.gen`)
 - [ ] Types match the backend prop definitions
 - [ ] No TypeScript errors in frontend
 ```
@@ -358,7 +358,7 @@ config :nb_ts,
 
 Then generate manually:
 ```bash
-mix nb_ts.gen.types
+mix nb_ts.gen
 ```
 
 ---
@@ -371,13 +371,13 @@ mix nb_ts.gen.types
 
 **Fix:**
 ```bash
-mix nb_ts.gen.types
+mix nb_ts.gen
 git add assets/js/types/
 git commit --amend --no-edit
 git push --force-with-lease
 ```
 
-### CI Fails: "mix nb_ts.gen.types not found"
+### CI Fails: "mix nb_ts.gen not found"
 
 **Cause:** nb_ts not installed.
 
@@ -421,14 +421,14 @@ For most teams, we recommend:
 **✅ Plus: Make task for easy regeneration**
 ```makefile
 types:
-	mix nb_ts.gen.types
+	mix nb_ts.gen
 ```
 
 **✅ Plus: Document in README**
 ```markdown
 ## TypeScript Types
 
-Run `make types` or `mix nb_ts.gen.types` after changing backend props.
+Run `make types` or `mix nb_ts.gen` after changing backend props.
 ```
 
 This gives you:
@@ -447,7 +447,7 @@ This gives you:
    vim lib/my_app_web/controllers/user_controller.ex
 
    # Regenerate types
-   mix nb_ts.gen.types
+   mix nb_ts.gen
 
    # Update frontend to use new prop
    vim assets/js/pages/Users/Index.tsx

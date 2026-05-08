@@ -16,14 +16,14 @@
 defmodule BlogWeb.PostsPage.Edit do
   use NbInertia.Page
 
-  prop :post, Blog.PostSerializer
-  prop :categories, :list
+  prop(:post, ref(Blog.PostSerializer))
+  prop(:categories, list_of(:string))
 
   form_inputs :post_form do
-    field :title, :string
-    field :body, :string
-    field :status, :string
-    field :category, :string, optional: true
+    field(:title, :string)
+    field(:body, :string)
+    field(:status, :string)
+    field(:category, :string, optional: true)
   end
 
   # Returning conn from mount/2 instead of a plain map.

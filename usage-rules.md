@@ -17,8 +17,8 @@ NbInertia provides advanced Inertia.js integration for Phoenix:
 ### Conditional Shared Props
 Control when shared props are included using `:only`, `:except`, and `:when` options:
 ```elixir
-inertia_shared(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
-inertia_shared(MyAppWeb.InertiaShared.BetaFeatures, when: :beta_enabled?)
+include_shared_props(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
+include_shared_props(MyAppWeb.InertiaShared.BetaFeatures, when: :beta_enabled?)
 ```
 
 ### Auto-Registration via web.ex
@@ -29,7 +29,7 @@ defmodule MyAppWeb do
     quote do
       use Phoenix.Controller
       use NbInertia.Controller
-      inertia_shared(MyAppWeb.InertiaShared.Base)  # Auto-included!
+      include_shared_props(MyAppWeb.InertiaShared.Base)  # Auto-included!
     end
   end
 end
@@ -54,7 +54,7 @@ inertia_shared do
 end
 
 inertia_page :index do
-  prop :user, UserSerializer
+  prop :user, ref(UserSerializer)
 end
 ```
 
@@ -64,7 +64,7 @@ Prevent type name collisions when multiple pages use the same component:
 inertia_page :preview,
   component: "Public/WidgetShow",
   type_name: "WidgetPreviewProps" do
-  prop :widget, WidgetSerializer
+  prop :widget, ref(WidgetSerializer)
 end
 ```
 
@@ -121,9 +121,9 @@ defmodule MyAppWeb.UserController do
 
   # Define page and props
   inertia_page :users_index do
-    prop :users, :list
+    prop :users, list_of(:map)
     prop :total_count, :integer
-    prop :filters, :map, optional: true
+    prop :filters, :map, partial: true
   end
 
   def index(conn, params) do
@@ -153,40 +153,47 @@ prop :data, :any
 
 **Lists of primitives:**
 ```elixir
-prop :tags, list: :string      # TypeScript: tags: string[]
-prop :scores, list: :number    # TypeScript: scores: number[]
+prop :tags, list_of(:string)   # TypeScript: tags: string[]
+prop :scores, list_of(:number) # TypeScript: scores: number[]
 ```
 
 **Enums (restricted values):**
 ```elixir
-prop :status, enum: ["active", "inactive", "pending"]
+prop :status, enum([:active, :inactive, :pending])
 # TypeScript: status: "active" | "inactive" | "pending"
 ```
 
 **List of enums:**
 ```elixir
-prop :roles, list: [enum: ["admin", "user", "guest"]]
+prop :roles, list_of(enum([:admin, :user, :guest]))
 # TypeScript: roles: ("admin" | "user" | "guest")[]
 ```
 
 **With NbSerializer - Single serializer:**
 ```elixir
-prop :user, UserSerializer      # TypeScript: user: User
+prop :user, ref(UserSerializer) # TypeScript: user: User
 ```
 
 **With NbSerializer - List of serializers:**
 ```elixir
-prop :users, list: UserSerializer  # TypeScript: users: User[]
+prop :users, list_of(ref(UserSerializer))  # TypeScript: users: User[]
 ```
 
 **Modifiers:**
 ```elixir
-prop :priority, enum: ["low", "high"], optional: true
-prop :notes, list: :string, optional: true
+prop :priority, enum([:low, :high]), partial: true
+prop :notes, list_of(:string), partial: true
 prop :metadata, :map, nullable: true
 ```
 
-**Custom TypeScript types (with NbTs):**
+**Elixir-native helper types:**
+```elixir
+prop :filters, shape(search: optional(:string), page: :integer)
+prop :subject, union([ref(UserSerializer), ref(TeamSerializer)])
+prop :settings, nullable(shape(theme: literal("dark"), compact: :boolean))
+```
+
+**TypeScript escape hatch (with NbTs):**
 ```elixir
 import NbTs.Sigil
 
@@ -221,7 +228,7 @@ end
 inertia_page :preview,
   component: "Public/WidgetShow",
   type_name: "WidgetPreviewProps" do
-  prop :widget, WidgetSerializer
+  prop :widget, ref(WidgetSerializer)
 end
 ```
 
@@ -299,7 +306,7 @@ assign_serialized(conn, :stats, StatsSerializer, stats, defer: true)
 assign_serialized(conn, :items, ItemSerializer, items, merge: true)
 
 # Optional - excluded on first visit
-assign_serialized(conn, :data, DataSerializer, data, optional: true)
+assign_serialized(conn, :data, DataSerializer, data, partial: true)
 ```
 
 ## Shared Props
@@ -318,7 +325,7 @@ defmodule MyAppWeb.UserController do
   end
 
   inertia_page :index do
-    prop :users, :list
+    prop :users, list_of(:map)
   end
 end
 ```
@@ -349,10 +356,10 @@ Register in controller:
 defmodule MyAppWeb.UserController do
   use NbInertia.Controller
 
-  inertia_shared(MyAppWeb.InertiaShared.Auth)
+  include_shared_props(MyAppWeb.InertiaShared.Auth)
 
   inertia_page :index do
-    prop :users, :list
+    prop :users, list_of(:map)
   end
 end
 ```
@@ -370,7 +377,7 @@ defmodule MyAppWeb do
       use NbInertia.Controller
 
       # Auto-register base shared props for ALL controllers
-      inertia_shared(MyAppWeb.InertiaShared.Base)
+      include_shared_props(MyAppWeb.InertiaShared.Base)
 
       import Plug.Conn
       import MyAppWeb.Gettext
@@ -388,7 +395,7 @@ defmodule MyAppWeb.UserController do
   use MyAppWeb, :controller  # Automatically includes Base shared props!
 
   # Additional controller-specific shared props (optional)
-  inertia_shared(MyAppWeb.InertiaShared.Auth)
+  include_shared_props(MyAppWeb.InertiaShared.Auth)
 
   inertia_page :dashboard do
     prop :stats, :map
@@ -411,16 +418,16 @@ defmodule MyAppWeb.AdminController do
   use MyAppWeb, :controller
 
   # Only include for specific actions
-  inertia_shared(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
+  include_shared_props(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
 
   # Exclude from specific actions
-  inertia_shared(MyAppWeb.InertiaShared.Public, except: [:admin])
+  include_shared_props(MyAppWeb.InertiaShared.Public, except: [:admin])
 
   # Conditional based on guard function
-  inertia_shared(MyAppWeb.InertiaShared.BetaFeatures, when: :beta_enabled?)
+  include_shared_props(MyAppWeb.InertiaShared.BetaFeatures, when: :beta_enabled?)
 
   # Multiple conditions
-  inertia_shared(MyAppWeb.InertiaShared.Analytics,
+  include_shared_props(MyAppWeb.InertiaShared.Analytics,
     only: [:index],
     when: :analytics_enabled?
   )
@@ -484,7 +491,7 @@ defmodule MyAppWeb.UserController do
   end
 
   inertia_page :index do
-    prop :user, UserSerializer  # Collision!
+    prop :user, ref(UserSerializer)  # Collision!
   end
 end
 ```
@@ -649,7 +656,7 @@ Shared props are included in **every Inertia response**. Keep them minimal:
 inertia_page :dashboard do
   prop :summary, :map
   prop :detailed_analytics, :map, lazy: true  # Only loaded when requested
-  prop :audit_log, :list, lazy: true          # Only loaded when requested
+  prop :audit_log, list_of(:map), lazy: true  # Only loaded when requested
 end
 ```
 
@@ -728,13 +735,13 @@ inertia_shared do
 end
 
 # Register SharedProps module
-inertia_shared(MyAppWeb.InertiaShared.Auth)
+include_shared_props(MyAppWeb.InertiaShared.Auth)
 
 # Conditional shared props
-inertia_shared(Module, only: [:index, :show])
-inertia_shared(Module, except: [:admin])
-inertia_shared(Module, when: :guard_function?)
-inertia_shared(Module, only: [:index], when: :enabled?)
+include_shared_props(Module, only: [:index, :show])
+include_shared_props(Module, except: [:admin])
+include_shared_props(Module, when: :guard_function?)
+include_shared_props(Module, only: [:index], when: :enabled?)
 ```
 
 ### Render Options
@@ -767,7 +774,7 @@ end
 inertia_page :name,
   component: "Public/Widget",
   type_name: "WidgetPreviewProps" do
-  prop :widget, WidgetSerializer
+  prop :widget, ref(WidgetSerializer)
 end
 ```
 
@@ -802,15 +809,15 @@ prop :data, :map
 prop :anything, :any
 
 # Lists
-prop :tags, list: :string
-prop :users, list: UserSerializer
+prop :tags, list_of(:string)
+prop :users, list_of(ref(UserSerializer))
 
 # Enums
-prop :status, enum: ["active", "inactive"]
-prop :roles, list: [enum: ["admin", "user"]]
+prop :status, enum([:active, :inactive])
+prop :roles, list_of(enum([:admin, :user]))
 
 # Options
-prop :data, :map, optional: true
+prop :data, :map, partial: true
 prop :value, :string, nullable: true
 prop :expensive, :map, lazy: true
 

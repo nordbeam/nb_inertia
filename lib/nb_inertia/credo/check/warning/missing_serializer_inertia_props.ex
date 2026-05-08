@@ -12,7 +12,7 @@ if Code.ensure_loaded?(Credo.Check) do
     Instead of:
 
         def show(conn, params) do
-          render_inertia(conn, :show,
+          render_inertia_page(conn, :show,
             user: user,           # Raw struct without serializer
             config: widget.config # Raw map
           )
@@ -21,9 +21,9 @@ if Code.ensure_loaded?(Credo.Check) do
     Use:
 
         def show(conn, params) do
-          render_inertia(conn, :show,
-            user: {UserSerializer, user},
-            config: {ConfigSerializer, widget.config}
+          render_inertia_page(conn, :show,
+            user: serialize(UserSerializer, user),
+            config: serialize(ConfigSerializer, widget.config)
           )
         end
 
@@ -47,10 +47,10 @@ if Code.ensure_loaded?(Credo.Check) do
         - Computed/derived fields
 
         Instead of:
-            render_inertia(:page, user: user)
+            render_inertia_page(conn, :page, user: user)
 
         Use:
-            render_inertia(:page, user: {UserSerializer, user})
+            render_inertia_page(conn, :page, user: serialize(UserSerializer, user))
         """
       ]
 
@@ -64,13 +64,13 @@ if Code.ensure_loaded?(Credo.Check) do
       |> Enum.reverse()
     end
 
-    # Match render_inertia with props that access struct fields directly
+    # Match render_inertia/render_inertia_page with props that access struct fields directly
     defp traverse(
-           {:render_inertia, meta, [_conn, _page, props | _]} = ast,
+           {render_fn, meta, [_conn, _page, props | _]} = ast,
            issues,
            issue_meta
          )
-         when is_list(props) do
+         when render_fn in [:render_inertia, :render_inertia_page] and is_list(props) do
       problematic_props = find_unserialzed_complex_props(props)
 
       if Enum.empty?(problematic_props) do
@@ -103,6 +103,24 @@ if Code.ensure_loaded?(Credo.Check) do
           []
 
         {_prop_name, {{:__aliases__, _, _}, _data, _opts}} ->
+          []
+
+        # Already using serialize(Serializer, data) or serialize(Serializer, data, opts)
+        {_prop_name, {:serialize, _, [{:__aliases__, _, _}, _data]}} ->
+          []
+
+        {_prop_name, {:serialize, _, [{:__aliases__, _, _}, _data, _opts]}} ->
+          []
+
+        # Already using fully qualified serialize helper
+        {_prop_name,
+         {{:., _, [{:__aliases__, _, _module_parts}, :serialize]}, _,
+          [{:__aliases__, _, _}, _data]}} ->
+          []
+
+        {_prop_name,
+         {{:., _, [{:__aliases__, _, _module_parts}, :serialize]}, _,
+          [{:__aliases__, _, _}, _data, _opts]}} ->
           []
 
         # Function call that looks like it returns a struct: Repo.get!(), Context.get_user()
@@ -150,8 +168,8 @@ if Code.ensure_loaded?(Credo.Check) do
       format_issue(
         issue_meta,
         message:
-          "Prop `:#{prop_name}` accesses a field directly. Consider using a serializer: `{MySerializer, data}`.",
-        trigger: "render_inertia",
+          "Prop `:#{prop_name}` accesses a field directly. Consider using `serialize(MySerializer, data)`.",
+        trigger: "render_inertia_page",
         line_no: line_no
       )
     end
@@ -160,8 +178,8 @@ if Code.ensure_loaded?(Credo.Check) do
       format_issue(
         issue_meta,
         message:
-          "Prop `:#{prop_name}` passes a Repo result directly. Use a serializer: `{MySerializer, data}`.",
-        trigger: "render_inertia",
+          "Prop `:#{prop_name}` passes a Repo result directly. Use `serialize(MySerializer, data)`.",
+        trigger: "render_inertia_page",
         line_no: line_no
       )
     end
@@ -170,8 +188,8 @@ if Code.ensure_loaded?(Credo.Check) do
       format_issue(
         issue_meta,
         message:
-          "Prop `:#{prop_name}` passes a context getter result. Consider using a serializer: `{MySerializer, data}`.",
-        trigger: "render_inertia",
+          "Prop `:#{prop_name}` passes a context getter result. Consider using `serialize(MySerializer, data)`.",
+        trigger: "render_inertia_page",
         line_no: line_no
       )
     end
@@ -180,8 +198,8 @@ if Code.ensure_loaded?(Credo.Check) do
       format_issue(
         issue_meta,
         message:
-          "Prop `:#{prop_name}` uses a getter function that may return a struct. Consider using a serializer: `{MySerializer, data}`.",
-        trigger: "render_inertia",
+          "Prop `:#{prop_name}` uses a getter function that may return a struct. Consider using `serialize(MySerializer, data)`.",
+        trigger: "render_inertia_page",
         line_no: line_no
       )
     end
@@ -190,8 +208,8 @@ if Code.ensure_loaded?(Credo.Check) do
       format_issue(
         issue_meta,
         message:
-          "Prop `:#{prop_name}` uses a list function that may return structs. Consider using a serializer: `{MySerializer, data}`.",
-        trigger: "render_inertia",
+          "Prop `:#{prop_name}` uses a list function that may return structs. Consider using `serialize(MySerializer, data)`.",
+        trigger: "render_inertia_page",
         line_no: line_no
       )
     end

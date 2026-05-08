@@ -21,7 +21,7 @@ if Code.ensure_loaded?(Credo.Check) do
         end
 
         def index(conn, _params) do
-          render_inertia(conn, :dashboard,
+          render_inertia_page(conn, :dashboard,
             current_user: conn.assigns.current_user,  # Manual access
             flash: conn.assigns.flash                  # Manual access
           )
@@ -35,7 +35,7 @@ if Code.ensure_loaded?(Credo.Check) do
         end
 
         def index(conn, _params) do
-          render_inertia(conn, :dashboard)
+          render_inertia_page(conn, :dashboard)
           # Props are automatically pulled from assigns!
         end
 
@@ -62,7 +62,7 @@ if Code.ensure_loaded?(Credo.Check) do
         - Works well with shared props for common values
 
         Instead of:
-            render_inertia(conn, :page, current_user: conn.assigns.current_user)
+            render_inertia_page(conn, :page, current_user: conn.assigns.current_user)
 
         Declare with `from: :assigns`:
             inertia_page :page do
@@ -70,7 +70,7 @@ if Code.ensure_loaded?(Credo.Check) do
             end
 
             def action(conn, _params) do
-              render_inertia(conn, :page)
+              render_inertia_page(conn, :page)
             end
         """
       ]
@@ -85,13 +85,13 @@ if Code.ensure_loaded?(Credo.Check) do
       |> Enum.reverse()
     end
 
-    # Match `render_inertia(conn, page, props)` where props contains conn.assigns access
+    # Match `render_inertia/3` or `render_inertia_page/3` where props contains conn.assigns access
     defp traverse(
-           {:render_inertia, meta, [_conn, _page, props | _]} = ast,
+           {render_fn, meta, [_conn, _page, props | _]} = ast,
            issues,
            issue_meta
          )
-         when is_list(props) do
+         when render_fn in [:render_inertia, :render_inertia_page] and is_list(props) do
       assigns_props = find_assigns_access(props)
 
       if Enum.empty?(assigns_props) do

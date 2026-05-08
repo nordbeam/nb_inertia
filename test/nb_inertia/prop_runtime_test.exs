@@ -73,6 +73,15 @@ defmodule NbInertia.PropRuntimeTest do
     end
   end
 
+  describe "assign_props/3" do
+    test "does not treat plain tuples like {:ok, value} as serializer tuples" do
+      conn = conn(:get, "/")
+      result = PropRuntime.assign_props(conn, [status: {:ok, %{id: 1}}], %{})
+
+      assert result.private[:inertia_shared][:status] == {:ok, %{id: 1}}
+    end
+  end
+
   if Code.ensure_loaded?(NbSerializer) do
     describe "resolve_shared_props/4" do
       test "shared prop modules expose serialize_props/2 for serializer-backed props" do

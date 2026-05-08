@@ -35,8 +35,8 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
 
     1. Adds or uses the existing `nb_inertia` dependency
     2. Adds optional companion deps like `nb_ts` and `nb_flop` when requested
-    3. Sets up controller helpers (use NbInertia.Controller)
-    4. Sets up HTML helpers (import NbInertia.HTML)
+    3. Wires NbInertia.Controller into your Phoenix controller helper
+    4. Imports NbInertia.HTML into your Phoenix HTML helper
     5. Adds `plug NbInertia.Plug` to the browser pipeline
     7. Adds configuration to config/config.exs under :nb_inertia namespace
     8. Updates root layout template (with nb_vite support if detected)
@@ -1691,7 +1691,7 @@ if Code.ensure_loaded?(Igniter) do
             if full? do
               full_react_home_page()
             else
-              sample_react_page(extension, typescript)
+              sample_react_page(extension)
             end
 
           igniter =
@@ -1746,10 +1746,9 @@ if Code.ensure_loaded?(Igniter) do
         - list fields
         - nullable fields
         - computed fields
-        - the `~TS` sigil for custom TypeScript types (requires nb_ts)
+        - serializer field declarations that generate frontend types
         \"\"\"
         use NbSerializer.Serializer
-        import NbTs.Sigil
 
         schema do
           field :id, :number
@@ -1758,7 +1757,7 @@ if Code.ensure_loaded?(Igniter) do
           field :tags, list: :string
           field :bio, :string, nullable: true
           field :excerpt, :string, compute: :make_excerpt
-          field :metadata, type: ~TS"Record<string, string | number>"
+          field :metadata, :map
         end
 
         def make_excerpt(%{bio: nil}, _opts), do: ""
@@ -1775,14 +1774,13 @@ if Code.ensure_loaded?(Igniter) do
 
         Demonstrates `NbInertia.SharedProps` with:
         - primitive types (via atoms)
-        - custom TypeScript types (via `~TS` sigil)
+        - Elixir-native enums
         \"\"\"
         use NbInertia.SharedProps
-        import NbTs.Sigil
 
         inertia_shared do
           prop :app_name, :string
-          prop :env, type: ~TS"'dev' | 'prod' | 'test'"
+          prop :env, enum(["dev", "prod", "test"])
           prop :hmr_enabled, :boolean
         end
 
@@ -1862,7 +1860,7 @@ if Code.ensure_loaded?(Igniter) do
               )}
             </Section>
 
-            <Section title="nb_serializer + nb_flop · sortable, paginated table" hint="`{ItemSerializer, items}` with computed excerpt; sort+page via useFlopParams">
+            <Section title="nb_serializer + nb_flop · sortable, paginated table" hint="`serialize(ItemSerializer, items)` with computed excerpt; sort+page via useFlopParams">
               <div className="overflow-x-auto">
                 <table className="table table-zebra">
                   <thead>
@@ -1989,7 +1987,7 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    defp sample_react_page(extension, typescript) do
+    defp sample_react_page(extension) do
       """
       import React from "react";
 
@@ -2008,8 +2006,8 @@ if Code.ensure_loaded?(Igniter) do
               <h2>Next Steps</h2>
               <ul>
                 <li>Create more page components in assets/js/pages/</li>
-                <li>Use <code>inertia_page</code> macro to declare pages in your controllers</li>
-                <li>Render pages with <code>render_inertia(conn, :page_name, props)</code></li>
+                <li>Register shared props modules with <code>include_shared_props/2</code> and declare pages with <code>inertia_page/2</code></li>
+                <li>Render declared pages with <code>render_inertia_page(conn, :page_name, props)</code></li>
               </ul>
             </div>
 
@@ -2018,14 +2016,13 @@ if Code.ensure_loaded?(Igniter) do
               <pre style={{ background: "white", padding: "1rem", borderRadius: "0.25rem", overflow: "auto" }}>
                 {`defmodule MyAppWeb.PageController do
         use MyAppWeb, :controller
-        use NbInertia.Controller
 
         inertia_page :home do
-          prop :greeting, #{if typescript, do: ~s(type: ~TS"string"), else: ":string"}
+          prop :greeting, :string
         end
 
         def home(conn, _params) do
-          render_inertia(conn, :home,
+          render_inertia_page(conn, :home,
             greeting: "Hello from NbInertia!"
           )
         end
@@ -2097,7 +2094,7 @@ if Code.ensure_loaded?(Igniter) do
           end
 
           def home(conn, _params) do
-            render_inertia(conn, :home, greeting: "Welcome to Inertia.js!")
+            render_inertia_page(conn, :home, greeting: "Welcome to Inertia.js!")
           end
       """
     end
@@ -2114,7 +2111,7 @@ if Code.ensure_loaded?(Igniter) do
         alias #{web}.Serializers.ItemSerializer
         alias #{web}.Serializers.FlopMetaSerializer
 
-        inertia_shared(DemoShared)
+        include_shared_props(DemoShared)
 
         @items [
           %{id: 1, name: "Alpha", status: "active", tags: ["ui", "core"],
@@ -2135,8 +2132,8 @@ if Code.ensure_loaded?(Igniter) do
         @contact_types %{name: :string, email: :string, message: :string}
 
         inertia_page :home do
-          prop :items, list: ItemSerializer
-          prop :meta, FlopMetaSerializer
+          prop :items, list_of(ref(ItemSerializer))
+          prop :meta, ref(FlopMetaSerializer)
           prop :stats, :map, defer: true
           prop :contact_form, :map, default: %{}
           prop :ping, :string, once: true
@@ -2155,12 +2152,12 @@ if Code.ensure_loaded?(Igniter) do
 
           conn
           |> inertia_flash(:notice, "Welcome to the nb_* demo page")
-          |> render_inertia(:home,
-            items: {ItemSerializer, @items},
-            meta: {FlopMetaSerializer, meta},
+          |> render_inertia_page(:home, [
+            items: serialize(ItemSerializer, @items),
+            meta: serialize(FlopMetaSerializer, meta),
             stats: fn -> compute_stats() end,
             ping: "pong-\#{System.system_time(:second)}"
-          )
+          ])
         end
 
         def contact(conn, params) do
@@ -2170,7 +2167,7 @@ if Code.ensure_loaded?(Igniter) do
             case changeset do
               %{valid?: true} ->
                 conn
-                |> inertia_flash(:success, "Thanks, \#{params[\\"name\\"]}! We got your message.")
+                |> inertia_flash(:success, "Thanks, \#{params["name"]}! We got your message.")
                 |> redirect(to: ~p"/")
 
               invalid ->
@@ -2811,7 +2808,7 @@ if Code.ensure_loaded?(Igniter) do
           """
 
           SSR Configuration:
-          - Added {:deno_rider, "~> 0.2"} for production SSR
+          - Added deno_rider for production SSR
           - Created SSR entry points:
             • assets/js/ssr.#{if typescript, do: "tsx", else: "jsx"} - Main SSR entry (used by Vite)
             • assets/js/ssr_prod.#{if typescript, do: "tsx", else: "jsx"} - Production SSR for Deno (eager loading)
@@ -2835,13 +2832,12 @@ if Code.ensure_loaded?(Igniter) do
           """
 
           TypeScript Integration (nb_ts):
-          - Added {:nb_ts, "~> 0.1"} for TypeScript type generation
+          - Added nb_ts for TypeScript type generation
           - Created types output directory at assets/js/types
           - Added mix alias: mix ts.gen (run after modifying props or serializers)
           - Will generate TypeScript interfaces for:
             • NbSerializer serializers
             • Inertia page props
-          - Use the ~TS sigil for compile-time type validation in page props
 
           NOTE: Type generation is manual. Run 'mix ts.gen' after making changes to keep types in sync.
           """
@@ -2854,7 +2850,7 @@ if Code.ensure_loaded?(Igniter) do
           """
 
           Flop Integration (nb_flop):
-          - Added {:nb_flop, "~> 0.1"} and {:flop, "~> 0.26"} for pagination, sorting, and filtering
+          - Added nb_flop and flop for pagination, sorting, and filtering
           - Generated Flop serializers to lib/your_app_web/serializers/
           - Copied React components to assets/js/components/flop/
           - Installed @tanstack/react-table
@@ -2866,9 +2862,11 @@ if Code.ensure_loaded?(Igniter) do
           1. Add @derive Flop.Schema to your Ecto schemas
           2. Use FlopMetaSerializer in your controllers:
 
-             render_inertia(conn, :posts_index,
-               posts: {PostSerializer, posts},
-               meta: {FlopMetaSerializer, meta, schema: Post}
+             render_inertia_page(conn, :posts_index,
+               [
+                 posts: serialize(PostSerializer, posts),
+                 meta: serialize(FlopMetaSerializer, meta, opts: [schema: Post])
+               ]
              )
 
           3. Use Flop components in your frontend:
@@ -2974,10 +2972,10 @@ if Code.ensure_loaded?(Igniter) do
       #{if full_install, do: "NbInertia full stack has been successfully installed!", else: "NbInertia has been successfully installed!"}
 
       What was configured:
-      - Added {:nb_inertia, "~> 0.4"} to dependencies#{if typescript, do: "\n- Added {:nb_ts, \"~> 0.1\"} for TypeScript integration", else: ""}#{if with_flop, do: "\n- Added {:nb_flop, \"~> 0.1\"} and {:flop, \"~> 0.26\"} for pagination, sorting, and filtering", else: ""}
-      #{if full_install, do: "- Added {:nb_vite, ...}, {:nb_routes, ...}, and {:nb_serializer, ...} for the full stack", else: nil}
-      - Set up controller helpers (use NbInertia.Controller)
-      - Set up HTML helpers (import NbInertia.HTML)
+      - Added nb_inertia to dependencies#{if typescript, do: "\n- Added nb_ts for TypeScript integration", else: ""}#{if with_flop, do: "\n- Added nb_flop and flop for pagination, sorting, and filtering", else: ""}
+      #{if full_install, do: "- Added nb_vite, nb_routes, and nb_serializer for the full stack", else: nil}
+      - Wired NbInertia.Controller into your Phoenix controller helper
+      - Imported NbInertia.HTML into your Phoenix HTML helper
       - Added plug NbInertia.Plug to the browser pipeline
       - Updated root layout for Inertia.js
       #{bundler_info}
@@ -2986,22 +2984,29 @@ if Code.ensure_loaded?(Igniter) do
       - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{if client_framework == "react", do: "\n- Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)", else: ""}#{full_stack_info}#{typescript_info}#{flop_info}#{lib_inertia_info}#{ssr_info}
 
       Next steps:
-      1. Create an Inertia-enabled controller action:
+      1. Create a controller action that renders a declared page:
 
          defmodule MyAppWeb.PageController do
            use MyAppWeb, :controller
-           use NbInertia.Controller#{if typescript, do: "\n           import NbTs.Sigil", else: ""}
 
            inertia_page :home do
-             prop :greeting, #{if typescript, do: "type: ~TS\"string\"", else: ":string"}
+             prop :greeting, :string
            end
 
            def home(conn, _params) do
-             render_inertia(conn, :home,
+             render_inertia_page(conn, :home,
                greeting: "Hello from NbInertia!"
              )
            end
          end
+
+         Register shared props modules with include_shared_props/2 when you need them:
+
+         include_shared_props(MyAppWeb.InertiaShared.Auth)
+
+         When you need render options, pass props and opts explicitly:
+
+         render_inertia_page(conn, :home, [greeting: "Hello from NbInertia!"], ssr: true)
 
       2. Add a route in your router:
 

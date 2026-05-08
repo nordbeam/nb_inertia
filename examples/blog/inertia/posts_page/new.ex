@@ -15,16 +15,17 @@
 defmodule BlogWeb.PostsPage.New do
   use NbInertia.Page
 
-  prop :categories, :list
+  prop(:categories, :list)
 
   # form_inputs declares the shape of form data for TypeScript type generation.
   # nb_ts generates a PostFormInputs interface from this block.
-  # The :optional flag means the field isn't required for submission.
+  # optional: true means the key may be omitted from the submitted payload.
+  # That is different from nullable, where the key is present but the value may be nil.
   form_inputs :post_form do
-    field :title, :string
-    field :body, :string
-    field :status, :string, optional: true
-    field :category, :string, optional: true
+    field(:title, :string)
+    field(:body, :string)
+    field(:status, :string, optional: true)
+    field(:category, :string, optional: true)
   end
 
   def mount(_conn, _params) do

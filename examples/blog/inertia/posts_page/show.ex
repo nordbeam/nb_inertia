@@ -4,7 +4,7 @@
 #   - channel macro with topic interpolation from prop values
 #   - Multiple on/2 event handlers with different strategies:
 #     :append (add to list), :remove (remove by key), :replace (overwrite)
-#   - prop with nullable: true
+#   - prop with nullable: true (present key, nil-able value)
 #   - action/3 with :delete verb
 #   - ~TSX with useChannelProps usage
 #
@@ -15,9 +15,11 @@
 defmodule BlogWeb.PostsPage.Show do
   use NbInertia.Page
 
-  prop :post, Blog.PostSerializer
-  prop :comments, list: Blog.CommentSerializer
-  prop :typing_user, :map, nullable: true
+  prop(:post, ref(Blog.PostSerializer))
+  prop(:comments, list_of(ref(Blog.CommentSerializer)))
+  # nullable: true keeps typing_user as a declared prop; the value may be nil,
+  # but the key is still part of the page contract.
+  prop(:typing_user, :map, nullable: true)
 
   # Declarative channel bindings for real-time updates.
   # The topic "post:{post.id}" interpolates the :post prop's id at runtime.
@@ -25,13 +27,13 @@ defmodule BlogWeb.PostsPage.Show do
   # get a compile error.
   channel "post:{post.id}" do
     # When "comment_created" is broadcast, append the payload to the :comments list
-    on "comment_created", prop: :comments, strategy: :append
+    on("comment_created", prop: :comments, strategy: :append)
 
     # When "comment_deleted" is broadcast, remove the matching item by :id
-    on "comment_deleted", prop: :comments, strategy: :remove, key: :id
+    on("comment_deleted", prop: :comments, strategy: :remove, key: :id)
 
     # When "typing" is broadcast, replace the entire :typing_user value
-    on "typing", prop: :typing_user, strategy: :replace
+    on("typing", prop: :typing_user, strategy: :replace)
   end
 
   def mount(_conn, %{"post_id" => id}) do

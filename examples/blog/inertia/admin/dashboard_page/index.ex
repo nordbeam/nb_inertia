@@ -3,7 +3,7 @@
 # Features demonstrated:
 #   - use NbInertia.Page with encrypt_history: true and clear_history: true
 #   - prop with from: option (auto-pull from conn.assigns)
-#   - prop with defer: true (lazy-loaded after initial render)
+#   - prop with defer: true (deferred to a follow-up request after initial render)
 #   - Page-level shared props (inline shared do...end block)
 #   - Convention naming with nested scope: BlogWeb.Admin.DashboardPage.Index → "Admin/Dashboard/Index"
 #   - ~TSX sigil
@@ -25,18 +25,20 @@ defmodule BlogWeb.Admin.DashboardPage.Index do
 
   # from: :user_timezone — automatically pulls this prop's value from
   # conn.assigns[:user_timezone]. No need to return it from mount/2.
-  prop :timezone, :string, from: :user_timezone
+  prop(:timezone, :string, from: :user_timezone)
 
   # from: :locale — shorthand. When from: matches the prop name,
   # it pulls from conn.assigns[:locale].
-  prop :locale, :string, from: :locale
+  prop(:locale, :string, from: :locale)
 
-  prop :recent_posts, list: Blog.PostSerializer
-  prop :site_stats, :map
+  prop(:recent_posts, list_of(ref(Blog.PostSerializer)))
+  prop(:site_stats, :map)
 
   # defer: true — loaded after the initial page render via a follow-up request.
   # Use for expensive queries that aren't needed for the initial paint.
-  prop :activity_log, :list, defer: true
+  # Deferred props are optional in generated TS because the key may be absent
+  # on the initial response.
+  prop(:activity_log, :list, defer: true)
 
   # Page-level inline shared props. These are type declarations only —
   # the values come from the shared props modules registered in the router
@@ -44,7 +46,7 @@ defmodule BlogWeb.Admin.DashboardPage.Index do
   # Declaring them here ensures nb_ts generates correct TypeScript types
   # for this page's props interface (extends the shared types).
   shared do
-    prop :admin_permissions, :list
+    prop(:admin_permissions, :list)
   end
 
   def mount(_conn, _params) do

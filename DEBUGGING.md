@@ -25,26 +25,26 @@ Common issues and solutions when working with NbInertia.
 
 Missing props: :users, :total_count
 
-Add the missing props to your render_inertia call or mark them as optional.
+Add the missing props to your render call or mark them as `partial: true`.
 ```
 
-**Cause:** You declared props in `inertia_page` but didn't provide them in `render_inertia`.
+**Cause:** You declared props in `inertia_page` but didn't provide them in `render_inertia_page`.
 
 **Solution 1:** Add the missing props
 
 ```elixir
-render_inertia(conn, :users_index,
+render_inertia_page(conn, :users_index,
   users: users,
   total_count: length(users)  # Was missing
 )
 ```
 
-**Solution 2:** Mark props as optional if they're not always needed
+**Solution 2:** Mark props as `partial` if they're not always included in the initial payload
 
 ```elixir
 inertia_page :users_index do
   prop :users, :list
-  prop :total_count, :integer, optional: true  # Now optional
+  prop :total_count, :integer, partial: true  # Now omittable on first visit
 end
 ```
 
@@ -75,7 +75,7 @@ Remove these props or declare them in your inertia_page block.
 **Solution 1:** Remove the undeclared props
 
 ```elixir
-render_inertia(conn, :users_index,
+render_inertia_page(conn, :users_index,
   users: users
   # Remove: extra_data: data, debug_info: info
 )
@@ -86,8 +86,8 @@ render_inertia(conn, :users_index,
 ```elixir
 inertia_page :users_index do
   prop :users, :list
-  prop :extra_data, :map, optional: true  # Now declared
-  prop :debug_info, :map, optional: true  # Now declared
+  prop :extra_data, :map, partial: true  # Now declared
+  prop :debug_info, :map, partial: true  # Now declared
 end
 ```
 
@@ -120,7 +120,7 @@ end
 
 # Page props
 inertia_page :show do
-  prop :user, UserSerializer  # Collision!
+  prop :user, ref(UserSerializer)  # Collision!
 end
 ```
 
@@ -134,7 +134,7 @@ end
 
 # Page props
 inertia_page :show do
-  prop :user, UserSerializer  # The user being displayed
+  prop :user, ref(UserSerializer)  # The user being displayed
 end
 ```
 
@@ -154,7 +154,7 @@ Available pages: :users_index, :users_new
 
 To fix this, declare the page in your controller:
     inertia_page :users_show do
-      prop :user, UserSerializer
+      prop :user, ref(UserSerializer)
     end
 ```
 
@@ -164,12 +164,12 @@ To fix this, declare the page in your controller:
 
 ```elixir
 inertia_page :users_show do
-  prop :user, UserSerializer
+  prop :user, ref(UserSerializer)
 end
 
 def show(conn, %{"id" => id}) do
   user = Accounts.get_user!(id)
-  render_inertia(conn, :users_show, user: {UserSerializer, user})
+  render_inertia_page(conn, :users_show, user: serialize(UserSerializer, user))
 end
 ```
 
@@ -210,7 +210,7 @@ When using `when:` option with inertia_shared, you must define the guard functio
 defmodule MyAppWeb.DashboardController do
   use MyAppWeb, :controller
 
-  inertia_shared(MyAppWeb.InertiaShared.Admin, when: :admin?)
+  include_shared_props(MyAppWeb.InertiaShared.Admin, when: :admin?)
 
   # Add the guard function
   defp admin?(conn) do
@@ -280,7 +280,7 @@ end
 
 ```elixir
 inertia_page :show do
-  prop :user, UserSerializer, optional: true  # Allow nil
+  prop :user, ref(UserSerializer), nullable: true  # Allow a present key with nil value
 end
 
 def show(conn, %{"id" => id}) do
@@ -293,7 +293,7 @@ def show(conn, %{"id" => id}) do
       |> redirect(to: ~p"/users")
 
     user ->
-      render_inertia(conn, :show, user: {UserSerializer, user})
+      render_inertia_page(conn, :show, user: serialize(UserSerializer, user))
   end
 end
 ```
@@ -303,7 +303,7 @@ end
 ```elixir
 def show(conn, %{"id" => id}) do
   user = Accounts.get_user(id) || %User{}
-  render_inertia(conn, :show, user: {UserSerializer, user})
+  render_inertia_page(conn, :show, user: serialize(UserSerializer, user))
 end
 ```
 
@@ -341,7 +341,7 @@ end
 
 ```elixir
 inertia_page :dashboard do
-  prop :user, UserSerializer
+  prop :user, ref(UserSerializer)
   prop :analytics, :map, lazy: true  # Only loaded when requested
   prop :reports, :list, lazy: true   # Only loaded when requested
 end
@@ -353,8 +353,8 @@ end
 def index(conn, params) do
   page = Accounts.paginate_users(params)
 
-  render_inertia(conn, :index,
-    users: {UserSerializer, page.entries},
+  render_inertia_page(conn, :index,
+    users: serialize(UserSerializer, page.entries),
     page_number: page.page_number,
     total_pages: page.total_pages
   )
@@ -403,7 +403,7 @@ defmodule MyAppWeb.DashboardController do
   use MyAppWeb, :controller
 
   # Make sure you have this line
-  inertia_shared(MyAppWeb.InertiaShared.Base)
+  include_shared_props(MyAppWeb.InertiaShared.Base)
 end
 
 # Or in web.ex for all controllers
@@ -411,7 +411,7 @@ def controller do
   quote do
     use Phoenix.Controller
     use NbInertia.Controller
-    inertia_shared(MyAppWeb.InertiaShared.Base)  # Auto-register
+    include_shared_props(MyAppWeb.InertiaShared.Base)  # Auto-register
   end
 end
 ```
@@ -422,7 +422,7 @@ end
 
 ```elixir
 # If using when: :condition?
-inertia_shared(MyAppWeb.InertiaShared.Admin, when: :admin?)
+include_shared_props(MyAppWeb.InertiaShared.Admin, when: :admin?)
 
 defp admin?(conn) do
   IO.inspect(conn.assigns[:current_user], label: "Current user")  # Debug
@@ -435,7 +435,7 @@ end
 **Solution:**
 ```elixir
 # If using only:
-inertia_shared(MyAppWeb.InertiaShared.Data, only: [:index, :show])
+include_shared_props(MyAppWeb.InertiaShared.Data, only: [:index, :show])
 
 # Make sure current action is in the list
 def index(conn, _params) do
@@ -451,7 +451,7 @@ end
 **Symptom:**
 ```elixir
 # Page prop is being ignored
-render_inertia(conn, :show, user: specific_user)
+render_inertia_page(conn, :show, user: specific_user)
 
 # But frontend receives the current_user from shared props instead
 ```
@@ -463,12 +463,12 @@ render_inertia(conn, :show, user: specific_user)
 ```elixir
 # Shared props
 inertia_shared do
-  prop :current_user, UserSerializer  # The logged-in user
+  prop :current_user, ref(UserSerializer)  # The logged-in user
 end
 
 # Page props
 inertia_page :show do
-  prop :user, UserSerializer  # The user being viewed
+  prop :user, ref(UserSerializer)  # The user being viewed
 end
 ```
 
@@ -488,7 +488,7 @@ ls assets/js/types/  # Empty or missing
 **Solution:**
 ```bash
 mix deps.get nb_ts
-mix nb_ts.gen.types
+mix nb_ts.gen
 ```
 
 **Cause 2:** Output directory not configured
@@ -509,7 +509,7 @@ config :nb_ts,
 ```elixir
 # This generates types
 inertia_page :users_index do
-  prop :users, list: UserSerializer
+  prop :users, list_of(ref(UserSerializer))
   prop :total_count, :integer
 end
 ```
@@ -523,7 +523,7 @@ end
 **Solution 1:** Manually regenerate
 
 ```bash
-mix nb_ts.gen.types
+mix nb_ts.gen
 ```
 
 **Solution 2:** Add to compile workflow
@@ -533,7 +533,7 @@ mix nb_ts.gen.types
 {
   "scripts": {
     "dev": "mix phx.server & vite",
-    "types": "mix nb_ts.gen.types"
+    "types": "mix nb_ts.gen"
   }
 }
 ```
@@ -543,7 +543,7 @@ mix nb_ts.gen.types
 ```bash
 # .git/hooks/pre-commit
 #!/bin/sh
-mix nb_ts.gen.types
+mix nb_ts.gen
 git add assets/js/types/
 ```
 
@@ -553,7 +553,7 @@ git add assets/js/types/
 # .github/workflows/ci.yml
 - name: Check TypeScript types are up to date
   run: |
-    mix nb_ts.gen.types
+    mix nb_ts.gen
     git diff --exit-code assets/js/types/
 ```
 
@@ -751,7 +751,7 @@ def index(conn, params) do
   # Debug conn assigns
   IO.inspect(conn.assigns, label: "Assigns")
 
-  render_inertia(conn, :index, props)
+  render_inertia_page(conn, :index, props)
 end
 ```
 

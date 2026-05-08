@@ -22,8 +22,8 @@ if Code.ensure_loaded?(Credo.Check) do
     Use:
 
         inertia_page :index do
-          prop :filters, type: ~TS"{ search?: string; status?: string }"
-          prop :data, list: ItemSerializer
+          prop :filters, shape(search: optional(:string), status: optional(:string))
+          prop :data, list_of(ref(ItemSerializer))
         end
 
     Also applies to Page modules:
@@ -32,7 +32,7 @@ if Code.ensure_loaded?(Credo.Check) do
           use NbInertia.Page
 
           prop :filters, :map           # Warning: generic type
-          prop :data, list: ItemSerializer  # Good: specific type
+          prop :data, list_of(ref(ItemSerializer))  # Good: specific type
         end
 
     """
@@ -54,9 +54,9 @@ if Code.ensure_loaded?(Credo.Check) do
             prop :data, :map
 
         Use:
-            prop :data, type: ~TS"{ key: string; value: number }"
+            prop :data, shape(key: :string, value: :number)
             # or
-            prop :data, DataSerializer
+            prop :data, ref(DataSerializer)
         """
       ]
 
@@ -97,9 +97,9 @@ if Code.ensure_loaded?(Credo.Check) do
     defp issue_for(issue_meta, line_no, prop_name, type) do
       suggestion =
         case type do
-          :map -> "type: ~TS\"{ key: value }\" or a Serializer"
-          :list -> "list: ItemSerializer or type: ~TS\"ItemType[]\""
-          :any -> "a specific type or Serializer"
+          :map -> "shape(...) or ref(DataSerializer)"
+          :list -> "list_of(:string), list_of(ref(ItemSerializer)), or type: ~TS\"ItemType[]\""
+          :any -> "a specific helper type, shape(...), union(...), ref(...), or type: ~TS\"...\""
         end
 
       format_issue(

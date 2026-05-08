@@ -7,10 +7,10 @@ defmodule NbInertia do
 
   ## Features
 
-  - **Declarative Page DSL**: Define pages and their props with compile-time validation
+  - **Declarative Page DSL**: Define pages and validate literal `render_inertia_page/4` calls in dev/test
   - **Component Name Inference**: Automatic conversion from `:users_index` to `"Users/Index"`
-  - **Shared Props**: Define props shared across all pages (inline or as modules)
-  - **Type Safety**: Compile-time prop validation in dev/test environments
+  - **Shared Props**: Define props shared across all pages inline or via `include_shared_props/2`
+  - **Type Safety**: Default-backed and assign-backed props are materialized at runtime
   - **NbSerializer Integration**: Optional automatic serialization with NbSerializer
   - **Flexible Rendering**: Support for both all-in-one and pipe-friendly patterns
 
@@ -20,8 +20,9 @@ defmodule NbInertia do
 
       def deps do
         [
-          {:nb_inertia, "~> 0.1"},
-          {:nb_serializer, "~> 0.1", optional: true}  # Optional
+          {:nb_inertia, github: "nordbeam/nb_inertia"},
+          {:nb_serializer, github: "nordbeam/nb_serializer", optional: true},
+          {:nb_ts, github: "nordbeam/nb_ts", optional: true}
         ]
       end
 
@@ -34,14 +35,14 @@ defmodule NbInertia do
         use NbInertia.Controller
 
         inertia_page :users_index do
-          prop :users, :list
+          prop :users, list_of(:map)
           prop :total_count, :integer
         end
 
         def index(conn, _params) do
           users = MyApp.Accounts.list_users()
 
-          render_inertia(conn, :users_index,
+          render_inertia_page(conn, :users_index,
             users: users,
             total_count: length(users)
           )
@@ -57,15 +58,15 @@ defmodule NbInertia do
         use NbInertia.Controller
 
         inertia_page :users_index do
-          prop :users, MyApp.UserSerializer
+          prop :users, list_of(ref(MyApp.UserSerializer))
           prop :total_count, :integer
         end
 
         def index(conn, _params) do
           users = MyApp.Accounts.list_users()
 
-          render_inertia_serialized(conn, :users_index,
-            users: {MyApp.UserSerializer, users},
+          render_inertia_page(conn, :users_index,
+            users: serialize(MyApp.UserSerializer, users),
             total_count: length(users)
           )
         end
@@ -88,6 +89,29 @@ defmodule NbInertia do
           prop :stats, :map
         end
       end
+
+  Register reusable shared prop modules with `include_shared_props/2`:
+
+      defmodule MyAppWeb.UserController do
+        use MyAppWeb, :controller
+        use NbInertia.Controller
+
+        include_shared_props(MyAppWeb.InertiaShared.Auth)
+
+        inertia_page :dashboard do
+          prop :stats, :map
+        end
+      end
+
+  ## Compile-Time Validation
+
+  Prefer `render_inertia_page/4` for explicit all-in-one page renders. In dev and
+  test, literal props passed there are validated for declared pages, which catches
+  missing required props, undeclared props, and shared/page prop name collisions early.
+
+  `render_inertia/2-4` remains the overloaded compatibility entry point for pipe-friendly
+  page renders and explicit component renders. Dynamic prop variables and undeclared
+  page refs skip compile-time validation and fall back to runtime behavior.
 
   ## Testing
 

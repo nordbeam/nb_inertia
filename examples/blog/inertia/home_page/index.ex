@@ -2,7 +2,7 @@
 #
 # Features demonstrated:
 #   - use NbInertia.Page (minimal, no options)
-#   - prop with serializer list type
+#   - prop with explicit serializer refs inside native helper types
 #   - Simple mount/2 returning a props map
 #   - ~TSX sigil for colocated frontend component
 #   - Convention naming: BlogWeb.HomePage.Index → "Home/Index"
@@ -13,8 +13,8 @@
 defmodule BlogWeb.HomePage.Index do
   use NbInertia.Page
 
-  prop :featured_posts, list: Blog.PostSerializer
-  prop :stats, :map
+  prop(:featured_posts, list_of(ref(Blog.PostSerializer)))
+  prop(:stats, :map)
 
   def mount(_conn, _params) do
     %{

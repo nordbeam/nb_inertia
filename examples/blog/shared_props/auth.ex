@@ -7,7 +7,7 @@
 #   - build_props/2 callback
 #
 # Register in your router:
-#   inertia_shared BlogWeb.InertiaShared.Auth
+#   include_shared_props BlogWeb.InertiaShared.Auth
 
 defmodule BlogWeb.InertiaShared.Auth do
   use NbInertia.SharedProps
@@ -16,8 +16,8 @@ defmodule BlogWeb.InertiaShared.Auth do
   # in the router scope where this module is registered.
   # nb_ts generates TypeScript types from these declarations automatically.
   inertia_shared do
-    prop :current_user, Blog.UserSerializer, nullable: true
-    prop :flash, :map
+    prop(:current_user, ref(Blog.UserSerializer), nullable: true)
+    prop(:flash, :map)
   end
 
   # Called at request time. Return a map matching the declared props.

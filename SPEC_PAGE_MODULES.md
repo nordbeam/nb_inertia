@@ -62,7 +62,7 @@ Replace the controller-based pattern for Inertia pages with self-contained **Pag
 defmodule MyAppWeb.UsersPage.Index do
   use NbInertia.Page
 
-  prop :users, list(UserSerializer)
+  prop :users, list_of(ref(UserSerializer))
 
   def mount(_conn, _params) do
     %{users: Accounts.list_users()}
@@ -88,11 +88,11 @@ defmodule MyAppWeb.UsersPage.Edit do
   #   preserve_fragment: true | false
 
   # ── Prop declarations ──────────────────────────────
-  prop :user, UserSerializer
-  prop :roles, list(:string)
+  prop :user, ref(UserSerializer)
+  prop :roles, list_of(:string)
   prop :stats, :map, defer: true
-  prop :audit_log, :list, defer: "heavy"
-  prop :permissions, :list, partial: true
+  prop :audit_log, list_of(:map), defer: "heavy"
+  prop :permissions, list_of(:string), partial: true
   prop :timezone, :string, from: :user_timezone
   prop :draft, :map, nullable: true, default: %{}
 
@@ -353,7 +353,7 @@ Same DSL as `inertia_page`, now at module level:
 defmodule MyAppWeb.UsersPage.Index do
   use NbInertia.Page
 
-  prop :users, list(UserSerializer)
+  prop :users, list_of(ref(UserSerializer))
   prop :total_count, :integer
   prop :filters, :map, default: %{}
 end
@@ -369,10 +369,10 @@ end
 | `:boolean` | Boolean |
 | `:list` | Generic list |
 | `:map` | Generic map |
-| `list(:string)` | Typed list |
-| `list(UserSerializer)` | List of serialized structs |
-| `UserSerializer` | Serializer module |
-| `[enum: ["a", "b"]]` | Enumerated values |
+| `list_of(:string)` | Typed list |
+| `list_of(ref(UserSerializer))` | List of serialized structs |
+| `ref(UserSerializer)` | Serializer module |
+| `enum(["a", "b"])` | Enumerated values |
 
 ### 4.3 Prop Options
 
@@ -414,9 +414,9 @@ def mount(conn, _params) do
     cached_defer: inertia_defer(fn -> Heavy.load() end)
                   |> defer_once(),
 
-    # Serializer tuples
-    user: {UserSerializer, user},
-    report: {ReportSerializer, report, format: :detailed},
+    # Explicit serialization helper
+    user: serialize(UserSerializer, user),
+    report: serialize(ReportSerializer, report, format: :detailed),
 
     # Preserve case
     airports: preserve_case(Airports.codes()),
@@ -434,7 +434,7 @@ end
 defmodule MyAppWeb.UsersPage.New do
   use NbInertia.Page
 
-  prop :roles, list(:string)
+  prop :roles, list_of(:string)
 
   form_inputs :user_form do
     field :name, :string
@@ -504,7 +504,7 @@ Given this module:
 defmodule MyAppWeb.UsersPage.Index do
   use NbInertia.Page
 
-  prop :users, list(UserSerializer)
+  prop :users, list_of(ref(UserSerializer))
   prop :total, :integer
 
   def mount(_conn, _params) do
@@ -551,12 +551,12 @@ The preamble is generated from the module's `prop` declarations and `channel` bi
 | `prop :active, :boolean` | `active: boolean` | — |
 | `prop :tags, :list` | `tags: any[]` | — |
 | `prop :meta, :map` | `meta: Record<string, any>` | — |
-| `prop :users, list(:string)` | `users: string[]` | — |
-| `prop :users, list(UserSerializer)` | `users: User[]` | `import type { User } from '@/types'` |
-| `prop :user, UserSerializer` | `user: User` | `import type { User } from '@/types'` |
-| `prop :status, [enum: ["a","b"]]` | `status: 'a' \| 'b'` | — |
+| `prop :users, list_of(:string)` | `users: string[]` | — |
+| `prop :users, list_of(ref(UserSerializer))` | `users: User[]` | `import type { User } from '@/types'` |
+| `prop :user, ref(UserSerializer)` | `user: User` | `import type { User } from '@/types'` |
+| `prop :status, enum(["a","b"])` | `status: 'a' \| 'b'` | — |
 | `prop :x, :map, nullable: true` | `x: Record<string, any> \| null` | — |
-| `prop :x, :string, default: ""` | `x?: string` | — |
+| `prop :x, :string, default: ""` | `x: string` | — |
 
 When `channel` is declared, the preamble also generates:
 - `import { useChannelProps } from '@nordbeam/nb-inertia/react/realtime/useChannelProps'`
@@ -625,7 +625,7 @@ defmodule MyAppWeb.UsersPage.Show do
         close_button: true,
         close_explicitly: false
 
-  prop :user, UserSerializer
+  prop :user, ref(UserSerializer)
 
   def mount(_conn, %{"id" => id}) do
     %{user: Accounts.get_user!(id)}
@@ -715,9 +715,9 @@ Positions: `:center` | `:top` | `:bottom` | `:left` | `:right` | custom string
 defmodule MyAppWeb.ChatPage.Show do
   use NbInertia.Page
 
-  prop :room, RoomSerializer
-  prop :messages, list(MessageSerializer)
-  prop :active_users, list(UserSerializer)
+  prop :room, ref(RoomSerializer)
+  prop :messages, list_of(ref(MessageSerializer))
+  prop :active_users, list_of(ref(UserSerializer))
   prop :typing_user, :map, nullable: true
 
   channel "chat:{room.id}" do
@@ -849,14 +849,14 @@ defmodule MyAppWeb.SharedProps do
   use NbInertia.SharedProps
 
   inertia_shared do
-    prop :current_user, UserSerializer
-    prop :notifications, list(:map)
+    prop :current_user, ref(UserSerializer)
+    prop :notifications, list_of(:map)
   end
 
   @impl true
   def build_props(conn, _opts) do
     %{
-      current_user: {UserSerializer, conn.assigns.current_user},
+      current_user: serialize(UserSerializer, conn.assigns.current_user),
       notifications: Notifications.unread(conn.assigns.current_user)
     }
   end
@@ -873,7 +873,7 @@ end
 defmodule MyAppWeb.UsersPage.New do
   use NbInertia.Page
 
-  prop :roles, list(:string)
+  prop :roles, list_of(:string)
 
   form_inputs :user_form do
     field :name, :string
@@ -1338,7 +1338,10 @@ export interface UsersShowModalConfig {
 
 ```elixir
 def __inertia_page__(), do: :users_index
-def __inertia_props__(), do: [users: {list(UserSerializer), []}, total: {:integer, []}]
+def __inertia_props__(), do: [
+  %{name: :users, serializer: UserSerializer, opts: [list: true]},
+  %{name: :total, type: :integer, opts: []}
+]
 def __inertia_forms__(), do: [user_form: [name: :string, email: :string]]
 def __inertia_shared_modules__(), do: [MyAppWeb.SharedProps]
 def __inertia_modal__(), do: %{base_url: "/users", size: :lg, position: :center}
@@ -1359,18 +1362,18 @@ nb_ts reads these to generate all TypeScript types.
 Same as existing controller integration. Serializer modules in prop types trigger automatic serialization:
 
 ```elixir
-prop :user, UserSerializer        # serializes single struct
-prop :users, list(UserSerializer)  # serializes list of structs
+prop :user, ref(UserSerializer)                # serializes single struct
+prop :users, list_of(ref(UserSerializer))      # serializes list of structs
 ```
 
-### 16.2 Serializer Tuples in mount/2
+### 16.2 Explicit Serialization in mount/2
 
 ```elixir
 def mount(_conn, %{"id" => id}) do
   user = Accounts.get_user!(id)
   %{
-    user: {UserSerializer, user},
-    user_detailed: {UserSerializer, user, format: :detailed}
+    user: serialize(UserSerializer, user),
+    user_detailed: serialize(UserSerializer, user, format: :detailed)
   }
 end
 ```
@@ -1618,11 +1621,11 @@ defmodule MyAppWeb.UserController do
   use NbInertia.Controller
 
   inertia_page :users_index do
-    prop :users, list(UserSerializer)
+    prop :users, list_of(ref(UserSerializer))
   end
 
   def index(conn, _params) do
-    render_inertia(conn, :users_index, users: Accounts.list_users())
+    render_inertia_page(conn, :users_index, users: Accounts.list_users())
   end
 end
 ```
@@ -1634,7 +1637,7 @@ end
 defmodule MyAppWeb.UsersPage.Index do
   use NbInertia.Page
 
-  prop :users, list(UserSerializer)
+  prop :users, list_of(ref(UserSerializer))
 
   def mount(_conn, _params) do
     %{users: Accounts.list_users()}
@@ -1982,7 +1985,7 @@ end
 | Module setup | `use NbInertia.Controller` | `use NbInertia.Page` |
 | Route definition | `get "/users", UserController, :index` | `inertia "/users", UsersPage.Index` |
 | Prop declaration | `inertia_page :name do ... end` | `prop :name, :type` (module level) |
-| Render | `render_inertia(conn, :name, props)` | Return props from `mount/2` |
+| Render | `render_inertia_page(conn, :name, props)` | Return props from `mount/2` |
 | Mutations | Controller action function | `action/3` with verb atom |
 | Component naming | Atom → string conversion | Module → string derivation |
 | Frontend | Separate `.tsx` file | `~TSX` sigil or separate file |

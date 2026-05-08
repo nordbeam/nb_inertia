@@ -82,6 +82,19 @@ defmodule NbInertia.PropRuntime do
     end
   end
 
+  @spec existing_page_props(Plug.Conn.t(), map(), [map()]) :: map()
+  def existing_page_props(conn, shared_props, page_prop_configs \\ []) do
+    declared_prop_names = MapSet.new(page_prop_configs, & &1.name)
+
+    conn.private[:inertia_shared]
+    |> Kernel.||(%{})
+    |> Map.drop(Map.keys(shared_props))
+    |> Enum.reject(fn {key, _value} ->
+      key == :errors and not MapSet.member?(declared_prop_names, :errors)
+    end)
+    |> Map.new()
+  end
+
   @spec assign_props(Plug.Conn.t(), map() | keyword(), map()) :: Plug.Conn.t()
   def assign_props(conn, props_map, dsl_opts_map) when is_map(props_map) do
     assign_props(conn, Map.to_list(props_map), dsl_opts_map)
@@ -102,6 +115,28 @@ defmodule NbInertia.PropRuntime do
       Controller.assign_raw_prop_with_dsl_opts(acc, key, value, dsl_opts)
     end)
   end
+
+  @doc false
+  @spec normalize_serializer_tuple(term()) ::
+          {:ok, module(), term(), keyword()} | :error
+  def normalize_serializer_tuple({serializer, data}) when is_atom(serializer) do
+    if serializer_module?(serializer) do
+      {:ok, serializer, data, []}
+    else
+      :error
+    end
+  end
+
+  def normalize_serializer_tuple({serializer, data, opts})
+      when is_atom(serializer) and is_list(opts) do
+    if serializer_module?(serializer) do
+      {:ok, serializer, data, opts}
+    else
+      :error
+    end
+  end
+
+  def normalize_serializer_tuple(_value), do: :error
 
   defp build_shared_module_props(shared_modules, conn, action, controller_module) do
     Enum.reduce(shared_modules || [], %{}, fn module_config, acc ->
@@ -141,7 +176,9 @@ defmodule NbInertia.PropRuntime do
     end
   end
 
-  defp serialized_prop?({_key, value}) do
-    is_tuple(value) and tuple_size(value) >= 2 and is_atom(elem(value, 0))
+  defp serialized_prop?({_key, value}), do: normalize_serializer_tuple(value) != :error
+
+  defp serializer_module?(serializer) do
+    Code.ensure_loaded?(serializer) and function_exported?(serializer, :serialize, 2)
   end
 end

@@ -15,6 +15,16 @@ defmodule NbInertia.ControllerRenderApiTest do
       render_inertia(conn, :users_index, %{users: [%{id: 1}]})
     end
 
+    def explicit_page(conn) do
+      render_inertia_page(conn, :users_index, [users: [%{id: 1}]], deep_merge: true)
+    end
+
+    def pipe_page(conn) do
+      conn
+      |> assign_prop(:users, [%{id: 1}])
+      |> render_inertia(:users_index)
+    end
+
     def component_map(conn) do
       render_inertia(conn, "Users/Index", %{users: [%{id: 1}]})
     end
@@ -38,6 +48,20 @@ defmodule NbInertia.ControllerRenderApiTest do
     @impl NbInertia.SharedProps.Behaviour
     def build_props(conn, _opts) do
       %{locale: conn.assigns.locale}
+    end
+  end
+
+  defmodule SharedTypedProps do
+    use NbInertia.SharedProps
+
+    inertia_shared do
+      prop(:env, enum(["dev", "prod", "test"]))
+      prop(:flags, list_of(:string))
+    end
+
+    @impl NbInertia.SharedProps.Behaviour
+    def build_props(_conn, _opts) do
+      %{env: "test", flags: ["typed"]}
     end
   end
 
@@ -75,6 +99,17 @@ defmodule NbInertia.ControllerRenderApiTest do
     end
   end
 
+  defmodule PrimitiveTypesController do
+    use NbInertia.Controller
+
+    inertia_page :details do
+      prop(:count, :number)
+      prop(:metadata, :any)
+      prop(:published_on, :date)
+      prop(:updated_at, :datetime)
+    end
+  end
+
   if Code.ensure_loaded?(NbSerializer) do
     defmodule UserSerializer do
       use NbSerializer.Serializer
@@ -94,6 +129,20 @@ defmodule NbInertia.ControllerRenderApiTest do
           "Users/Index",
           users: serialize(UserSerializer, [%{id: 1, name: "Ada"}])
         )
+      end
+    end
+
+    defmodule SerializedPageController do
+      use NbInertia.Controller
+
+      inertia_page :users_index do
+        prop(:users, list: UserSerializer)
+      end
+
+      def index(conn) do
+        conn
+        |> assign_serialized(:users, UserSerializer, [%{id: 1, name: "Ada"}])
+        |> render_inertia(:users_index)
       end
     end
   end
@@ -152,12 +201,57 @@ defmodule NbInertia.ControllerRenderApiTest do
     end
   end
 
+  test "render_inertia_page keeps props and options explicit while preserving page validation" do
+    conn = inertia_conn() |> RenderController.explicit_page()
+    props = page_props(conn)
+
+    assert props["users"] == [%{"id" => 1}]
+  end
+
+  test "pipe-friendly atom page render validates previously assigned required props" do
+    props = inertia_conn() |> RenderController.pipe_page() |> page_props()
+
+    assert props["users"] == [%{"id" => 1}]
+  end
+
+  test "render_inertia_page rejects unknown literal render options at compile time" do
+    assert_raise CompileError, ~r/Unknown render options passed to render_inertia_page/, fn ->
+      defmodule InvalidPageRenderOptionsController do
+        use NbInertia.Controller
+
+        inertia_page :users_index do
+          prop(:users, :list)
+        end
+
+        def index(conn) do
+          render_inertia_page(conn, :users_index, [users: []], unknown: true)
+        end
+      end
+    end
+  end
+
   test "render_inertia_component allows explicit component props and options" do
     conn = inertia_conn() |> RenderController.component_explicit()
     props = page_props(conn)
 
     assert props["users"] == [%{"id" => 1}]
     assert conn.private[:nb_inertia_ssr_enabled] == false
+  end
+
+  test "render_inertia_component rejects unknown literal render options at compile time" do
+    assert_raise CompileError,
+                 ~r/Unknown render options passed to render_inertia_component/,
+                 fn ->
+                   defmodule InvalidComponentRenderOptionsController do
+                     use NbInertia.Controller
+
+                     def index(conn) do
+                       render_inertia_component(conn, "Users/Index", [users: []],
+                         deep_merge: true
+                       )
+                     end
+                   end
+                 end
   end
 
   test "include_shared_props registers shared prop modules without inertia_shared overloads" do
@@ -170,6 +264,13 @@ defmodule NbInertia.ControllerRenderApiTest do
 
     assert page["props"]["locale"] == "en"
     assert page["sharedProps"] == ["locale"]
+  end
+
+  test "shared props import native type helpers" do
+    props = Map.new(SharedTypedProps.__inertia_shared_props__(), &{&1.name, &1})
+
+    assert props.env.type == {:enum, ["dev", "prod", "test"]}
+    assert props.flags.type == {:list, :string}
   end
 
   test "atom page render materializes default and from assigns props at runtime" do
@@ -192,11 +293,35 @@ defmodule NbInertia.ControllerRenderApiTest do
     assert props["errors"] == %{"name" => "is required"}
   end
 
+  test "extended primitive prop atoms stay typed, not serializer-tagged" do
+    props = PrimitiveTypesController.inertia_page_config(:details).props
+    prop_by_name = Map.new(props, &{&1.name, &1})
+
+    assert prop_by_name.count.type == :number
+    assert prop_by_name.metadata.type == :any
+    assert prop_by_name.published_on.type == :date
+    assert prop_by_name.updated_at.type == :datetime
+
+    refute Map.has_key?(prop_by_name.count, :serializer)
+    refute Map.has_key?(prop_by_name.metadata, :serializer)
+    refute Map.has_key?(prop_by_name.published_on, :serializer)
+    refute Map.has_key?(prop_by_name.updated_at, :serializer)
+  end
+
   if Code.ensure_loaded?(NbSerializer) do
     test "serialize/2 helper returns the serializer tuple shape accepted by component renders" do
       props =
         inertia_conn()
         |> __MODULE__.SerializedComponentController.index()
+        |> page_props()
+
+      assert props["users"] == [%{"id" => 1, "name" => "Ada"}]
+    end
+
+    test "pipe-friendly atom page render validates previously assigned serialized props" do
+      props =
+        inertia_conn()
+        |> __MODULE__.SerializedPageController.index()
         |> page_props()
 
       assert props["users"] == [%{"id" => 1, "name" => "Ada"}]

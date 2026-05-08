@@ -2,24 +2,25 @@
 if Code.ensure_loaded?(Credo.Check) do
   defmodule NbInertia.Credo.Check.Warning.InconsistentOptionalProps do
     @moduledoc """
-    Warns when optional props are passed with `nil` instead of an appropriate
+    Warns when non-nullable props are passed with `nil` instead of an appropriate
     empty value or when they're missing entirely.
 
-    Optional props should be handled consistently - either always pass them
-    with a sensible default, or rely on the frontend to handle `undefined`.
+    Props should be handled consistently. If a value may legitimately be `nil`,
+    declare it as `nullable: true`. If a key may be omitted from the initial
+    payload, use `partial: true` or `defer: true`.
 
     ## Example
 
     Instead of:
 
-        render_inertia(conn, :show,
+        render_inertia_page(conn, :show,
           user: user,
           settings: nil  # Inconsistent - might be undefined or null on frontend
         )
 
     Use:
 
-        render_inertia(conn, :show,
+        render_inertia_page(conn, :show,
           user: user,
           settings: user.settings || %{}  # Consistent empty value
         )
@@ -102,12 +103,13 @@ if Code.ensure_loaded?(Credo.Check) do
 
     defp extract_nullable_from_prop(_), do: []
 
-    # Match render_inertia calls with props containing nil values
+    # Match render_inertia/render_inertia_page calls with props containing nil values
     defp traverse(
-           {:render_inertia, meta, [_conn, page, props | _]} = ast,
+           {render_fn, meta, [_conn, page, props | _]} = ast,
            state
          )
-         when is_list(props) and is_atom(page) do
+         when render_fn in [:render_inertia, :render_inertia_page] and is_list(props) and
+                is_atom(page) do
       page_nullable = Map.get(state.nullable_props, page, [])
       nil_props = find_nil_props(props, page_nullable)
 
@@ -143,7 +145,7 @@ if Code.ensure_loaded?(Credo.Check) do
         issue_meta,
         message:
           "Prop `:#{prop_name}` is set to `nil`. Consider using a default value or omitting it entirely.",
-        trigger: "render_inertia",
+        trigger: "render_inertia_page",
         line_no: line_no
       )
     end

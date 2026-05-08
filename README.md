@@ -4,11 +4,11 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 
 ## Features
 
-- **Declarative Page DSL**: Define pages and their props with compile-time validation
+- **Declarative Page DSL**: Define pages and validate literal `render_inertia_page/4` calls in dev/test
 - **Component Name Inference**: Automatic conversion from `:users_index` to `"Users/Index"`
 - **Shared Props**: Define props shared across all pages (inline or as dedicated modules)
 - **Flash Data**: One-time data that doesn't persist in browser history (Inertia v2.3.3+ compatible)
-- **Type Safety**: Compile-time prop validation in dev/test environments
+- **Type Safety**: Runtime default/assign materialization plus dev/test page prop validation
 - **Server-Side Rendering**: Built-in SSR support with DenoRider (Deno-based)
 - **NbSerializer Integration**: Optional automatic serialization for high-performance JSON
 - **Flexible Rendering**: Support for both all-in-one and pipe-friendly patterns
@@ -87,9 +87,9 @@ Add `nb_inertia` to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-    {:nb_inertia, "~> 0.1"},
-    {:nb_serializer, "~> 0.1", optional: true},  # Optional
-    {:nb_ts, "~> 0.1", optional: true}           # Optional for TypeScript
+    {:nb_inertia, github: "nordbeam/nb_inertia"},
+    {:nb_serializer, github: "nordbeam/nb_serializer", optional: true},
+    {:nb_ts, github: "nordbeam/nb_ts", optional: true}
   ]
 end
 ```
@@ -113,7 +113,7 @@ defmodule MyAppWeb.UserController do
 
   # Define the page and its props
   inertia_page :users_index do
-    prop :users, :list
+    prop :users, list_of(:map)
     prop :total_count, :integer
     prop :filters, :map, partial: true
   end
@@ -121,7 +121,7 @@ defmodule MyAppWeb.UserController do
   def index(conn, params) do
     users = MyApp.Accounts.list_users(params)
 
-    render_inertia(conn, :users_index,
+    render_inertia_page(conn, :users_index,
       users: users,
       total_count: length(users),
       filters: params["filters"]
@@ -162,34 +162,44 @@ inertia_page :products_index do
   prop :active, :boolean
 
   # Lists of primitives
-  prop :tags, list: :string           # TypeScript: tags: string[]
-  prop :scores, list: :number         # TypeScript: scores: number[]
+  prop :tags, list_of(:string)        # TypeScript: tags: string[]
+  prop :scores, list_of(:number)      # TypeScript: scores: number[]
 
   # Enums (restricted values)
-  prop :status, enum: ["active", "inactive", "pending"]
+  prop :status, enum([:active, :inactive, :pending])
   # TypeScript: status: "active" | "inactive" | "pending"
 
   # List of enums
-  prop :roles, list: [enum: ["admin", "user", "guest"]]
+  prop :roles, list_of(enum([:admin, :user, :guest]))
   # TypeScript: roles: ("admin" | "user" | "guest")[]
 
   # Single serializer (when nb_serializer is installed)
-  prop :user, UserSerializer          # TypeScript: user: User
+  prop :user, ref(UserSerializer)     # TypeScript: user: User
 
   # List of serializers
-  prop :users, list: UserSerializer   # TypeScript: users: User[]
+  prop :users, list_of(ref(UserSerializer))   # TypeScript: users: User[]
 
   # Modifiers
-  prop :priority, enum: ["low", "high"], partial: true
-  prop :notes, list: :string, partial: true
+  prop :priority, enum([:low, :high]), partial: true
+  prop :notes, list_of(:string), partial: true
   prop :metadata, :map, nullable: true
+
+  # Elixir-native helper types
+  prop :filters, shape(search: optional(:string), page: :integer)
+  prop :subject, union([ref(UserSerializer), ref(TeamSerializer)])
+  prop :settings, nullable(shape(theme: literal("dark"), compact: :boolean))
 end
 ```
+
+Prefer the Elixir-native helpers for normal page contracts. The older `list:` /
+`enum:` / bare-module forms still work as compatibility shorthand, but `list_of(...)`,
+`enum(...)`, and `ref(...)` are the preferred public syntax. Keep `type: ~TS"..."` for
+TypeScript-only edge cases that the helpers cannot express cleanly.
 
 **Benefits of unified syntax:**
 - Same syntax as `field` in NbSerializer
 - Automatic TypeScript generation (with `nb_ts`)
-- Type-safe props with compile-time validation
+- Type-safe prop declarations with dev/test literal render validation
 - Clear, consistent API across the codebase
 
 ## Advanced Usage
@@ -204,15 +214,15 @@ defmodule MyAppWeb.UserController do
   use NbInertia.Controller
 
   inertia_page :users_index do
-    prop :users, MyApp.UserSerializer  # Uses serializer for type
+    prop :users, list_of(ref(MyApp.UserSerializer))  # Uses serializer for type
     prop :total_count, :integer
   end
 
   def index(conn, _params) do
     users = MyApp.Accounts.list_users()
 
-    render_inertia_serialized(conn, :users_index,
-      users: {MyApp.UserSerializer, users},
+    render_inertia_page(conn, :users_index,
+      users: serialize(MyApp.UserSerializer, users),
       total_count: length(users)
     )
   end
@@ -231,7 +241,7 @@ When `nb_serializer` is available, you get additional functions:
 #### Advanced Prop Options
 
 ```elixir
-# Lazy evaluation - only serialize on partial reloads
+# Lazy evaluation - included on first visit, resolved only when needed
 assign_serialized(conn, :posts, PostSerializer, posts, lazy: true)
 
 # Lazy function - automatically partial, only executes when requested
@@ -309,7 +319,7 @@ defmodule MyAppWeb.UserController do
   use NbInertia.Controller
 
   # Use the shared props module
-  inertia_shared(MyAppWeb.InertiaShared.Auth)
+  include_shared_props(MyAppWeb.InertiaShared.Auth)
 
   inertia_page :dashboard do
     prop :stats, :map
@@ -330,7 +340,7 @@ defmodule MyAppWeb do
       use NbInertia.Controller
 
       # Auto-register base shared props for ALL controllers
-      inertia_shared(MyAppWeb.InertiaShared.Base)
+      include_shared_props(MyAppWeb.InertiaShared.Base)
 
       import Plug.Conn
       import MyAppWeb.Gettext
@@ -348,7 +358,7 @@ defmodule MyAppWeb.UserController do
   use MyAppWeb, :controller  # Automatically includes Base shared props!
 
   # Additional controller-specific shared props (optional)
-  inertia_shared(MyAppWeb.InertiaShared.Auth)
+  include_shared_props(MyAppWeb.InertiaShared.Auth)
 
   inertia_page :dashboard do
     prop :stats, :map
@@ -373,16 +383,16 @@ defmodule MyAppWeb.AdminController do
   use MyAppWeb, :controller
 
   # Only include for specific actions
-  inertia_shared(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
+  include_shared_props(MyAppWeb.InertiaShared.Admin, only: [:index, :show])
 
   # Exclude from specific actions
-  inertia_shared(MyAppWeb.InertiaShared.Public, except: [:admin])
+  include_shared_props(MyAppWeb.InertiaShared.Public, except: [:admin])
 
   # Conditional based on guard function
-  inertia_shared(MyAppWeb.InertiaShared.BetaFeatures, when: :beta_enabled?)
+  include_shared_props(MyAppWeb.InertiaShared.BetaFeatures, when: :beta_enabled?)
 
   # Multiple conditions
-  inertia_shared(MyAppWeb.InertiaShared.Analytics,
+  include_shared_props(MyAppWeb.InertiaShared.Analytics,
     only: [:index],
     when: :analytics_enabled?
   )
@@ -423,7 +433,7 @@ def index(conn, _params) do
   # Page:   %{settings: %{theme: "light"}}
   # Result: %{settings: %{theme: "light", notifications: true}}
 
-  render_inertia(conn, :index,
+  render_inertia_page(conn, :index,
     [settings: %{theme: "light"}],
     deep_merge: true
   )
@@ -445,9 +455,9 @@ defmodule MyAppWeb.InertiaShared.Auth do
 
   inertia_shared do
     prop :locale, :string
-    prop :current_user, MyApp.UserSerializer  # Automatically serialized
+    prop :current_user, ref(MyApp.UserSerializer)  # Automatically serialized
     prop :flash, :map
-    prop :permissions, :list
+    prop :permissions, list_of(:string)
   end
 
   def build_props(conn, _opts) do
@@ -467,11 +477,12 @@ NbInertia supports multiple rendering patterns to fit your style:
 
 ### All-in-One Pattern (Recommended)
 
-Provides compile-time validation in dev/test:
+Use `render_inertia_page/4` for explicit page renders. In dev/test, literal maps
+and keyword lists passed here are validated against the declared page props:
 
 ```elixir
 def index(conn, _params) do
-  render_inertia(conn, :users_index,
+  render_inertia_page(conn, :users_index,
     users: list_users(),
     total_count: count_users(),
     filters: %{status: "active"}
@@ -481,7 +492,9 @@ end
 
 ### Pipe-Friendly Pattern
 
-More flexible, no compile-time validation:
+`render_inertia/2-4` remains the overloaded compatibility entry point. It fits
+pipe-based flows and explicit component renders, but dynamically assembled props
+skip literal callsite validation:
 
 ```elixir
 def index(conn, _params) do
@@ -499,11 +512,11 @@ Automatic serialization for performance:
 
 ```elixir
 def index(conn, _params) do
-  render_inertia(conn, :users_index,
-    users: {UserSerializer, list_users()},
-    pagination: {PaginationSerializer, pagination_data()},
+  render_inertia_page(conn, :users_index,
+    users: serialize(UserSerializer, list_users()),
+    pagination: serialize(PaginationSerializer, pagination_data()),
     # Lazy function - automatically partial, only executes when requested
-    analytics: {AnalyticsSerializer, fn -> fetch_analytics() end},
+    analytics: serialize(AnalyticsSerializer, fn -> fetch_analytics() end),
     total_count: count_users()
   )
 end
@@ -533,9 +546,10 @@ end
 - `:list` - List/array structures
 - `:any` - Any type (no validation)
 
-### TypeScript Types (with NbTs)
+### TypeScript Escape Hatch (with NbTs)
 
-When using NbTs, you can specify exact TypeScript types:
+When the Elixir-native helpers are not expressive enough, you can still drop
+down to exact TypeScript with `~TS`:
 
 ```elixir
 import NbTs.Sigil
@@ -549,44 +563,60 @@ end
 
 **Real-Time Type Regeneration:** When NbTs is installed, NbInertia automatically registers a compile hook that regenerates TypeScript types whenever your controllers are recompiled. This means your frontend types stay in sync with your backend prop definitions during development without any manual intervention.
 
+`~TS` strings are validated at Elixir compile time with `tsgo` and then emitted
+to the generated files as-is.
+
 ### Serializer Types (with NbSerializer)
 
 When NbSerializer is installed, use serializer modules as types:
 
 ```elixir
 inertia_page :users_index do
-  prop :users, MyApp.UserSerializer     # Single or list of users
-  prop :current_user, MyApp.UserSerializer
+  prop :users, list_of(ref(MyApp.UserSerializer))
+  prop :current_user, ref(MyApp.UserSerializer)
 end
 ```
 
 ## Compile-Time Validation
 
-In development and test environments, NbInertia validates at compile time:
+In development and test, `render_inertia_page/4` validates literal props for declared
+pages at compile time. The overloaded `render_inertia/2-4` compatibility path performs
+the same literal page-prop checks when called with an atom page ref, but
+`render_inertia_page/4` is the preferred explicit API.
 
-✅ **Validates:**
-- All required props are provided
-- No undeclared props are passed
-- No collisions between shared and page props
-- Prop types match declarations (when using serializers)
+Validates:
+- Missing required props in literal maps and keyword lists
+- Undeclared props in literal maps and keyword lists
+- Shared/page prop name collisions
 
-⚠️ **Note:** Validation is disabled in production for performance.
+Does not validate:
+- Dynamic prop variables or computed map keys
+- Undeclared page refs, which still fail at runtime
+- Arbitrary runtime value shapes
 
-### Partial Props
+Validation is disabled in production.
 
-Props can be marked as partial (excluded from initial page load, only sent on partial reloads):
+### Initial-Load Semantics and TS Optionality
+
+Props can be omitted from explicit page renders in a few different ways, and the
+generated TypeScript follows initial-page presence rather than omission-at-render-time:
 
 ```elixir
 inertia_page :users_show do
   prop :user, :map
-  prop :posts, :list, partial: true      # Can be omitted
-  prop :comments, :list, lazy: true      # Can be omitted
-  prop :analytics, :map, defer: true     # Can be omitted
+  prop :defaults, :map, default: %{}     # Omit at render time, stays required in TS
+  prop :posts, list_of(:map), partial: true      # Omit at render time, optional in TS
+  prop :comments, list_of(:map), lazy: true      # Omit at render time, stays required in TS
+  prop :analytics, :map, defer: true     # Omit at render time, optional in TS
 end
 
-# Valid - partial/lazy/defer props can be omitted
-render_inertia(conn, :users_show, user: user)
+render_inertia_page(conn, :users_show, user: user)
 ```
+
+- `default:` and `from: :assigns` props are materialized by NbInertia at runtime.
+- `lazy: true` props are resolved lazily but still participate in the initial page visit, so they stay required in generated TypeScript.
+- `partial: true` props are omitted from the initial payload unless explicitly requested in a partial reload, so they become optional in generated TypeScript.
+- `defer: true` props are omitted from the initial payload and loaded after the first render, so they also become optional in generated TypeScript.
 
 ### Once Props
 
@@ -766,7 +796,7 @@ end
 ### Compile-Time Validation Overhead
 
 - **Development:** Adds ~50-100ms per controller during compilation
-- **Production:** Zero overhead - validation is disabled in production
+- **Production:** Zero overhead - compile-time validation is disabled in production
 - **Benefit:** Catches errors before deployment, saves debugging time
 
 ### Serialization Performance
@@ -779,13 +809,13 @@ Benchmark (serializing 100 users):
   NbSerializer:         0.6ms  (overhead ~20%)
   Jason.encode:         0.8ms
 
-Benefit: Type safety + TypeScript generation + compile-time validation
+Benefit: Type safety + TypeScript generation + dev/test literal render validation
 ```
 
 **When to use NbSerializer:**
 - ✅ Complex nested data structures
 - ✅ Need TypeScript types generated
-- ✅ Want compile-time type validation
+- ✅ Want serializer-backed props and generated frontend types
 - ✅ Serializing the same data multiple times
 
 **When to use manual maps:**
@@ -817,19 +847,19 @@ Shared props are included in **every Inertia response**. Keep them minimal:
 
 **Optimization strategies:**
 1. Use conditional shared props (`only:`, `when:`) to limit inclusion
-2. Use lazy props for expensive data
+2. Use `lazy`, `partial`, and `defer` intentionally for expensive data
 3. Paginate large lists
 4. Reduce serializer fields to only what's needed
 
 ### Response Size Optimization
 
-**Lazy props** prevent loading expensive data unless requested:
+**Partial and deferred props** reduce initial payload size:
 
 ```elixir
 inertia_page :dashboard do
   prop :summary, :map
-  prop :detailed_analytics, :map, lazy: true  # Only loaded when requested
-  prop :audit_log, :list, lazy: true          # Only loaded when requested
+  prop :detailed_analytics, :map, defer: true  # Loaded after first render
+  prop :audit_log, list_of(:map), partial: true # Loaded only on partial reloads
 end
 ```
 
@@ -839,8 +869,8 @@ end
 def index(conn, params) do
   page = Accounts.paginate_users(params, page_size: 25)
 
-  render_inertia(conn, :index,
-    users: {UserSerializer, page.entries},
+  render_inertia_page(conn, :index,
+    users: serialize(UserSerializer, page.entries),
     meta: %{
       current_page: page.page_number,
       total_pages: page.total_pages,
@@ -901,7 +931,7 @@ defmodule MyAppWeb.UserController do
   def index(conn, _params) do
     conn
     |> inertia_flash(:highlight, conn.params["highlight"])
-    |> render_inertia(:users_index, users: list_users())
+    |> render_inertia_page(:users_index, users: list_users())
   end
 end
 ```
@@ -1172,7 +1202,7 @@ formAttrs.method;  // 'get' | 'post'
 
 ```bash
 mix deps.get
-# Add {:nb_routes, "~> 0.1.0"} to mix.exs
+# Add {:nb_routes, github: "nordbeam/nb_routes"} to mix.exs
 ```
 
 2. **Configure rich mode with form helpers:**
@@ -2235,7 +2265,7 @@ Or add Page module support to an existing installation manually:
 defmodule MyAppWeb.UsersPage.Index do
   use NbInertia.Page
 
-  prop :users, list(UserSerializer)
+  prop :users, list_of(ref(UserSerializer))
   prop :total_count, :integer
 
   def mount(_conn, _params) do
@@ -2263,7 +2293,7 @@ end
 defmodule MyAppWeb.UsersPage.New do
   use NbInertia.Page
 
-  prop :roles, list(:string)
+  prop :roles, list_of(:string)
 
   def mount(_conn, _params) do
     %{roles: ~w(admin member guest)}
@@ -2274,7 +2304,7 @@ defmodule MyAppWeb.UsersPage.New do
       {:ok, user} ->
         conn
         |> put_flash(:info, "User created")
-        |> redirect(~p"/users/#{user}")
+        |> redirect(to: ~p"/users/#{user}")
 
       {:error, changeset} ->
         {:error, changeset}
@@ -2293,7 +2323,7 @@ defmodule MyAppWeb.DashboardPage.Index do
   use NbInertia.Page
 
   prop :stats, :map
-  prop :recent_activity, list(:map)
+  prop :recent_activity, list_of(:map)
 
   def mount(_conn, _params) do
     %{stats: Analytics.dashboard_stats(), recent_activity: Analytics.recent(10)}
@@ -2303,7 +2333,7 @@ defmodule MyAppWeb.DashboardPage.Index do
     ~TSX"""
     import { Card } from '@/components/ui'
 
-    export default function Dashboard({ stats, recentActivity }: Props) {
+    export default function Dashboard({ stats, recent_activity }: Props) {
       return (
         <div>
           <Card title="Overview">
@@ -2317,14 +2347,17 @@ defmodule MyAppWeb.DashboardPage.Index do
 end
 ```
 
+`Props` in extracted `~TSX` and `~JSX` files use the prop names exactly as declared
+in the Page module. Top-level prop keys are not camelized in the generated preamble.
+
 ### Declarative Real-Time Channels
 
 ```elixir
 defmodule MyAppWeb.ChatPage.Show do
   use NbInertia.Page
 
-  prop :room, RoomSerializer
-  prop :messages, list(MessageSerializer)
+  prop :room, ref(RoomSerializer)
+  prop :messages, list_of(ref(MessageSerializer))
 
   channel "chat:{room.id}" do
     on "message_created", prop: :messages, strategy: :append
@@ -2344,7 +2377,7 @@ end
 defmodule MyAppWeb.UsersPage.Show do
   use NbInertia.Page
 
-  prop :user, UserSerializer
+  prop :user, ref(UserSerializer)
 
   modal base_url: "/users",
         size: :lg,
@@ -2370,7 +2403,7 @@ Controller-based pages and Page modules coexist. Migrate incrementally, one cont
 
 - **[NbRoutes](https://github.com/nordbeam/nb_routes)** - Type-safe route helpers with form integration
 - **[NbSerializer](https://github.com/nordbeam/nb_serializer)** - High-performance JSON serialization
-- **[NbTs](https://github.com/nordbeam/nb_ts)** - TypeScript type generation and validation
+- **[NbTs](https://github.com/nordbeam/nb_ts)** - TypeScript type generation for Elixir
 - **[NbVite](https://github.com/nordbeam/nb_vite)** - Vite integration for Phoenix
 
 ## Documentation

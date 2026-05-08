@@ -197,7 +197,69 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     assert source =~ ~s(import type { HomeProps } from "@/types";)
     assert source =~ ~s(const form = useForm<HomeProps["contactForm"]>()
     assert source =~ "prop :contact_form, :map, default: %{}"
+    assert source =~ "prop :items, list_of(ref(ItemSerializer))"
     refute source =~ ~s(import type { HomeProps, HomeFormInputs } from "@/types";)
     refute source =~ ~s(useForm<HomeFormInputs["contactForm"]>)
+  end
+
+  test "full installer demo emits valid nested interpolation in contact flash" do
+    source =
+      Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+      |> File.read!()
+
+    assert source =~
+             ~S|inertia_flash(:success, "Thanks, \#{params["name"]}! We got your message.")|
+
+    refute source =~ ~S|params[\\"name\\"]|
+  end
+
+  test "installer snippets prefer canonical shared props and serializer helpers" do
+    source =
+      Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+      |> File.read!()
+
+    assert source =~ "render_inertia_page(conn, :page_name, props)"
+    assert source =~ "render_inertia_page(conn, :posts_index,"
+
+    assert source =~
+             "render_inertia_page(conn, :home, [greeting: \"Hello from NbInertia!\"], ssr: true)"
+
+    assert source =~ "include_shared_props(DemoShared)"
+    assert source =~ "items: serialize(ItemSerializer, @items)"
+    assert source =~ "meta: serialize(FlopMetaSerializer, meta)"
+    assert source =~ "posts: serialize(PostSerializer, posts)"
+    assert source =~ "meta: serialize(FlopMetaSerializer, meta, opts: [schema: Post])"
+    assert source =~ "Register shared props modules with include_shared_props/2"
+    refute source =~ "render_inertia(conn, :page_name, props)"
+    refute source =~ "render_inertia(conn, :posts_index,"
+    refute source =~ "render_inertia(conn, :home,"
+    refute source =~ "inertia_shared(DemoShared)"
+    refute source =~ "items: {ItemSerializer, @items}"
+    refute source =~ "meta: {FlopMetaSerializer, meta}"
+    refute source =~ "posts: {PostSerializer, posts}"
+    refute source =~ "meta: {FlopMetaSerializer, meta, schema: Post}"
+  end
+
+  test "installer next-step text avoids stale versioned deps and ~TS string guidance" do
+    source =
+      Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+      |> File.read!()
+
+    assert source =~ "- Added nb_inertia to dependencies"
+    assert source =~ "- Wired NbInertia.Controller into your Phoenix controller helper"
+    assert source =~ "- Imported NbInertia.HTML into your Phoenix HTML helper"
+    assert source =~ "prop :greeting, :string"
+    refute source =~ ~s(- Added {:nb_inertia, "~> 0.4"} to dependencies)
+    refute source =~ ~s(- Added {:nb_ts, "~> 0.1"} for TypeScript type generation)
+
+    refute source =~
+             ~s(- Added {:nb_flop, "~> 0.1"} and {:flop, "~> 0.26"} for pagination, sorting, and filtering)
+
+    refute source =~ ~s(- Added {:deno_rider, "~> 0.2"} for production SSR)
+    refute source =~ ~s(prop :greeting, type: ~TS"string")
+    refute source =~ "Use the ~TS sigil for compile-time type validation in page props"
+    refute source =~ "import NbTs.Sigil"
+    refute source =~ ~s(prop :env, type: ~TS"'dev' | 'prod' | 'test'")
+    assert source =~ ~s|prop :env, enum(["dev", "prod", "test"])|
   end
 end

@@ -2,7 +2,7 @@
 if Code.ensure_loaded?(Credo.Check) do
   defmodule NbInertia.Credo.Check.Design.DeclareInertiaPage do
     @moduledoc """
-    Warns when using `render_inertia/3` with an atom page reference in a controller
+    Warns when using `render_inertia/3` or `render_inertia_page/3` with an atom page reference in a controller
     that doesn't appear to have `use NbInertia.Controller`.
 
     Also recognizes `use NbInertia.Page` as a valid pattern — Page modules
@@ -26,7 +26,7 @@ if Code.ensure_loaded?(Credo.Check) do
           # Missing: use NbInertia.Controller
 
           def index(conn, _params) do
-            render_inertia(conn, :users_index, users: users)  # Will fail at runtime!
+            render_inertia_page(conn, :users_index, users: users)  # Will fail at runtime!
           end
         end
 
@@ -41,7 +41,7 @@ if Code.ensure_loaded?(Credo.Check) do
           end
 
           def index(conn, _params) do
-            render_inertia(conn, :users_index, users: list_users())
+            render_inertia_page(conn, :users_index, users: list_users())
           end
         end
 
@@ -52,7 +52,8 @@ if Code.ensure_loaded?(Credo.Check) do
       category: :design,
       explanations: [
         check: """
-        When using atom-based page references with `render_inertia/3`, ensure:
+        When using atom-based page references with `render_inertia/3` or
+        `render_inertia_page/3`, ensure:
 
         1. Your controller has `use NbInertia.Controller`
         2. You've declared the page with `inertia_page :page_name do ... end`
@@ -71,7 +72,7 @@ if Code.ensure_loaded?(Credo.Check) do
               end
 
               def action(conn, _params) do
-                render_inertia(conn, :my_page, data: %{})
+                render_inertia_page(conn, :my_page, data: %{})
               end
             end
         """
@@ -82,7 +83,7 @@ if Code.ensure_loaded?(Credo.Check) do
     def run(%SourceFile{} = source_file, params) do
       issue_meta = IssueMeta.for(source_file, params)
 
-      # Single pass: collect module info and check render_inertia calls
+      # Single pass: collect module info and check atom page renders
       # We track module scopes to handle files with multiple modules correctly
       initial_state = %{
         issue_meta: issue_meta,
@@ -161,12 +162,12 @@ if Code.ensure_loaded?(Credo.Check) do
        }}
     end
 
-    # Check render_inertia calls with atom page references
+    # Check render_inertia/render_inertia_page calls with atom page references
     defp traverse(
-           {:render_inertia, meta, [_conn, page_name | _rest]} = ast,
+           {render_fn, meta, [_conn, page_name | _rest]} = ast,
            state
          )
-         when is_atom(page_name) do
+         when render_fn in [:render_inertia, :render_inertia_page] and is_atom(page_name) do
       cond do
         # Skip check for Page modules — they use mount/2, not render_inertia
         state.has_nb_inertia_page ->
@@ -174,12 +175,14 @@ if Code.ensure_loaded?(Credo.Check) do
 
         # If the module doesn't have NbInertia.Controller, warn
         not state.has_nb_inertia_controller ->
-          new_issue = issue_for_missing_use(state.issue_meta, meta[:line], page_name)
+          new_issue = issue_for_missing_use(state.issue_meta, meta[:line], page_name, render_fn)
           {ast, %{state | issues: [new_issue | state.issues]}}
 
         # If the page isn't declared, warn
         not MapSet.member?(state.declared_pages, page_name) ->
-          new_issue = issue_for_undeclared_page(state.issue_meta, meta[:line], page_name)
+          new_issue =
+            issue_for_undeclared_page(state.issue_meta, meta[:line], page_name, render_fn)
+
           {ast, %{state | issues: [new_issue | state.issues]}}
 
         true ->
@@ -191,22 +194,22 @@ if Code.ensure_loaded?(Credo.Check) do
       {ast, state}
     end
 
-    defp issue_for_missing_use(issue_meta, line_no, page_name) do
+    defp issue_for_missing_use(issue_meta, line_no, page_name, render_fn) do
       format_issue(
         issue_meta,
         message:
           "Using atom page reference `:#{page_name}` requires `use NbInertia.Controller` in this module.",
-        trigger: "render_inertia",
+        trigger: Atom.to_string(render_fn),
         line_no: line_no
       )
     end
 
-    defp issue_for_undeclared_page(issue_meta, line_no, page_name) do
+    defp issue_for_undeclared_page(issue_meta, line_no, page_name, render_fn) do
       format_issue(
         issue_meta,
         message:
           "Page `:#{page_name}` is not declared. Add `inertia_page :#{page_name} do ... end` to this controller.",
-        trigger: "render_inertia",
+        trigger: Atom.to_string(render_fn),
         line_no: line_no
       )
     end

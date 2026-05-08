@@ -14,11 +14,11 @@ if Code.ensure_loaded?(Credo.Check) do
         defmodule MyAppWeb.ItemsController do
           use NbInertia.Controller
 
-          inertia_shared(FormErrors)
+          include_shared_props(FormErrors)
           # Missing Auth and UIPreferences!
 
           inertia_page :index do
-            prop :items, list: ItemSerializer
+            prop :items, list_of(ref(ItemSerializer))
           end
         end
 
@@ -27,12 +27,12 @@ if Code.ensure_loaded?(Credo.Check) do
         defmodule MyAppWeb.ItemsController do
           use NbInertia.Controller
 
-          inertia_shared(Auth)
-          inertia_shared(FormErrors)
-          inertia_shared(UIPreferences)
+          include_shared_props(Auth)
+          include_shared_props(FormErrors)
+          include_shared_props(UIPreferences)
 
           inertia_page :index do
-            prop :items, list: ItemSerializer
+            prop :items, list_of(ref(ItemSerializer))
           end
         end
 
@@ -62,9 +62,9 @@ if Code.ensure_loaded?(Credo.Check) do
         like authentication state, form errors, and UI preferences.
 
         Add shared props to your controller:
-            inertia_shared(Auth)
-            inertia_shared(FormErrors)
-            inertia_shared(UIPreferences)
+            include_shared_props(Auth)
+            include_shared_props(FormErrors)
+            include_shared_props(UIPreferences)
 
         Configure expected shared props via check params.
         """,
@@ -133,14 +133,16 @@ if Code.ensure_loaded?(Credo.Check) do
       {ast, %{state | has_nb_inertia_controller: true}}
     end
 
-    # Track inertia_shared declarations
-    defp traverse({:inertia_shared, _meta, [{:__aliases__, _, parts} | _]} = ast, state) do
+    # Track include_shared_props/inertia_shared declarations
+    defp traverse({macro_name, _meta, [{:__aliases__, _, parts} | _]} = ast, state)
+         when macro_name in [:inertia_shared, :include_shared_props] do
       shared_name = Module.concat(parts)
       {ast, %{state | declared_shared: [shared_name | state.declared_shared]}}
     end
 
     # Also handle atom-style shared props
-    defp traverse({:inertia_shared, _meta, [name | _]} = ast, state) when is_atom(name) do
+    defp traverse({macro_name, _meta, [name | _]} = ast, state)
+         when macro_name in [:inertia_shared, :include_shared_props] and is_atom(name) do
       {ast, %{state | declared_shared: [name | state.declared_shared]}}
     end
 
@@ -204,7 +206,7 @@ if Code.ensure_loaded?(Credo.Check) do
       format_issue(
         issue_meta,
         message:
-          "Controller `#{inspect(module_name)}` is missing `inertia_shared(#{shared_name})`.",
+          "Controller `#{inspect(module_name)}` is missing `include_shared_props(#{shared_name})`.",
         trigger: "defmodule",
         line_no: line_no
       )

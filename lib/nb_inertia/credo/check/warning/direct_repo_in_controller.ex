@@ -14,14 +14,14 @@ if Code.ensure_loaded?(Credo.Check) do
 
         def show(conn, %{"id" => id}) do
           user = Repo.get!(User, id)
-          render_inertia(conn, :show, user: {UserSerializer, user})
+          render_inertia_page(conn, :show, user: serialize(UserSerializer, user))
         end
 
     Use:
 
         def show(conn, %{"id" => id}) do
           user = Accounts.get_user!(id)
-          render_inertia(conn, :show, user: {UserSerializer, user})
+          render_inertia_page(conn, :show, user: serialize(UserSerializer, user))
         end
 
     """

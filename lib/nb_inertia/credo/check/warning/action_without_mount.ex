@@ -15,7 +15,7 @@ if Code.ensure_loaded?(Credo.Check) do
         defmodule MyAppWeb.UsersPage.Create do
           use NbInertia.Page
 
-          prop :user, UserSerializer
+          prop :user, ref(UserSerializer)
 
           # Has action/3 but no mount/2!
           def action(conn, params, :create) do
@@ -31,7 +31,7 @@ if Code.ensure_loaded?(Credo.Check) do
         defmodule MyAppWeb.UsersPage.Create do
           use NbInertia.Page
 
-          prop :user, UserSerializer
+          prop :user, ref(UserSerializer)
 
           def mount(_conn, _params) do
             %{user: %User{}}

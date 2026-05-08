@@ -20,7 +20,7 @@ defmodule NbInertia.SharedProps.Behaviour do
 
         inertia_shared do
           prop :locale, :string
-          prop :current_user, MyApp.UserSerializer
+          prop :current_user, ref(MyApp.UserSerializer)
           prop :flash, :map
         end
 

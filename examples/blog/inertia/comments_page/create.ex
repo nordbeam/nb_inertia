@@ -18,17 +18,19 @@
 defmodule BlogWeb.CommentsPage.Create do
   use NbInertia.Page
 
-  prop :post, Blog.PostSerializer
+  prop(:post, ref(Blog.PostSerializer))
 
   # Dynamic base_url: the function receives conn.params at request time.
   # When rendered as a modal, the "page behind" shows the content at base_url.
   # Here, that's the post show page the comment belongs to.
-  modal base_url: &"/posts/#{&1["post_id"]}",
-        size: :md,
-        position: :center
+  modal(
+    base_url: &"/posts/#{&1["post_id"]}",
+    size: :md,
+    position: :center
+  )
 
   form_inputs :comment_form do
-    field :body, :string
+    field(:body, :string)
   end
 
   def mount(_conn, %{"post_id" => post_id}) do

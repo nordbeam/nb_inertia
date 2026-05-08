@@ -12,12 +12,12 @@ defmodule NbInertia.Controller do
         use NbInertia.Controller
 
         inertia_page :users_index do
-          prop :users, :list
+          prop :users, list_of(:map)
           prop :total_count, :integer
         end
 
         def index(conn, _params) do
-          render_inertia(conn, :users_index,
+          render_inertia_page(conn, :users_index,
             users: list_users(),
             total_count: count_users()
           )
@@ -29,13 +29,13 @@ defmodule NbInertia.Controller do
   If you have `nb_serializer` installed, you can use automatic serialization:
 
       inertia_page :users_index do
-        prop :users, UserSerializer
+        prop :users, list_of(ref(UserSerializer))
         prop :total_count, :integer
       end
 
       def index(conn, _params) do
         render_inertia_serialized(conn, :users_index,
-          users: {UserSerializer, list_users()},
+          users: serialize(UserSerializer, list_users()),
           total_count: count_users()
         )
       end
@@ -55,6 +55,7 @@ defmodule NbInertia.Controller do
   defmacro __using__(_opts) do
     quote do
       import NbInertia.Controller
+      import NbInertia.Type
 
       # Import NbInertia.CoreController functions except those we override
       import NbInertia.CoreController,
@@ -96,14 +97,16 @@ defmodule NbInertia.Controller do
   @doc """
   Declares an Inertia page with its props.
 
-  When a `form_inputs/2` block uses the same name as a generic page prop (`:map` or `:any`),
+  When a `form_inputs/2` block uses the same name as a compatible non-serializer prop,
   `nb_ts` inlines those field definitions into the generated `*Props` interface for that prop.
-  Forms without a matching generic prop are emitted on a separate `*FormInputs` interface.
+  Compatible props are usually declared as `:map` or `:any`; props with no explicit type
+  are also treated as compatible. Serializer, list, and enum props always keep separate
+  `*FormInputs` output.
 
   ## Examples
 
       inertia_page :users_index do
-        prop :users, :list
+        prop :users, list_of(:map)
         prop :total_count, :integer
       end
 
@@ -114,12 +117,12 @@ defmodule NbInertia.Controller do
       # Component names are inferred from the page atom by convention
       # :users_index -> "Users/Index"
       inertia_page :users_index do
-        prop :users, list: UserSerializer
+        prop :users, list_of(ref(UserSerializer))
       end
 
       # Override TypeScript type name to avoid collisions
       inertia_page :preview, component: "Public/WidgetShow", type_name: "WidgetPreviewProps" do
-        prop :widget, WidgetSerializer
+        prop :widget, ref(WidgetSerializer)
       end
 
       inertia_page :users_new do
@@ -201,9 +204,9 @@ defmodule NbInertia.Controller do
   @doc """
   Declares a prop within an inertia_page block.
 
-  ## Unified Syntax
+  ## Preferred Type Syntax
 
-  Props use a unified syntax matching NbSerializer's field syntax:
+  Prefer the Elixir-native helper DSL for page contracts:
 
       # Primitives
       prop :id, :integer
@@ -211,56 +214,61 @@ defmodule NbInertia.Controller do
       prop :active, :boolean
 
       # Lists of primitives
-      prop :tags, list: :string       # TypeScript: string[]
-      prop :scores, list: :number     # TypeScript: number[]
+      prop :tags, list_of(:string)    # TypeScript: string[]
+      prop :scores, list_of(:number)  # TypeScript: number[]
 
       # Enums
-      prop :status, enum: ["active", "inactive"]
+      prop :status, enum([:active, :inactive])
       # TypeScript: "active" | "inactive"
 
-      # List of enums
-      prop :roles, list: [enum: ["admin", "user"]]
-      # TypeScript: ("admin" | "user")[]
+      # References to serializers or named generated types
+      prop :user, ref(UserSerializer)
+      prop :users, list_of(ref(UserSerializer))
 
-      # Serializers (with nb_serializer)
-      prop :user, UserSerializer      # Single serializer
-      prop :users, list: UserSerializer  # List of serializers
+      # Nested shapes and unions
+      prop :roles, list_of(enum([:admin, :user]))
+      prop :filters, shape(search: optional(:string), page: :integer)
+      prop :subject, union([ref(UserSerializer), ref(TeamSerializer)])
+      prop :settings, nullable(shape(theme: literal("dark"), compact: :boolean))
 
-      # Modifiers
-      prop :priority, enum: ["low", "high"], partial: true
-      prop :notes, list: :string, partial: true
-      prop :posts, :list, lazy: true
-      prop :stats, :map, defer: true, partial: true
-      prop :flash, from: :assigns
+  ## Delivery Options
+
+  Delivery and runtime behavior are configured separately from the type:
+
+      # Key may be omitted on the initial visit
+      prop :priority, enum([:low, :high]), partial: true
+      prop :stats, shape(total: :integer), defer: true
+
+      # Value may be null even though the key is present
+      prop :metadata, nullable(shape(source: :string))
+
+      # Value comes from conn.assigns and is hydrated at runtime
+      prop :flash, shape(info: optional(:string), error: optional(:string)), from: :assigns
+
+      # Value is always materialized, even if mount/render omits it
+      prop :draft, shape(name: :string), default: %{name: ""}
+
+  `optional/1` is only for fields inside `shape/1`. At the top level, `partial: true`
+  and `defer: true` control prop omission, while `nullable(...)` controls whether the
+  value can be `null`.
+
+  ## Compatibility Shorthand
+
+  The older keyword shorthand still works:
+
+      prop :status, enum: ["active", "inactive"]
+      prop :users, list: UserSerializer
+      prop :user, UserSerializer
+
+  Keep those forms for compatibility; prefer the helper syntax above for new code.
+  Keep `type: ~TS"..."` as an escape hatch for TypeScript-only constructs.
   """
   defmacro prop(name, type_or_serializer \\ nil, opts \\ [])
 
   # Handle prop with only name and options (no serializer/type)
   defmacro prop(name, opts, []) when is_list(opts) do
     quote bind_quoted: [name: name, opts: opts] do
-      # Normalize deprecated :optional to :partial for inertia_page props
-      opts =
-        if Keyword.get(opts, :optional, false) do
-          IO.warn(
-            "optional: true in inertia_page props is deprecated, use partial: true instead.\n" <>
-              "  optional: true excludes the prop from initial page load (Inertia partial reloads only).\n" <>
-              "  If you meant the prop value can be nil, use nullable: true instead."
-          )
-
-          opts |> Keyword.delete(:optional) |> Keyword.put(:partial, true)
-        else
-          opts
-        end
-
-      prop_config = %{name: name, opts: opts}
-
-      # Handle the :from option for shared props
-      prop_config =
-        case Keyword.get(opts, :from) do
-          nil -> prop_config
-          from -> Map.put(prop_config, :from, from)
-        end
-
+      prop_config = NbInertia.Controller.build_prop_config!(name, nil, opts)
       Module.put_attribute(__MODULE__, :current_props, prop_config)
     end
   end
@@ -268,41 +276,128 @@ defmodule NbInertia.Controller do
   # Handle prop with name, type/serializer, and options
   defmacro prop(name, type_or_serializer, opts) do
     quote bind_quoted: [name: name, type_or_serializer: type_or_serializer, opts: opts] do
-      # Normalize deprecated :optional to :partial for inertia_page props
-      opts =
-        if Keyword.get(opts, :optional, false) do
-          IO.warn(
-            "optional: true in inertia_page props is deprecated, use partial: true instead.\n" <>
-              "  optional: true excludes the prop from initial page load (Inertia partial reloads only).\n" <>
-              "  If you meant the prop value can be nil, use nullable: true instead."
-          )
-
-          opts |> Keyword.delete(:optional) |> Keyword.put(:partial, true)
-        else
-          opts
-        end
-
-      prop_config =
-        case type_or_serializer do
-          type
-          when is_atom(type) and type in [:string, :integer, :float, :boolean, :map, :list] ->
-            %{name: name, type: type, opts: opts}
-
-          serializer when is_atom(serializer) ->
-            %{name: name, serializer: serializer, opts: opts}
-
-          other ->
-            %{name: name, serializer: other, opts: opts}
-        end
-
-      # Handle the :from option for shared props
-      prop_config =
-        case Keyword.get(opts, :from) do
-          nil -> prop_config
-          from -> Map.put(prop_config, :from, from)
-        end
-
+      prop_config = NbInertia.Controller.build_prop_config!(name, type_or_serializer, opts)
       Module.put_attribute(__MODULE__, :current_props, prop_config)
+    end
+  end
+
+  @doc false
+  def build_prop_config!(name, type_or_serializer, opts) when is_list(opts) do
+    opts =
+      opts
+      |> normalize_deprecated_prop_opts()
+      |> NbInertia.Type.normalize_prop_opts!()
+
+    prop_config = %{name: name, opts: opts}
+
+    prop_config =
+      case NbInertia.Type.classify_prop_input!(type_or_serializer) do
+        {:type, type} ->
+          Map.put(prop_config, :type, type)
+
+        {:serializer, serializer} ->
+          Map.put(prop_config, :serializer, serializer)
+
+        :none ->
+          case NbInertia.Type.normalize_prop_declared_type(opts) do
+            nil -> prop_config
+            type -> Map.put(prop_config, :type, type)
+          end
+      end
+
+    case Keyword.get(opts, :from) do
+      nil -> prop_config
+      from -> Map.put(prop_config, :from, from)
+    end
+  end
+
+  @doc false
+  def ensure_form_field_context!(module, file, line, arity) do
+    if !Module.get_attribute(module, :current_form_name) do
+      raise CompileError,
+        file: file,
+        line: line,
+        description: """
+        field/#{arity} must be used inside a form_inputs block.
+
+        Example:
+          form_inputs :user do
+            field :name, :string
+          end
+        """
+    end
+  end
+
+  @doc false
+  def build_field_definition!(name, type, opts) when is_list(opts) do
+    opts = NbInertia.Type.normalize_field_opts!(opts)
+    normalized_type = NbInertia.Type.normalize_field_declared_type(type, opts)
+
+    if not is_nil(normalized_type) and normalized_type != :any do
+      NbInertia.Type.validate_type_descriptor!(normalized_type, top_level: true, context: :field)
+    end
+
+    {name, normalized_type, opts}
+  end
+
+  @doc false
+  def raise_invalid_nested_field_type!(name, type, file, line) do
+    type_description =
+      case type do
+        {:enum, _values} -> "Enum types"
+        {:list, _inner_type} -> "Typed lists"
+        {:shape, _fields} -> "Shape types"
+        {:union, _types} -> "Union types"
+        {:literal, _value} -> "Literal types"
+        {:nullable, _inner} -> "Nullable types"
+        {:optional, _inner} -> "Optional field types"
+        _ -> "Typed fields"
+      end
+
+    type_example =
+      case type do
+        {:enum, _values} -> "field :status, enum([:active, :inactive])"
+        {:list, _inner_type} -> "field :tags, list_of(:string)"
+        {:shape, _fields} -> "field :profile, shape(name: :string, email: optional(:string))"
+        {:union, _types} -> "field :subject, union([ref(UserSerializer), ref(TeamSerializer)])"
+        {:literal, _value} -> ~s|field :mode, literal("preview")|
+        {:nullable, _inner} -> "field :metadata, nullable(shape(key: :string))"
+        {:optional, _inner} -> "field :profile, shape(name: optional(:string))"
+        _ -> "field :field_name, #{inspect(type)}"
+      end
+
+    raise CompileError,
+      file: file,
+      line: line,
+      description: """
+      cannot use nested block with #{String.downcase(type_description)}.
+
+      #{type_description} define specific types and cannot have nested blocks.
+
+      You used: field #{inspect(name)}, #{inspect(type)} do
+
+      Either:
+      1. Use a regular :list with nested block:
+         field :questions, :list do
+           field :text, :string
+         end
+
+      2. Or use #{String.downcase(type_description)} without a block:
+         #{type_example}
+      """
+  end
+
+  defp normalize_deprecated_prop_opts(opts) do
+    if Keyword.get(opts, :optional, false) do
+      IO.warn(
+        "optional: true in inertia_page props is deprecated, use partial: true instead.\n" <>
+          "  partial: true means the prop key may be omitted on the initial page load.\n" <>
+          "  nullable: true means the key is present but the value may be nil."
+      )
+
+      opts |> Keyword.delete(:optional) |> Keyword.put(:partial, true)
+    else
+      opts
     end
   end
 
@@ -329,16 +424,16 @@ defmodule NbInertia.Controller do
   Conditional sharing (matches Phoenix plug pattern):
 
       # Only for specific actions
-      inertia_shared(MyAppWeb.InertiaShared.Auth, only: [:index, :show])
+      include_shared_props(MyAppWeb.InertiaShared.Auth, only: [:index, :show])
 
       # Except for specific actions
-      inertia_shared(MyAppWeb.InertiaShared.Public, except: [:admin])
+      include_shared_props(MyAppWeb.InertiaShared.Public, except: [:admin])
 
       # Conditional based on guard function
-      inertia_shared(MyAppWeb.InertiaShared.Admin, when: :admin?)
+      include_shared_props(MyAppWeb.InertiaShared.Admin, when: :admin?)
 
       # Multiple conditions
-      inertia_shared(MyAppWeb.InertiaShared.Features, only: [:index], when: :feature_enabled?)
+      include_shared_props(MyAppWeb.InertiaShared.Features, only: [:index], when: :feature_enabled?)
 
   ## Options
 
@@ -416,9 +511,11 @@ defmodule NbInertia.Controller do
   This macro does NOT perform any validation - it is purely for type generation.
   All validation should be handled by changesets on the server.
 
-  When the form name matches a generic page prop (`:map` or `:any`), the generated
+  When the form name matches a compatible non-serializer page prop, the generated
   TypeScript fields are inlined into that prop on the page's `*Props` interface.
-  Otherwise, the form is emitted under a standalone `*FormInputs` interface.
+  Compatible props are usually declared as `:map` or `:any`; props with no explicit
+  type are also treated as compatible. Otherwise, the form is emitted under a
+  standalone `*FormInputs` interface.
 
   ## Examples
 
@@ -442,8 +539,8 @@ defmodule NbInertia.Controller do
         };
       }
 
-  Without a matching `prop :user, :map` or `prop :user, :any`, the same form would
-  instead be emitted on `UsersNewFormInputs`.
+  Without a matching compatible prop, the same form would instead be emitted on
+  `UsersNewFormInputs`.
   """
   defmacro form_inputs(name, do: block) when is_atom(name) do
     quote do
@@ -508,6 +605,8 @@ defmodule NbInertia.Controller do
       field :email, :string
       field :age, :integer, optional: true
       field :bio, :string, optional: true
+      field :roles, list_of(enum([:admin, :editor]))
+      field :preferences, shape(theme: :string, locale: optional(:string))
 
   ## Nested List Fields
 
@@ -519,71 +618,32 @@ defmodule NbInertia.Controller do
   # Handle field/4 when block is passed with enum or typed list
   # This should error since enums and typed lists cannot have nested blocks
   defmacro field(name, type, _opts, do: _block) when is_atom(name) and is_tuple(type) do
-    quote do
-      # Check what kind of tuple type this is for better error messages
-      type_description =
-        case unquote(type) do
-          {:enum, _values} -> "Enum types"
-          {:list, _inner_type} -> "Typed lists"
-          _ -> "Typed fields"
-        end
-
-      type_example =
-        case unquote(type) do
-          {:enum, _values} -> "field :status, {:enum, [\"active\", \"inactive\"]}"
-          {:list, _inner_type} -> "field :tags, {:list, :string}"
-          _ -> "field :field_name, #{inspect(unquote(type))}"
-        end
-
-      raise CompileError,
-        file: __ENV__.file,
-        line: __ENV__.line,
-        description: """
-        cannot use nested block with #{String.downcase(type_description)}.
-
-        #{type_description} define specific types and cannot have nested blocks.
-
-        You used: field #{inspect(unquote(name))}, #{inspect(unquote(type))} do
-
-        Either:
-        1. Use a regular :list with nested block:
-           field :questions, :list do
-             field :text, :string
-           end
-
-        2. Or use #{String.downcase(type_description)} without a block:
-           #{type_example}
-        """
+    quote bind_quoted: [name: name, type: type] do
+      NbInertia.Controller.raise_invalid_nested_field_type!(
+        name,
+        type,
+        __ENV__.file,
+        __ENV__.line
+      )
     end
   end
 
   # Handle field/4 when block is passed with explicit opts: field(:name, :list, [optional: true], do: block)
   defmacro field(name, type, opts, do: block) when is_atom(name) and is_atom(type) do
     quote do
-      # Validate we're inside a form_inputs block
-      if !Module.get_attribute(__MODULE__, :current_form_name) do
-        raise CompileError,
-          file: __ENV__.file,
-          line: __ENV__.line,
-          description: """
-          field/3 must be used inside a form_inputs block.
+      NbInertia.Controller.ensure_form_field_context!(__MODULE__, __ENV__.file, __ENV__.line, 3)
+      name = unquote(name)
+      type = unquote(type)
+      opts = NbInertia.Type.normalize_field_opts!(unquote(opts))
 
-          Example:
-            form_inputs :user do
-              field :name, :string
-            end
-          """
-      end
-
-      # Validate that blocks are only used with :list type
-      if unquote(type) != :list do
+      if type != :list do
         raise CompileError,
           file: __ENV__.file,
           line: __ENV__.line,
           description: """
           field with nested block must have type :list.
 
-          You tried to use a nested block with type #{inspect(unquote(type))}.
+          You tried to use a nested block with type #{inspect(type)}.
 
           Correct usage:
             field :questions, :list do
@@ -623,7 +683,7 @@ defmodule NbInertia.Controller do
       Module.put_attribute(
         __MODULE__,
         :current_form_fields,
-        {unquote(name), unquote(type), unquote(opts), Enum.reverse(nested_fields)}
+        {name, type, opts, Enum.reverse(nested_fields)}
       )
     end
   end
@@ -632,26 +692,9 @@ defmodule NbInertia.Controller do
   # Examples: field(:tags, list: :string), field(:status, enum: ["active", "inactive"])
   defmacro field(name, opts) when is_atom(name) and is_list(opts) do
     quote bind_quoted: [name: name, opts: opts] do
-      # Validate we're inside a form_inputs block
-      if !Module.get_attribute(__MODULE__, :current_form_name) do
-        raise CompileError,
-          file: __ENV__.file,
-          line: __ENV__.line,
-          description: """
-          field/2 must be used inside a form_inputs block.
-
-          Example:
-            form_inputs :user do
-              field :name, :string
-            end
-          """
-      end
-
-      # Type is :any when using list/enum options
-      type = :any
-
-      # Store field definition as a tuple: {name, type, opts}
-      Module.put_attribute(__MODULE__, :current_form_fields, {name, type, opts})
+      NbInertia.Controller.ensure_form_field_context!(__MODULE__, __ENV__.file, __ENV__.line, 2)
+      field = NbInertia.Controller.build_field_definition!(name, :any, opts)
+      Module.put_attribute(__MODULE__, :current_form_fields, field)
     end
   end
 
@@ -708,23 +751,9 @@ defmodule NbInertia.Controller do
     else
       # Generate code for typed list field (no block)
       quote bind_quoted: [name: name, type: type, opts: clean_opts] do
-        # Validate we're inside a form_inputs block
-        if !Module.get_attribute(__MODULE__, :current_form_name) do
-          raise CompileError,
-            file: __ENV__.file,
-            line: __ENV__.line,
-            description: """
-            field/3 must be used inside a form_inputs block.
-
-            Example:
-              form_inputs :user do
-                field :name, :string
-              end
-            """
-        end
-
-        # Store typed list field definition as a tuple: {name, type, opts}
-        Module.put_attribute(__MODULE__, :current_form_fields, {name, type, opts})
+        NbInertia.Controller.ensure_form_field_context!(__MODULE__, __ENV__.file, __ENV__.line, 3)
+        field = NbInertia.Controller.build_field_definition!(name, type, opts)
+        Module.put_attribute(__MODULE__, :current_form_fields, field)
       end
     end
   end
@@ -741,30 +770,19 @@ defmodule NbInertia.Controller do
     if block do
       # Generate code for field with nested block (from field :name, :list do syntax)
       quote do
-        # Validate we're inside a form_inputs block
-        if !Module.get_attribute(__MODULE__, :current_form_name) do
-          raise CompileError,
-            file: __ENV__.file,
-            line: __ENV__.line,
-            description: """
-            field/3 must be used inside a form_inputs block.
+        NbInertia.Controller.ensure_form_field_context!(__MODULE__, __ENV__.file, __ENV__.line, 3)
+        name = unquote(name)
+        type = unquote(type)
+        clean_opts = NbInertia.Type.normalize_field_opts!(unquote(clean_opts))
 
-            Example:
-              form_inputs :user do
-                field :name, :string
-              end
-            """
-        end
-
-        # Validate that blocks are only used with :list type
-        if unquote(type) != :list do
+        if type != :list do
           raise CompileError,
             file: __ENV__.file,
             line: __ENV__.line,
             description: """
             field with nested block must have type :list.
 
-            You tried to use a nested block with type #{inspect(unquote(type))}.
+            You tried to use a nested block with type #{inspect(type)}.
 
             Correct usage:
               field :questions, :list do
@@ -804,29 +822,15 @@ defmodule NbInertia.Controller do
         Module.put_attribute(
           __MODULE__,
           :current_form_fields,
-          {unquote(name), unquote(type), unquote(clean_opts), Enum.reverse(nested_fields)}
+          {name, type, clean_opts, Enum.reverse(nested_fields)}
         )
       end
     else
       # Generate code for regular field
       quote bind_quoted: [name: name, type: type, opts: clean_opts] do
-        # Validate we're inside a form_inputs block
-        if !Module.get_attribute(__MODULE__, :current_form_name) do
-          raise CompileError,
-            file: __ENV__.file,
-            line: __ENV__.line,
-            description: """
-            field/3 must be used inside a form_inputs block.
-
-            Example:
-              form_inputs :user do
-                field :name, :string
-              end
-            """
-        end
-
-        # Store regular field definition as a tuple: {name, type, opts}
-        Module.put_attribute(__MODULE__, :current_form_fields, {name, type, opts})
+        NbInertia.Controller.ensure_form_field_context!(__MODULE__, __ENV__.file, __ENV__.line, 3)
+        field = NbInertia.Controller.build_field_definition!(name, type, opts)
+        Module.put_attribute(__MODULE__, :current_form_fields, field)
       end
     end
   end
@@ -1007,7 +1011,7 @@ defmodule NbInertia.Controller do
 
           2. Or rename the page props:
              inertia_page #{inspect(page_name)} do
-               prop :page_user, UserSerializer  # instead of :user
+               prop :page_user, ref(UserSerializer)  # instead of :user
              end
 
           3. Or use namespacing in your prop names:
@@ -1051,13 +1055,13 @@ defmodule NbInertia.Controller do
   ## Examples
 
       # All-in-one pattern (with validation)
-      render_inertia(conn, :users_index,
+      render_inertia_page(conn, :users_index,
         users: users,
         total_count: 42
       )
 
       # With deep merge (per-action override)
-      render_inertia(conn, :users_index,
+      render_inertia_page(conn, :users_index,
         [settings: %{theme: "light"}],
         deep_merge: true
       )
@@ -1138,7 +1142,14 @@ defmodule NbInertia.Controller do
       conn_value =
         NbInertia.PropRuntime.mark_shared_prop_keys(conn_value, shared_props)
 
-      NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props_map)
+      validation_props =
+        NbInertia.PropRuntime.merge_props(
+          NbInertia.PropRuntime.existing_page_props(conn_value, shared_props, page_prop_configs),
+          props_map,
+          deep_merge?
+        )
+
+      NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, validation_props)
 
       # Combine shared props with provided page props
       all_props_map =
@@ -1248,7 +1259,18 @@ defmodule NbInertia.Controller do
 
           conn_value = NbInertia.PropRuntime.mark_shared_prop_keys(conn_value, shared_props)
 
-          NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, props_map)
+          validation_props =
+            NbInertia.PropRuntime.merge_props(
+              NbInertia.PropRuntime.existing_page_props(
+                conn_value,
+                shared_props,
+                page_prop_configs
+              ),
+              props_map,
+              deep_merge?
+            )
+
+          NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, validation_props)
 
           all_props_map =
             NbInertia.PropRuntime.merge_props(shared_props, props_map, deep_merge?)
@@ -1306,6 +1328,109 @@ defmodule NbInertia.Controller do
   end
 
   @doc """
+  Renders a declared Inertia page with explicit page semantics.
+
+  Unlike `render_inertia/3`, the third argument here is always treated as props,
+  so keyword lists are never reinterpreted as render options. Literal props are
+  validated at compile time in dev/test, matching the all-in-one page render path.
+
+  Use `render_inertia_page/4` when you want the explicit counterpart to
+  `render_inertia_component/4` without losing page validation.
+  """
+  defmacro render_inertia_page(conn, page_ref, props \\ [], opts \\ [])
+
+  defmacro render_inertia_page(conn, page_ref, props, opts) do
+    if is_atom(page_ref) do
+      maybe_validate_literal_page_props!(__CALLER__, page_ref, props)
+    end
+
+    maybe_validate_literal_render_opts!(__CALLER__, :page, opts, "render_inertia_page")
+
+    quote do
+      conn_value = unquote(conn)
+      page_ref = unquote(page_ref)
+
+      {props_map, render_opts} =
+        NbInertia.Controller.normalize_explicit_page_render_args!(
+          unquote(props),
+          unquote(opts)
+        )
+
+      # Look up the component name (will raise at runtime if page not declared)
+      component = page(page_ref)
+
+      # Build a map of prop name -> DSL opts for quick lookup
+      # inertia_page_config returns nil for undeclared pages
+      page_prop_configs =
+        case inertia_page_config(page_ref) do
+          nil -> []
+          page_config -> page_config.props
+        end
+
+      {props_map, saved_errors} =
+        NbInertia.Controller.prepare_page_props_for_render(
+          conn_value,
+          props_map,
+          page_prop_configs
+        )
+
+      inline_shared_configs = inertia_shared_props()
+
+      dsl_opts_map =
+        NbInertia.PropRuntime.dsl_opts_map(page_prop_configs ++ inline_shared_configs)
+
+      # Get registered shared modules
+      shared_modules = __inertia_shared_modules__()
+
+      # Get current action name for conditional filtering
+      action = Phoenix.Controller.action_name(conn_value)
+
+      deep_merge? =
+        Keyword.get(render_opts, :deep_merge, NbInertia.Config.deep_merge_shared_props())
+
+      render_opts = Keyword.delete(render_opts, :deep_merge)
+
+      shared_props =
+        NbInertia.PropRuntime.resolve_shared_props(
+          conn_value,
+          shared_modules,
+          inline_shared_configs,
+          action: action,
+          controller_module: __MODULE__,
+          deep_merge: deep_merge?
+        )
+
+      conn_value =
+        NbInertia.PropRuntime.mark_shared_prop_keys(conn_value, shared_props)
+
+      validation_props =
+        NbInertia.PropRuntime.merge_props(
+          NbInertia.PropRuntime.existing_page_props(conn_value, shared_props, page_prop_configs),
+          props_map,
+          deep_merge?
+        )
+
+      NbInertia.Controller.validate_page_props!(__MODULE__, page_ref, validation_props)
+
+      all_props_map =
+        NbInertia.PropRuntime.merge_props(shared_props, props_map, deep_merge?)
+
+      conn_value = NbInertia.PropRuntime.assign_props(conn_value, all_props_map, dsl_opts_map)
+      conn_value = NbInertia.Controller.restore_render_errors(conn_value, saved_errors)
+      conn_value = NbInertia.Controller.apply_render_opts(conn_value, render_opts)
+
+      conn_value =
+        if NbInertia.Config.camelize_props?() do
+          NbInertia.CoreController.camelize_props(conn_value, true)
+        else
+          conn_value
+        end
+
+      NbInertia.Controller.do_render_inertia(conn_value, component, render_opts)
+    end
+  end
+
+  @doc """
   Renders an explicit component path with props.
 
   Unlike `render_inertia/3`, the third argument here is always treated as props,
@@ -1314,6 +1439,8 @@ defmodule NbInertia.Controller do
   Use `render_inertia_component/4` when you want to pass both props and options.
   """
   defmacro render_inertia_component(conn, component, props \\ [], opts \\ []) do
+    maybe_validate_literal_render_opts!(__CALLER__, :component, opts, "render_inertia_component")
+
     quote do
       conn_value = unquote(conn)
 
@@ -1364,7 +1491,7 @@ defmodule NbInertia.Controller do
       ambiguous_render_keywords?(kind, props_or_opts) ->
         raise ArgumentError,
               "ambiguous render_inertia keyword list: #{inspect(props_or_opts)}. " <>
-                "Pass props and options separately, or use render_inertia_component/3 for explicit components."
+                "Pass props and options separately, or use render_inertia_component/4 for explicit components."
 
       true ->
         {Enum.into(props_or_opts, %{}), []}
@@ -1382,6 +1509,7 @@ defmodule NbInertia.Controller do
   def normalize_explicit_component_render_args!(props, opts \\ [])
 
   def normalize_explicit_component_render_args!(%{} = props, opts) when is_list(opts) do
+    validate_explicit_render_opts!(:component, opts, "render_inertia_component")
     {props, opts}
   end
 
@@ -1392,14 +1520,53 @@ defmodule NbInertia.Controller do
             "render_inertia_component props must be a map or keyword list, got: #{inspect(props)}"
     end
 
+    validate_explicit_render_opts!(:component, opts, "render_inertia_component")
     {Enum.into(props, %{}), opts}
   end
 
   def normalize_explicit_component_render_args!(nil, []), do: {%{}, []}
 
+  def normalize_explicit_component_render_args!(nil, opts) when is_list(opts) do
+    validate_explicit_render_opts!(:component, opts, "render_inertia_component")
+    {%{}, opts}
+  end
+
   def normalize_explicit_component_render_args!(props, _opts) do
     raise ArgumentError,
           "render_inertia_component props must be a map or keyword list, got: #{inspect(props)}"
+  end
+
+  @doc false
+  def normalize_explicit_page_render_args!(props, opts \\ [])
+
+  def normalize_explicit_page_render_args!(%{} = props, opts) when is_list(opts) do
+    validate_explicit_render_opts!(:page, opts, "render_inertia_page")
+    {props, opts}
+  end
+
+  def normalize_explicit_page_render_args!(props, opts)
+      when is_list(props) and is_list(opts) do
+    unless Keyword.keyword?(props) do
+      raise ArgumentError,
+            "render_inertia_page props must be a map or keyword list, got: #{inspect(props)}"
+    end
+
+    validate_explicit_render_opts!(:page, opts, "render_inertia_page")
+    {Enum.into(props, %{}), opts}
+  end
+
+  def normalize_explicit_page_render_args!(nil, []) do
+    {%{}, []}
+  end
+
+  def normalize_explicit_page_render_args!(nil, opts) when is_list(opts) do
+    validate_explicit_render_opts!(:page, opts, "render_inertia_page")
+    {%{}, opts}
+  end
+
+  def normalize_explicit_page_render_args!(props, _opts) do
+    raise ArgumentError,
+          "render_inertia_page props must be a map or keyword list, got: #{inspect(props)}"
   end
 
   @doc false
@@ -1488,7 +1655,7 @@ defmodule NbInertia.Controller do
             Use one of these explicit forms instead:
 
               render_inertia(conn, "Users/Index", %{users: users}, ssr: true)
-              render_inertia_component(conn, "Users/Index", users: users, ssr: true)
+              render_inertia_component(conn, "Users/Index", %{users: users}, ssr: true)
             """,
             file: caller.file,
             line: caller.line
@@ -1545,6 +1712,56 @@ defmodule NbInertia.Controller do
   defp render_opt_keys(:component), do: @component_render_opts
   defp render_opt_keys(:page), do: @page_render_opts
 
+  defp validate_explicit_render_opts!(kind, opts, macro_name) when is_list(opts) do
+    unless Keyword.keyword?(opts) do
+      raise ArgumentError, "#{macro_name} options must be a keyword list, got: #{inspect(opts)}"
+    end
+
+    unknown_keys = Keyword.keys(opts) -- render_opt_keys(kind)
+
+    if unknown_keys != [] do
+      raise ArgumentError,
+            "#{macro_name} received unknown render options #{inspect(unknown_keys)}. " <>
+              "Allowed options: #{inspect(render_opt_keys(kind))}"
+    end
+
+    :ok
+  end
+
+  defp maybe_validate_literal_render_opts!(caller, kind, opts_ast, macro_name) do
+    if Mix.env() in [:dev, :test] do
+      cond do
+        not is_list(opts_ast) ->
+          :ok
+
+        Keyword.keyword?(opts_ast) ->
+          unknown_keys = Keyword.keys(opts_ast) -- render_opt_keys(kind)
+
+          if unknown_keys != [] do
+            raise CompileError,
+              description: """
+              Unknown render options passed to #{macro_name}
+
+              Unknown options: #{inspect(unknown_keys)}
+              Allowed options: #{inspect(render_opt_keys(kind))}
+              """,
+              file: caller.file,
+              line: caller.line
+          end
+
+        true ->
+          raise CompileError,
+            description: """
+            #{macro_name} options must be a keyword list
+
+            Received: #{inspect(opts_ast)}
+            """,
+            file: caller.file,
+            line: caller.line
+      end
+    end
+  end
+
   @doc """
   Validates that the provided props match the declared props for a page.
 
@@ -1568,7 +1785,7 @@ defmodule NbInertia.Controller do
 
     declared_prop_names = Enum.map(declared_props, &to_string(&1.name)) |> MapSet.new()
 
-    # Find required props (not partial, lazy, defer, default-backed, or from assigns)
+    # Find required props (not partial, defer, default-backed, or from assigns)
     required_props =
       declared_props
       |> Enum.reject(&optional_runtime_prop?/1)
@@ -1653,7 +1870,6 @@ defmodule NbInertia.Controller do
     opts = prop[:opts] || []
 
     Keyword.get(opts, :partial, false) ||
-      Keyword.get(opts, :lazy, false) ||
       Keyword.get(opts, :defer, false) ||
       not is_nil(Keyword.get(opts, :from)) ||
       Keyword.has_key?(opts, :default)
@@ -1705,10 +1921,10 @@ defmodule NbInertia.Controller do
       type_info =
         case prop do
           %{serializer: serializer} when not is_nil(serializer) ->
-            "#{inspect(serializer)}"
+            "ref(#{inspect(serializer)})"
 
           %{type: type} when not is_nil(type) ->
-            inspect(type)
+            format_declared_type_for_error(type)
 
           _ ->
             "any"
@@ -1753,10 +1969,10 @@ defmodule NbInertia.Controller do
       type_or_serializer =
         case prop do
           %{serializer: serializer} when not is_nil(serializer) ->
-            inspect(serializer)
+            "ref(#{inspect(serializer)})"
 
           %{type: type} when not is_nil(type) ->
-            inspect(type)
+            format_declared_type_for_error(type)
 
           _ ->
             nil
@@ -1774,8 +1990,50 @@ defmodule NbInertia.Controller do
 
   defp format_missing_props_declaration(prop_names) do
     prop_names
-    |> Enum.map_join("\n           ", &"prop #{inspect(&1)}, :type")
+    |> Enum.map_join(
+      "\n           ",
+      &"prop #{inspect(&1)}, :string  # replace with the real type"
+    )
   end
+
+  defp format_declared_type_for_error({:ref, module}) do
+    "ref(#{inspect(module)})"
+  end
+
+  defp format_declared_type_for_error({:list, inner}) do
+    "list_of(#{format_declared_type_for_error(inner)})"
+  end
+
+  defp format_declared_type_for_error({:enum, values}) when is_list(values) do
+    "enum(#{inspect(values)})"
+  end
+
+  defp format_declared_type_for_error({:literal, value}) do
+    "literal(#{inspect(value)})"
+  end
+
+  defp format_declared_type_for_error({:union, types}) when is_list(types) do
+    "union([#{Enum.map_join(types, ", ", &format_declared_type_for_error/1)}])"
+  end
+
+  defp format_declared_type_for_error({:nullable, inner}) do
+    "nullable(#{format_declared_type_for_error(inner)})"
+  end
+
+  defp format_declared_type_for_error({:optional, inner}) do
+    "optional(#{format_declared_type_for_error(inner)})"
+  end
+
+  defp format_declared_type_for_error({:shape, fields}) when is_list(fields) do
+    rendered_fields =
+      Enum.map_join(fields, ", ", fn {field_name, field_type} ->
+        "#{field_name}: #{format_declared_type_for_error(field_type)}"
+      end)
+
+    "shape(#{rendered_fields})"
+  end
+
+  defp format_declared_type_for_error(type), do: inspect(type)
 
   @doc """
   Determines if a shared module should be applied based on conditional options.
@@ -2099,7 +2357,7 @@ defmodule NbInertia.Controller do
 
         # Given DSL declaration:
         inertia_page :dashboard do
-          prop :stats, StatsSerializer, defer: true
+          prop :stats, ref(StatsSerializer), defer: true
         end
 
         # And render call:
@@ -2501,40 +2759,38 @@ defmodule NbInertia.Controller do
   defp atomize_if(value, true), do: String.to_atom(value)
   defp atomize_if(value, false), do: value
 
-  defp serialize_prop_value({serializer, data}) when is_atom(serializer) do
-    if Code.ensure_loaded?(NbSerializer) do
-      camelize = NbInertia.Config.camelize_props?()
+  defp serialize_prop_value(value) do
+    case NbInertia.PropRuntime.normalize_serializer_tuple(value) do
+      {:ok, serializer, data, runtime_opts} ->
+        if Code.ensure_loaded?(NbSerializer) do
+          camelize = NbInertia.Config.camelize_props?()
 
-      case NbSerializer.serialize(serializer, data,
-             camelize: camelize,
-             keep_raw_markers: true
-           ) do
-        {:ok, serialized} -> serialized
-        {:error, _} -> data
-      end
-    else
-      data
+          serialization_opts =
+            Keyword.merge(
+              [camelize: camelize, keep_raw_markers: true],
+              serializer_runtime_opts(runtime_opts)
+            )
+
+          case NbSerializer.serialize(serializer, data, serialization_opts) do
+            {:ok, serialized} -> serialized
+            {:error, _} -> data
+          end
+        else
+          data
+        end
+
+      :error ->
+        value
     end
   end
 
-  defp serialize_prop_value({serializer, data, opts})
-       when is_atom(serializer) and is_list(opts) do
-    if Code.ensure_loaded?(NbSerializer) do
-      camelize = NbInertia.Config.camelize_props?()
-
-      serialization_opts =
-        Keyword.merge([camelize: camelize, keep_raw_markers: true], opts[:opts] || [])
-
-      case NbSerializer.serialize(serializer, data, serialization_opts) do
-        {:ok, serialized} -> serialized
-        {:error, _} -> data
-      end
-    else
-      data
+  defp serializer_runtime_opts(runtime_opts) do
+    case Keyword.get(runtime_opts, :opts) do
+      nil -> runtime_opts
+      opts when is_list(opts) -> opts
+      _ -> runtime_opts
     end
   end
-
-  defp serialize_prop_value(value), do: value
 
   @doc """
   Assigns a raw (non-serialized) prop with DSL options applied.

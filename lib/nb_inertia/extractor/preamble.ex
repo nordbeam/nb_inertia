@@ -17,18 +17,35 @@ defmodule NbInertia.Extractor.Preamble do
   | `prop :active, :boolean` | `active: boolean` | -- |
   | `prop :tags, :list` | `tags: any[]` | -- |
   | `prop :meta, :map` | `meta: Record<string, any>` | -- |
-  | `prop :users, list: :string` | `users: string[]` | -- |
-  | `prop :users, list: UserSerializer` | `users: User[]` | `import type { User } from '@/types'` |
-  | `prop :user, UserSerializer` | `user: User` | `import type { User } from '@/types'` |
-  | `prop :status, enum: ["a","b"]` | `status: 'a' \\| 'b'` | -- |
+  | `prop :users, list_of(:string)` | `users: string[]` | -- |
+  | `prop :users, list_of(ref(UserSerializer))` | `users: User[]` | `import type { User } from '@/types'` |
+  | `prop :user, ref(UserSerializer)` | `user: User` | `import type { User } from '@/types'` |
+  | `prop :status, enum([:a, :b])` | `status: 'a' \\| 'b'` | -- |
   | `prop :x, :map, nullable: true` | `x: Record<string, any> \\| null` | -- |
   | `prop :x, :string, default: ""` | `x: string` | -- |
-  | `prop :x, :string, partial: true` | `x?: string` | -- (optional with ?) |
-  | `prop :x, :string, defer: true` | `x?: string` | -- (optional with ?) |
+  | `prop :x, :string, from: :assigns` | `x: string \\| null` | -- |
+  | `prop :x, :string, partial: true` | `x?: string` | -- |
+  | `prop :x, :string, defer: true` | `x?: string` | -- |
   | `prop :x, :string, lazy: true` | `x: string` | -- |
+
+  TypeScript optionality follows initial-page presence:
+  `default:`, `from:`, and `lazy: true` stay required, while `partial: true`
+  and `defer: true` become optional. When `form_inputs/2` matches a compatible
+  prop, the generated `Props` field is inlined to that nested form shape.
   """
 
-  @primitive_types [:string, :integer, :float, :boolean, :map, :list, :number, :any]
+  @primitive_types [
+    :string,
+    :integer,
+    :float,
+    :number,
+    :boolean,
+    :map,
+    :list,
+    :any,
+    :date,
+    :datetime
+  ]
 
   @doc """
   Generates a complete TypeScript preamble string from a list of prop configs.
@@ -38,6 +55,7 @@ defmodule NbInertia.Extractor.Preamble do
     * `:module` - The source Elixir module (for the header comment)
     * `:source_path` - The source file path (for the header comment)
     * `:types_import_path` - The import path for types (default: `"@/types"`)
+    * `:forms` - Form input definitions from `form_inputs/2` (optional)
     * `:channel` - Channel config map from `__inertia_channel__/0` (optional)
     * `:camelize_props` - Whether to camelize prop names in channel config (default: `false`)
 
@@ -54,13 +72,14 @@ defmodule NbInertia.Extractor.Preamble do
     module = Keyword.get(opts, :module)
     source_path = Keyword.get(opts, :source_path)
     types_import_path = Keyword.get(opts, :types_import_path, "@/types")
+    forms = Keyword.get(opts, :forms, %{})
     channel_config = Keyword.get(opts, :channel)
     camelize? = Keyword.get(opts, :camelize_props, false)
 
     header = build_header(module, source_path)
     imports = build_imports(props, types_import_path)
     channel_section = build_channel_section(channel_config, camelize?)
-    interface = build_interface(props)
+    interface = build_interface(props, forms)
 
     parts =
       [header, imports, channel_section, interface]
@@ -76,10 +95,17 @@ defmodule NbInertia.Extractor.Preamble do
   """
   @spec prop_to_ts_type(map()) :: String.t()
   def prop_to_ts_type(prop) do
-    base_type = resolve_base_type(prop)
-    nullable? = Keyword.get(prop[:opts] || [], :nullable, false)
+    declared_type =
+      cond do
+        Map.has_key?(prop, :serializer) -> prop.serializer
+        true -> prop_declared_type(prop) || :any
+      end
 
-    if nullable? do
+    base_type = resolve_type_reference(declared_type, 2)
+    opts = prop[:opts] || []
+    nullable? = Keyword.get(opts, :nullable, false) || not is_nil(Keyword.get(opts, :from))
+
+    if nullable? and not nullable_descriptor?(declared_type) do
       "#{base_type} | null"
     else
       base_type
@@ -219,18 +245,18 @@ defmodule NbInertia.Extractor.Preamble do
     |> Enum.join()
   end
 
-  defp build_interface(props) do
+  defp build_interface(props, forms) do
     fields =
       props
-      |> Enum.map(&format_interface_field/1)
+      |> Enum.map(&format_interface_field(&1, forms))
       |> Enum.join("\n")
 
     "interface Props {\n#{fields}\n}"
   end
 
-  defp format_interface_field(prop) do
+  defp format_interface_field(prop, forms) do
     name = to_string(prop[:name] || prop.name)
-    ts_type = prop_to_ts_type(prop)
+    ts_type = interface_field_type(prop, forms)
     optional? = ts_optional_field?(prop[:opts] || [])
 
     if optional? do
@@ -247,38 +273,116 @@ defmodule NbInertia.Extractor.Preamble do
     partial? || defer?
   end
 
-  # ── Type Resolution ──────────────────────────────────
+  defp interface_field_type(prop, forms) do
+    form_name = prop[:name] || prop.name
 
-  defp resolve_base_type(%{type: :string}), do: "string"
-  defp resolve_base_type(%{type: :integer}), do: "number"
-  defp resolve_base_type(%{type: :float}), do: "number"
-  defp resolve_base_type(%{type: :number}), do: "number"
-  defp resolve_base_type(%{type: :boolean}), do: "boolean"
-  defp resolve_base_type(%{type: :list}), do: "any[]"
-  defp resolve_base_type(%{type: :map}), do: "Record<string, any>"
-  defp resolve_base_type(%{type: :any}), do: "any"
+    case Map.get(forms || %{}, form_name) do
+      fields when is_list(fields) and fields != [] ->
+        if form_inputs_compatible_prop?(prop) do
+          inline_form_type(fields, 2)
+        else
+          prop_to_ts_type(prop)
+        end
 
-  # Serializer type (single)
-  defp resolve_base_type(%{serializer: serializer}) when is_atom(serializer) do
-    serializer_type_name(serializer)
-  end
-
-  # No type or serializer — check opts for list:/enum:
-  defp resolve_base_type(%{opts: opts} = prop) when is_list(opts) do
-    cond do
-      Keyword.has_key?(opts, :list) ->
-        resolve_list_type(Keyword.get(opts, :list))
-
-      Keyword.has_key?(opts, :enum) ->
-        resolve_enum_type(Keyword.get(opts, :enum))
-
-      true ->
-        # Fallback: check if there's a type key we missed
-        Map.get(prop, :type, :any) |> resolve_simple_type()
+      _ ->
+        prop_to_ts_type(prop)
     end
   end
 
-  defp resolve_base_type(_), do: "any"
+  defp form_inputs_compatible_prop?(prop_config) do
+    opts = Map.get(prop_config, :opts, [])
+    declared_type = prop_declared_type(prop_config)
+
+    cond do
+      Map.has_key?(prop_config, :serializer) ->
+        false
+
+      Keyword.has_key?(opts, :list) or Keyword.has_key?(opts, :enum) ->
+        false
+
+      declared_type in [:map, :any] ->
+        true
+
+      true ->
+        is_nil(declared_type)
+    end
+  end
+
+  defp prop_declared_type(prop_config) do
+    opts = Map.get(prop_config, :opts, [])
+
+    cond do
+      Map.has_key?(prop_config, :type) ->
+        Map.get(prop_config, :type)
+
+      Keyword.has_key?(opts, :type) ->
+        Keyword.get(opts, :type)
+
+      Keyword.has_key?(opts, :list) ->
+        {:list, normalize_list_inner_type(Keyword.get(opts, :list))}
+
+      Keyword.has_key?(opts, :enum) ->
+        {:enum, Keyword.get(opts, :enum)}
+
+      true ->
+        nil
+    end
+  end
+
+  defp inline_form_type(fields, indent_size) do
+    camelize? = Application.get_env(:nb_inertia, :snake_case_params, true)
+    field_defs = generate_form_field_definitions(fields, camelize?, indent_size + 2)
+    "{\n#{field_defs}\n#{spaces(indent_size)}}"
+  end
+
+  defp spaces(count) when is_integer(count) and count >= 0 do
+    String.duplicate(" ", count)
+  end
+
+  defp generate_form_field_definitions(fields, camelize?, indent_size) when is_list(fields) do
+    fields
+    |> Enum.map_join("\n", fn field ->
+      case field do
+        {name, :list, opts, nested_fields} when is_list(nested_fields) ->
+          field_name = form_field_name(name, camelize?)
+          optional_marker = if Keyword.get(opts, :optional, false), do: "?", else: ""
+
+          nested_definitions =
+            generate_form_field_definitions(nested_fields, camelize?, indent_size + 2)
+
+          "#{spaces(indent_size)}#{field_name}#{optional_marker}: Array<{\n#{nested_definitions}\n#{spaces(indent_size)}}>;"
+
+        {name, type, opts} ->
+          field_name = form_field_name(name, camelize?)
+          optional_marker = if Keyword.get(opts, :optional, false), do: "?", else: ""
+          ts_type = form_field_ts_type(type, opts)
+
+          "#{spaces(indent_size)}#{field_name}#{optional_marker}: #{ts_type};"
+      end
+    end)
+  end
+
+  defp form_field_name(name, true), do: camelize_key(name)
+  defp form_field_name(name, false) when is_atom(name), do: Atom.to_string(name)
+  defp form_field_name(name, false), do: to_string(name)
+
+  defp form_field_ts_type({:enum, values}, _opts) when is_list(values) do
+    resolve_enum_type(values)
+  end
+
+  defp form_field_ts_type({:list, inner_type}, _opts) do
+    resolve_list_type(inner_type)
+  end
+
+  defp form_field_ts_type(type, opts) when is_list(opts) do
+    type
+    |> field_declared_type(opts)
+    |> resolve_type_reference(2)
+  end
+
+  defp form_field_ts_type(type, _opts), do: resolve_type_reference(type, 2)
+
+  # ── Type Resolution ──────────────────────────────────
 
   defp resolve_simple_type(:string), do: "string"
   defp resolve_simple_type(:integer), do: "number"
@@ -288,7 +392,77 @@ defmodule NbInertia.Extractor.Preamble do
   defp resolve_simple_type(:list), do: "any[]"
   defp resolve_simple_type(:map), do: "Record<string, any>"
   defp resolve_simple_type(:any), do: "any"
+  defp resolve_simple_type(:date), do: "string"
+  defp resolve_simple_type(:datetime), do: "string"
   defp resolve_simple_type(_), do: "any"
+
+  defp resolve_type_reference({:typescript_validated, ts_string}, _indent_size)
+       when is_binary(ts_string),
+       do: ts_string
+
+  defp resolve_type_reference(type, _indent_size) when is_binary(type), do: type
+
+  defp resolve_type_reference({:ref, module}, _indent_size) when is_atom(module) do
+    serializer_type_name(module)
+  end
+
+  defp resolve_type_reference({:list, inner}, indent_size) do
+    inner_type = resolve_type_reference(inner, indent_size)
+    format_array_type(inner_type)
+  end
+
+  defp resolve_type_reference({:enum, values}, _indent_size) when is_list(values) do
+    Enum.map_join(values, " | ", &literal_to_typescript/1)
+  end
+
+  defp resolve_type_reference({:literal, value}, _indent_size) do
+    literal_to_typescript(value)
+  end
+
+  defp resolve_type_reference({:union, types}, indent_size) when is_list(types) do
+    types
+    |> Enum.map_join(" | ", &resolve_type_reference(&1, indent_size))
+  end
+
+  defp resolve_type_reference({:nullable, inner}, indent_size) do
+    "#{resolve_type_reference(inner, indent_size)} | null"
+  end
+
+  defp resolve_type_reference({:optional, inner}, indent_size) do
+    resolve_type_reference(inner, indent_size)
+  end
+
+  defp resolve_type_reference({:shape, fields}, indent_size)
+       when is_list(fields) do
+    unless Keyword.keyword?(fields) do
+      raise ArgumentError, "shape/1 expects a keyword list, got: #{inspect(fields)}"
+    end
+
+    field_defs =
+      fields
+      |> Enum.map_join("\n", fn {field_name, field_type} ->
+        {optional_field?, normalized_type} = unwrap_optional_type(field_type)
+        optional_marker = if optional_field?, do: "?", else: ""
+
+        "#{spaces(indent_size + 2)}#{field_name}#{optional_marker}: #{resolve_type_reference(normalized_type, indent_size + 2)};"
+      end)
+
+    "{\n#{field_defs}\n#{spaces(indent_size)}}"
+  end
+
+  defp resolve_type_reference(type, _indent_size) when type in @primitive_types do
+    resolve_simple_type(type)
+  end
+
+  defp resolve_type_reference(type, _indent_size) when is_atom(type) do
+    if module_atom?(type) do
+      serializer_type_name(type)
+    else
+      "any"
+    end
+  end
+
+  defp resolve_type_reference(_type, _indent_size), do: "any"
 
   # ── List Type Resolution ──────────────────────────────
 
@@ -322,6 +496,63 @@ defmodule NbInertia.Extractor.Preamble do
   end
 
   defp resolve_enum_type(_), do: "any"
+
+  defp nullable_descriptor?({:nullable, _inner}), do: true
+  defp nullable_descriptor?(_type), do: false
+
+  defp unwrap_optional_type({:optional, inner}), do: {true, inner}
+  defp unwrap_optional_type(type), do: {false, type}
+
+  defp field_declared_type(type, opts) when is_list(opts) do
+    cond do
+      not is_nil(type) and type != :any ->
+        type
+
+      Keyword.has_key?(opts, :type) ->
+        Keyword.get(opts, :type)
+
+      Keyword.has_key?(opts, :list) ->
+        {:list, normalize_list_inner_type(Keyword.get(opts, :list))}
+
+      Keyword.has_key?(opts, :enum) ->
+        {:enum, Keyword.get(opts, :enum)}
+
+      true ->
+        type
+    end
+  end
+
+  defp format_array_type(inner_type) do
+    cond do
+      String.starts_with?(inner_type, "{\n") ->
+        "Array<#{inner_type}>"
+
+      String.contains?(inner_type, "\n") ->
+        "Array<#{inner_type}>"
+
+      String.contains?(inner_type, " | ") ->
+        "(#{inner_type})[]"
+
+      Regex.match?(~r/^[A-Za-z0-9_$.]+$/, inner_type) ->
+        "#{inner_type}[]"
+
+      true ->
+        "Array<#{inner_type}>"
+    end
+  end
+
+  defp literal_to_typescript(value) when is_binary(value),
+    do: "'" <> escape_single_quoted_string(value) <> "'"
+
+  defp literal_to_typescript(value) when is_integer(value) or is_float(value),
+    do: to_string(value)
+
+  defp literal_to_typescript(true), do: "true"
+  defp literal_to_typescript(false), do: "false"
+  defp literal_to_typescript(nil), do: "null"
+
+  defp literal_to_typescript(value) when is_atom(value),
+    do: "'" <> escape_single_quoted_string(Atom.to_string(value)) <> "'"
 
   # ── Serializer Type Name ──────────────────────────────
 
@@ -359,25 +590,69 @@ defmodule NbInertia.Extractor.Preamble do
   # ── Import Extraction ──────────────────────────────────
 
   defp extract_prop_imports(%{serializer: serializer}) when is_atom(serializer) do
-    [{serializer_type_name(serializer), serializer}]
+    if module_atom?(serializer), do: [{serializer_type_name(serializer), serializer}], else: []
+  end
+
+  defp extract_prop_imports(%{type: type}) do
+    extract_type_imports(type)
   end
 
   defp extract_prop_imports(%{opts: opts}) when is_list(opts) do
-    case Keyword.get(opts, :list) do
-      nil ->
-        []
-
-      inner when is_atom(inner) ->
-        if inner in @primitive_types do
-          []
-        else
-          [{serializer_type_name(inner), inner}]
-        end
-
-      _other ->
-        []
-    end
+    opts
+    |> Keyword.take([:type, :list, :enum])
+    |> Enum.flat_map(fn
+      {:type, type} -> extract_type_imports(type)
+      {:list, inner} -> extract_type_imports({:list, normalize_list_inner_type(inner)})
+      {:enum, values} -> extract_type_imports({:enum, values})
+    end)
   end
 
   defp extract_prop_imports(_), do: []
+
+  defp extract_type_imports({:list, inner}), do: extract_type_imports(inner)
+  defp extract_type_imports({:ref, module}) when is_atom(module), do: extract_type_imports(module)
+
+  defp extract_type_imports({:union, types}) when is_list(types),
+    do: Enum.flat_map(types, &extract_type_imports/1)
+
+  defp extract_type_imports({:nullable, inner}), do: extract_type_imports(inner)
+  defp extract_type_imports({:optional, inner}), do: extract_type_imports(inner)
+
+  defp extract_type_imports({:shape, fields}) when is_list(fields) do
+    Enum.flat_map(fields, fn {_field_name, field_type} -> extract_type_imports(field_type) end)
+  end
+
+  defp extract_type_imports(type) when type in @primitive_types, do: []
+  defp extract_type_imports({:enum, _values}), do: []
+  defp extract_type_imports({:literal, _value}), do: []
+  defp extract_type_imports({:typescript_validated, _ts_string}), do: []
+  defp extract_type_imports(type) when is_binary(type), do: []
+
+  defp extract_type_imports(type) when is_atom(type) do
+    if module_atom?(type), do: [{serializer_type_name(type), type}], else: []
+  end
+
+  defp extract_type_imports(_type), do: []
+
+  defp normalize_list_inner_type(inner) when is_list(inner) do
+    if Keyword.keyword?(inner) and Keyword.has_key?(inner, :enum) do
+      {:enum, Keyword.get(inner, :enum)}
+    else
+      inner
+    end
+  end
+
+  defp normalize_list_inner_type(inner), do: inner
+
+  defp module_atom?(type) when is_atom(type) do
+    type
+    |> Atom.to_string()
+    |> String.starts_with?("Elixir.")
+  end
+
+  defp escape_single_quoted_string(value) do
+    value
+    |> String.replace("\\", "\\\\")
+    |> String.replace("'", "\\'")
+  end
 end

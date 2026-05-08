@@ -11,7 +11,7 @@ defmodule NbInertia.Page do
       defmodule MyAppWeb.UsersPage.Index do
         use NbInertia.Page
 
-        prop :users, :list
+        prop :users, list_of(ref(UserSerializer))
         prop :total_count, :integer
 
         def mount(_conn, _params) do
@@ -46,11 +46,11 @@ defmodule NbInertia.Page do
   Props use the same DSL as `NbInertia.Controller`:
 
       prop :name, :string
-      prop :user, UserSerializer
-      prop :tags, list: :string
-      prop :status, enum: ["active", "inactive"]
-      prop :stats, :map, defer: true
-      prop :draft, :map, nullable: true, default: %{}
+      prop :user, ref(UserSerializer)
+      prop :tags, list_of(:string)
+      prop :status, enum([:active, :inactive])
+      prop :stats, shape(total: :integer), defer: true
+      prop :draft, nullable(shape(name: :string)), default: %{name: ""}
 
   ## Form Inputs
 
@@ -113,7 +113,7 @@ defmodule NbInertia.Page do
         changeset = Accounts.change_user(%User{}, params)
         precognition conn, changeset do
           case Accounts.create_user(params) do
-            {:ok, user} -> redirect(conn, ~p"/users/\#{user}")
+            {:ok, user} -> redirect(conn, to: ~p"/users/\#{user}")
             {:error, changeset} -> {:error, changeset}
           end
         end
@@ -148,7 +148,7 @@ defmodule NbInertia.Page do
       end
 
       # Error (re-renders with errors)
-      def action(_conn, params, :update) do
+      def action(conn, params, :update) do
         case update_user(params) do
           {:ok, _} -> redirect(conn, to: "/users")
           {:error, changeset} -> {:error, changeset}
@@ -173,6 +173,17 @@ defmodule NbInertia.Page do
           field: 2,
           field: 3,
           field: 4
+        ]
+
+      import NbInertia.Type,
+        only: [
+          list_of: 1,
+          enum: 1,
+          literal: 1,
+          union: 1,
+          nullable: 1,
+          optional: 1,
+          shape: 1
         ]
 
       # Import runtime helpers from CoreController

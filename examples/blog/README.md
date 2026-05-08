@@ -178,7 +178,7 @@ inertia_shared BlogWeb.InertiaShared.Auth
 
 # Page-level (additive)
 shared do
-  prop :admin_permissions, :list
+  prop :admin_permissions, list_of(:string)
 end
 ```
 
@@ -197,6 +197,10 @@ use NbInertia.Page,
 ### Prop Options
 
 **See:** `inertia/posts_page/index.ex` (`defer:`, `default:`), `inertia/posts_page/show.ex` (`nullable:`), `inertia/admin/dashboard_page/index.ex` (`from:`)
+
+`optional` means a key may be omitted. `nullable` means the key is present but the
+value may be `nil`. `partial` and `defer` affect transport: the prop key itself may
+be absent from some responses, especially the initial visit.
 
 ```elixir
 prop :data, :map, defer: true           # Loaded after initial render

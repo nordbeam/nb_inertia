@@ -366,7 +366,7 @@ defmodule NbInertia.FormInputsTest do
     end
   end
 
-  describe "enum fields" do
+  describe "keyword shorthand compatibility in form fields" do
     test "supports enum: values syntax for enum types" do
       defmodule TestController21 do
         use NbInertia.Controller

@@ -95,7 +95,7 @@ defmodule NbInertia.CompileTimeValidationTest do
       Code.compile_string(code)
     end
 
-    test "does not raise when lazy props are missing" do
+    test "raises when lazy props are missing" do
       code = """
       defmodule TestLazyPropsMissing do
         use NbInertia.Controller
@@ -106,14 +106,15 @@ defmodule NbInertia.CompileTimeValidationTest do
         end
 
         def index(conn, _params) do
-          # Lazy props don't need to be provided at render time
+          # Lazy props are still required; only evaluation is deferred
           render_inertia(conn, :users_index, [users: []])
         end
       end
       """
 
-      # Should not raise - lazy props are not required at render time
-      Code.compile_string(code)
+      assert_raise CompileError, ~r/Missing required props.*:stats/s, fn ->
+        Code.compile_string(code)
+      end
     end
 
     test "does not raise when defer props are missing" do

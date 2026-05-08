@@ -12,9 +12,9 @@ defmodule NbInertia.Page.Channel do
       defmodule MyAppWeb.ChatPage.Show do
         use NbInertia.Page
 
-        prop :room, RoomSerializer
-        prop :messages, list: MessageSerializer
-        prop :active_users, list: UserSerializer
+        prop :room, ref(RoomSerializer)
+        prop :messages, list_of(ref(MessageSerializer))
+        prop :active_users, list_of(ref(UserSerializer))
         prop :typing_user, :map, nullable: true
 
         channel "chat:{room.id}" do

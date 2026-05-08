@@ -201,27 +201,31 @@ defmodule NbInertia.Realtime do
     end)
   end
 
-  defp serialize_value({serializer, data}) when is_atom(serializer) do
-    try do
-      serializer.serialize(data, [])
-    rescue
-      e ->
-        reraise "NbInertia.Realtime: serializer #{inspect(serializer)} failed on #{inspect(data)}: #{Exception.message(e)}",
-                __STACKTRACE__
+  defp serialize_value(value) do
+    case NbInertia.PropRuntime.normalize_serializer_tuple(value) do
+      {:ok, serializer, data, runtime_opts} ->
+        opts = serializer_runtime_opts(runtime_opts)
+
+        try do
+          serializer.serialize(data, opts)
+        rescue
+          e ->
+            reraise "NbInertia.Realtime: serializer #{inspect(serializer)} failed on #{inspect(data)} with opts #{inspect(opts)}: #{Exception.message(e)}",
+                    __STACKTRACE__
+        end
+
+      :error ->
+        value
     end
   end
 
-  defp serialize_value({serializer, data, opts}) when is_atom(serializer) and is_list(opts) do
-    try do
-      serializer.serialize(data, opts)
-    rescue
-      e ->
-        reraise "NbInertia.Realtime: serializer #{inspect(serializer)} failed on #{inspect(data)} with opts #{inspect(opts)}: #{Exception.message(e)}",
-                __STACKTRACE__
+  defp serializer_runtime_opts(runtime_opts) do
+    case Keyword.get(runtime_opts, :opts) do
+      nil -> runtime_opts
+      opts when is_list(opts) -> opts
+      _ -> runtime_opts
     end
   end
-
-  defp serialize_value(value), do: value
 
   @doc """
   Defines helpers for real-time broadcasting in a context module.

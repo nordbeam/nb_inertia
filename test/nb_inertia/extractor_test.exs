@@ -137,6 +137,32 @@ defmodule NbInertia.ExtractorTest do
     end
   end
 
+  defmodule FormInputsPage do
+    use NbInertia.Page, component: "Test/FormInputs"
+
+    prop(:contact_form, :map, default: %{})
+
+    form_inputs :contact_form do
+      field(:name, :string)
+
+      field :questions, :list do
+        field(:question_text, :string)
+      end
+    end
+
+    def mount(_conn, _params) do
+      %{contact_form: %{}}
+    end
+
+    def render do
+      ~TSX"""
+      export default function FormInputsPage({ contact_form }: Props) {
+        return <div>{contact_form.name}</div>
+      }
+      """
+    end
+  end
+
   # ══════════════════════════════════════════════════════════
   # Preamble Tests
   # ══════════════════════════════════════════════════════════
@@ -204,12 +230,50 @@ defmodule NbInertia.ExtractorTest do
                "Record<string, any> | null"
     end
 
+    test "date prop" do
+      assert Preamble.prop_to_ts_type(%{name: :published_on, type: :date, opts: []}) == "string"
+    end
+
+    test "datetime prop" do
+      assert Preamble.prop_to_ts_type(%{name: :updated_at, type: :datetime, opts: []}) == "string"
+    end
+
     test "nullable serializer" do
       assert Preamble.prop_to_ts_type(%{
                name: :user,
                serializer: UserSerializer,
                opts: [nullable: true]
              }) == "User | null"
+    end
+
+    test "native helper descriptors" do
+      assert Preamble.prop_to_ts_type(%{
+               name: :filters,
+               type: {:shape, [search: {:optional, :string}, page: :integer]},
+               opts: []
+             }) ==
+               "{\n    search?: string;\n    page: number;\n  }"
+
+      assert Preamble.prop_to_ts_type(%{
+               name: :settings,
+               type: {:nullable, {:shape, [theme: {:literal, "dark"}, compact: :boolean]}},
+               opts: []
+             }) ==
+               "{\n    theme: 'dark';\n    compact: boolean;\n  } | null"
+
+      assert Preamble.prop_to_ts_type(%{
+               name: :subject,
+               type: {:union, [{:ref, UserSerializer}, {:literal, "guest"}]},
+               opts: []
+             }) ==
+               "User | 'guest'"
+
+      assert Preamble.prop_to_ts_type(%{
+               name: :reviewers,
+               type: {:list, {:ref, UserSerializer}},
+               opts: []
+             }) ==
+               "User[]"
     end
   end
 
@@ -253,6 +317,14 @@ defmodule NbInertia.ExtractorTest do
     test "imports list serializer" do
       props = [
         %{name: :users, opts: [list: UserSerializer]}
+      ]
+
+      assert Preamble.extract_imports(props) == [{"User", UserSerializer}]
+    end
+
+    test "imports native ref descriptors" do
+      props = [
+        %{name: :reviewers, type: {:list, {:ref, UserSerializer}}, opts: []}
       ]
 
       assert Preamble.extract_imports(props) == [{"User", UserSerializer}]
@@ -390,6 +462,38 @@ defmodule NbInertia.ExtractorTest do
       assert result =~ "  data: Record<string, any> | null"
     end
 
+    test "from-backed fields keep a present key with a nullable value" do
+      props = [
+        %{name: :locale, type: :string, opts: [from: :assigns]}
+      ]
+
+      result = Preamble.generate(props)
+
+      assert result =~ "  locale: string | null"
+      refute result =~ "  locale?:"
+    end
+
+    test "matching form_inputs inline into compatible props" do
+      props = [
+        %{name: :contact_form, type: :map, opts: [default: %{}]}
+      ]
+
+      forms = %{
+        contact_form: [
+          {:name, :string, []},
+          {:questions, :list, [], [{:question_text, :string, []}]}
+        ]
+      }
+
+      result = Preamble.generate(props, forms: forms)
+
+      assert result =~ "  contact_form: {"
+      assert result =~ "    name: string;"
+      assert result =~ "    questions: Array<{"
+      assert result =~ "      questionText: string;"
+      refute result =~ "contact_form: Record<string, any>"
+    end
+
     test "generates complete preamble matching spec example" do
       props = [
         %{name: :users, opts: [list: UserSerializer]},
@@ -467,6 +571,19 @@ defmodule NbInertia.ExtractorTest do
       assert content =~ "import type { User } from '@/types'"
       assert content =~ "users: User[]"
       assert content =~ "total: number"
+    end
+
+    test "extracts page with inline form_inputs shape", %{output_dir: output_dir} do
+      {:ok, path} = Extractor.extract_module(FormInputsPage, output_dir: output_dir)
+
+      content = File.read!(path)
+
+      assert content =~ "interface Props {"
+      assert content =~ "contact_form: {"
+      assert content =~ "name: string;"
+      assert content =~ "questions: Array<{"
+      assert content =~ "questionText: string;"
+      refute content =~ "contact_form: Record<string, any>"
     end
 
     test "extracts JSX page with .jsx extension", %{output_dir: output_dir} do

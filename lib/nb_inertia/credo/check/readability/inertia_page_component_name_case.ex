@@ -12,13 +12,13 @@ if Code.ensure_loaded?(Credo.Check) do
     Instead of:
 
         inertia_page :index, component: "items_index" do
-          prop :items, list: ItemSerializer
+          prop :items, list_of(ref(ItemSerializer))
         end
 
     Use:
 
         inertia_page :index, component: "Items/Index" do
-          prop :items, list: ItemSerializer
+          prop :items, list_of(ref(ItemSerializer))
         end
 
     """

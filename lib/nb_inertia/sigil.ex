@@ -12,7 +12,7 @@ defmodule NbInertia.Sigil do
       defmodule MyAppWeb.UsersPage.Index do
         use NbInertia.Page
 
-        prop :users, list: UserSerializer
+        prop :users, list_of(ref(UserSerializer))
         prop :total, :integer
 
         def mount(_conn, _params) do

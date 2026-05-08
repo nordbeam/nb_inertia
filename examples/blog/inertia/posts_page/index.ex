@@ -15,16 +15,18 @@
 defmodule BlogWeb.PostsPage.Index do
   use NbInertia.Page
 
-  prop :posts, list: Blog.PostSerializer
-  prop :total_count, :integer
+  prop(:posts, list_of(ref(Blog.PostSerializer)))
+  prop(:total_count, :integer)
 
   # defer: true — this prop is NOT included in the initial HTML response.
   # Instead, Inertia makes a follow-up request to load it after the page renders.
   # Use for expensive data that isn't needed for the initial paint.
-  prop :filter_options, :map, defer: true
+  # This means the key can be absent initially; that is different from nullable,
+  # where the key is present but the value may be nil.
+  prop(:filter_options, :map, defer: true)
 
   # default: "all" — if mount/2 doesn't return this key, the default is used.
-  prop :current_filter, :string, default: "all"
+  prop(:current_filter, :string, default: "all")
 
   def mount(_conn, params) do
     filter = Map.get(params, "filter", "all")

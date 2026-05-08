@@ -2,7 +2,7 @@
 if Code.ensure_loaded?(Credo.Check) do
   defmodule NbInertia.Credo.Check.Warning.MissingInertiaPageProps do
     @moduledoc """
-    Warns when `render_inertia/3` passes props that aren't declared in the
+    Warns when `render_inertia/3` or `render_inertia_page/3` passes props that aren't declared in the
     corresponding `inertia_page` block.
 
     When using nb_inertia's declarative page DSL, all props should be declared
@@ -13,11 +13,11 @@ if Code.ensure_loaded?(Credo.Check) do
     Instead of:
 
         inertia_page :show do
-          prop :user, UserSerializer
+          prop :user, ref(UserSerializer)
         end
 
         def show(conn, params) do
-          render_inertia(conn, :show,
+          render_inertia_page(conn, :show,
             user: user,
             extra_field: data  # Not declared!
           )
@@ -26,12 +26,12 @@ if Code.ensure_loaded?(Credo.Check) do
     Use:
 
         inertia_page :show do
-          prop :user, UserSerializer
+          prop :user, ref(UserSerializer)
           prop :extra_field, :string
         end
 
         def show(conn, params) do
-          render_inertia(conn, :show,
+          render_inertia_page(conn, :show,
             user: user,
             extra_field: data
           )
@@ -44,7 +44,7 @@ if Code.ensure_loaded?(Credo.Check) do
       category: :warning,
       explanations: [
         check: """
-        All props passed to `render_inertia/3` should be declared in the
+        All props passed to `render_inertia/3` or `render_inertia_page/3` should be declared in the
         corresponding `inertia_page` block.
 
         This ensures:
@@ -85,12 +85,13 @@ if Code.ensure_loaded?(Credo.Check) do
       {ast, %{state | declared_props: new_declared}}
     end
 
-    # Check render_inertia calls
+    # Check render_inertia/render_inertia_page calls
     defp traverse(
-           {:render_inertia, meta, [_conn, page_name, props_kwlist | _]} = ast,
+           {render_fn, meta, [_conn, page_name, props_kwlist | _]} = ast,
            state
          )
-         when is_atom(page_name) and is_list(props_kwlist) do
+         when render_fn in [:render_inertia, :render_inertia_page] and is_atom(page_name) and
+                is_list(props_kwlist) do
       declared = Map.get(state.declared_props, page_name, nil)
 
       if declared do
@@ -156,7 +157,7 @@ if Code.ensure_loaded?(Credo.Check) do
         issue_meta,
         message:
           "Prop `:#{prop_name}` is not declared in `inertia_page :#{page_name}`. Add `prop :#{prop_name}, <type>` to the page declaration.",
-        trigger: "render_inertia",
+        trigger: "render_inertia_page",
         line_no: line_no
       )
     end

@@ -119,14 +119,14 @@ defmodule MyAppWeb.UserController do
   inertia_page :users_index do
     prop :users, :list
     prop :total_count, :integer
-    prop :filters, :map, optional: true
+    prop :filters, :map, partial: true
   end
 
   def index(conn, params) do
     users = Accounts.list_users(params)
 
     # Use atom reference instead of string
-    render_inertia(conn, :users_index,
+    render_inertia_page(conn, :users_index,
       users: users,
       total_count: length(users),
       filters: params["filters"]
@@ -168,15 +168,15 @@ defmodule MyAppWeb.UserController do
   use NbInertia.Controller
 
   inertia_page :users_index do
-    prop :users, list: MyApp.UserSerializer  # Type-safe!
+    prop :users, list_of(ref(MyApp.UserSerializer))  # Type-safe!
     prop :total_count, :integer
   end
 
   def index(conn, _params) do
     users = Accounts.list_users()
 
-    render_inertia(conn, :users_index,
-      users: {MyApp.UserSerializer, users},  # Auto-serialized
+    render_inertia_page(conn, :users_index,
+      users: serialize(MyApp.UserSerializer, users),  # Explicit serialized call site
       total_count: length(users)
     )
   end
@@ -247,7 +247,7 @@ def controller do
     use NbInertia.Controller
 
     # Auto-register for ALL controllers
-    inertia_shared(MyAppWeb.InertiaShared.Base)
+    include_shared_props(MyAppWeb.InertiaShared.Base)
 
     import Plug.Conn
     import MyAppWeb.Gettext
@@ -327,12 +327,12 @@ Missing required props for Inertia page :users_index
 Missing props: :users, :total_count
 ```
 
-**Solution:** Either add the props or mark them as optional
+**Solution:** Either add the props or mark them as `partial: true`
 
 ```elixir
 inertia_page :users_index do
   prop :users, :list
-  prop :total_count, :integer, optional: true  # If sometimes omitted
+  prop :total_count, :integer, partial: true  # If sometimes omitted on first visit
 end
 ```
 
@@ -344,13 +344,13 @@ end
 
 ```bash
 mix deps.get nb_ts
-mix nb_ts.gen.types
+mix nb_ts.gen
 ```
 
 Add to your workflow:
 ```bash
 # In package.json or Makefile
-mix compile && mix nb_ts.gen.types
+mix compile && mix nb_ts.gen
 ```
 
 ### Issue 4: Shared Props Collision
@@ -372,7 +372,7 @@ inertia_shared do
 end
 
 inertia_page :show do
-  prop :user, UserSerializer  # Collision!
+  prop :user, ref(UserSerializer)  # Collision!
 end
 
 # After (no collision)
@@ -381,7 +381,7 @@ inertia_shared do
 end
 
 inertia_page :show do
-  prop :user, UserSerializer  # Different name
+  prop :user, ref(UserSerializer)  # Different name
 end
 ```
 

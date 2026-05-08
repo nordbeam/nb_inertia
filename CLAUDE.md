@@ -80,7 +80,7 @@ def create(conn, %{"user" => params}) do
     # Only runs for real submissions
     case Accounts.create_user(params) do
       {:ok, user} -> redirect(conn, to: ~p"/users/#{user.id}")
-      {:error, changeset} -> render_inertia(conn, :users_new, changeset: changeset)
+      {:error, changeset} -> render_inertia_page(conn, :users_new, changeset: changeset)
     end
   end
 end
@@ -112,14 +112,14 @@ Config: `include_phoenix_flash: true`, `camelize_flash: nil`.
 
 ## Shared Props
 
-Use `inertia_shared(Module)` in the **controller** (NOT a plug) — integrates with nb_ts type generation.
+Use `include_shared_props(Module)` in the **controller** (NOT a plug) — integrates with nb_ts type generation.
 
 ```elixir
 defmodule MyAppWeb.InertiaShared.Auth do
   use NbInertia.SharedProps
 
   inertia_shared do
-    prop(:user, UserSerializer, nullable: true)
+    prop(:user, ref(UserSerializer), nullable: true)
     prop(:flash, :map)
   end
 
@@ -130,7 +130,7 @@ defmodule MyAppWeb.InertiaShared.Auth do
 end
 
 # In controller:
-inertia_shared(Auth)
+include_shared_props(Auth)
 ```
 
 nb_ts auto-generates `DashboardProps extends AuthProps` — never manually merge types.
@@ -244,8 +244,8 @@ PATCH /users/:id
 Reused from `NbInertia.Controller` — same `prop`, `form_inputs`, `shared`, `modal` macros:
 
 ```elixir
-prop :users, list(UserSerializer)
-prop :status, enum: ["active", "inactive"]
+prop :users, list_of(ref(UserSerializer))
+prop :status, enum(["active", "inactive"])
 prop :draft, :map, nullable: true, default: %{}
 prop :stats, :map, defer: true
 ```

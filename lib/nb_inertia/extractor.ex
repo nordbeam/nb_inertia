@@ -163,6 +163,11 @@ defmodule NbInertia.Extractor do
       # 4. Get props for preamble
       props = module.__inertia_props__()
 
+      forms =
+        if function_exported?(module, :__inertia_forms__, 0),
+          do: module.__inertia_forms__(),
+          else: %{}
+
       # 4b. Get channel config if available
       channel_config = get_channel_config(module)
 
@@ -178,6 +183,7 @@ defmodule NbInertia.Extractor do
             module: module,
             source_path: source_path,
             types_import_path: types_import_path,
+            forms: forms,
             channel: channel_config,
             camelize_props: camelize?
           )

@@ -94,14 +94,14 @@ defmodule NbInertia.Validation do
     declared_props = page_config.props
     provided_prop_names = Keyword.keys(provided_props) |> MapSet.new()
 
-    # Find required props (not partial, lazy, defer, or from: :assigns)
+    # Find required props (not partial, defer, default-backed, or from:)
     required_props =
       declared_props
       |> Enum.reject(fn prop ->
         Keyword.get(prop.opts, :partial, false) ||
-          Keyword.get(prop.opts, :lazy, false) ||
           Keyword.get(prop.opts, :defer, false) ||
-          Keyword.get(prop.opts, :from, nil) == :assigns
+          not is_nil(Keyword.get(prop.opts, :from, nil)) ||
+          Keyword.has_key?(prop.opts, :default)
       end)
       |> MapSet.new(& &1.name)
 

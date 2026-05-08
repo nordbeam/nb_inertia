@@ -43,7 +43,7 @@ if Code.ensure_loaded?(Credo.Check) do
           end
 
           def index(conn, _params) do
-            render_inertia(conn, :index, users: [])
+            render_inertia_page(conn, :index, users: [])
           end
         end
 

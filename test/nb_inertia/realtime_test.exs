@@ -17,6 +17,12 @@ defmodule NbInertia.RealtimeTest do
     end
   end
 
+  defmodule OptsEchoSerializer do
+    def serialize(data, opts) do
+      %{data: data, opts: opts}
+    end
+  end
+
   # Mock endpoint that captures broadcast calls
   defmodule MockEndpoint do
     def broadcast(topic, event, payload) do
@@ -48,6 +54,19 @@ defmodule NbInertia.RealtimeTest do
       result = Realtime.serialize_payload(payload)
 
       assert result == %{user: %{id: 1, name: "BOB"}}
+    end
+
+    test "supports helper tuples with nested serializer opts" do
+      payload = %{user: {OptsEchoSerializer, %{id: 1}, opts: [scope: :full]}}
+      result = Realtime.serialize_payload(payload)
+
+      assert result == %{user: %{data: %{id: 1}, opts: [scope: :full]}}
+    end
+
+    test "passes through non-serializer tuples unchanged" do
+      payload = %{status: {:ok, %{id: 1}}}
+
+      assert Realtime.serialize_payload(payload) == payload
     end
 
     test "handles mixed plain and serialized values" do

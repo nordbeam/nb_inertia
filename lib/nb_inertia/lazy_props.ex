@@ -22,7 +22,7 @@ defmodule NbInertia.LazyProps do
         use NbInertia.Controller
 
         inertia_page :users_index do
-          prop :users, UserSerializer
+          prop :users, list_of(ref(UserSerializer))
           prop :page, :integer
           prop :total_pages, :integer
         end
