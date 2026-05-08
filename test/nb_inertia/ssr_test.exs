@@ -300,6 +300,57 @@ defmodule NbInertia.SSRTest do
         Application.put_env(:nb_inertia, :ssr, original_config)
       end
     end
+
+    test "uses the nb_vite SSR hot file for the automatic dev server URL" do
+      with_dev_ssr_config(fn hot_path ->
+        File.write!(hot_path, "http://127.0.0.1:46321/ssr\n")
+
+        {:ok, pid} = SSR.start_link()
+
+        state = :sys.get_state(pid)
+        assert state.dev_server_url == "http://127.0.0.1:46321/ssr"
+        assert state.dev_server_url_source == :auto
+
+        Process.exit(pid, :normal)
+      end)
+    end
+
+    test "keeps explicit dev_server_url ahead of the nb_vite SSR hot file" do
+      with_dev_ssr_config(fn hot_path ->
+        Application.put_env(:nb_inertia, :ssr,
+          enabled: true,
+          dev_server_url: "http://127.0.0.1:46322"
+        )
+
+        File.write!(hot_path, "http://127.0.0.1:46321/ssr\n")
+
+        {:ok, pid} = SSR.start_link()
+
+        state = :sys.get_state(pid)
+        assert state.dev_server_url == "http://127.0.0.1:46322"
+        assert state.dev_server_url_source == :configured
+
+        Process.exit(pid, :normal)
+      end)
+    end
+
+    test "refreshes the automatic dev server URL when the hot file appears after startup" do
+      with_dev_ssr_config(fn hot_path ->
+        System.put_env("VITE_PORT", "46322")
+        File.rm(hot_path)
+
+        {:ok, pid} = SSR.start_link()
+        assert :sys.get_state(pid).dev_server_url == "http://127.0.0.1:46322"
+
+        File.write!(hot_path, "http://127.0.0.1:46321/ssr\n")
+        send(pid, :check_dev_server)
+        Process.sleep(100)
+
+        assert :sys.get_state(pid).dev_server_url == "http://127.0.0.1:46321/ssr"
+
+        Process.exit(pid, :normal)
+      end)
+    end
   end
 
   defp stop_process(name) do
@@ -318,4 +369,46 @@ defmodule NbInertia.SSRTest do
         end
     end
   end
+
+  defp with_dev_ssr_config(fun) do
+    original_ssr_config = Application.get_env(:nb_inertia, :ssr, [])
+    original_env = Application.get_env(:nb_inertia, :env)
+    original_endpoint = Application.get_env(:nb_inertia, :endpoint)
+    original_vite_dev_server_url = System.get_env("VITE_DEV_SERVER_URL")
+    original_vite_host = System.get_env("VITE_HOST")
+    original_vite_port = System.get_env("VITE_PORT")
+
+    priv_dir = :code.priv_dir(:nb_inertia)
+    File.mkdir_p!(priv_dir)
+    hot_path = Path.join(priv_dir, "ssr-hot")
+    original_hot_file = File.read(hot_path)
+
+    try do
+      Application.put_env(:nb_inertia, :env, :dev)
+      Application.put_env(:nb_inertia, :endpoint, NbInertiaWeb.Endpoint)
+      Application.put_env(:nb_inertia, :ssr, enabled: true)
+      System.delete_env("VITE_DEV_SERVER_URL")
+      System.delete_env("VITE_HOST")
+      System.delete_env("VITE_PORT")
+
+      fun.(hot_path)
+    after
+      Application.put_env(:nb_inertia, :ssr, original_ssr_config)
+      restore_application_env(:env, original_env)
+      restore_application_env(:endpoint, original_endpoint)
+      restore_system_env("VITE_DEV_SERVER_URL", original_vite_dev_server_url)
+      restore_system_env("VITE_HOST", original_vite_host)
+      restore_system_env("VITE_PORT", original_vite_port)
+      restore_file(hot_path, original_hot_file)
+    end
+  end
+
+  defp restore_application_env(key, nil), do: Application.delete_env(:nb_inertia, key)
+  defp restore_application_env(key, value), do: Application.put_env(:nb_inertia, key, value)
+
+  defp restore_system_env(key, nil), do: System.delete_env(key)
+  defp restore_system_env(key, value), do: System.put_env(key, value)
+
+  defp restore_file(path, {:ok, contents}), do: File.write!(path, contents)
+  defp restore_file(path, {:error, _reason}), do: File.rm(path)
 end

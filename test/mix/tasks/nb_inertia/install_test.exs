@@ -189,6 +189,21 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     refute source =~ "axios.defaults.xsrfHeaderName"
   end
 
+  test "installer TypeScript templates include Vite and typed SSR module support" do
+    source =
+      Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+      |> File.read!()
+
+    assert source =~ ~s("types": ["vite/client"])
+    assert source =~ ~s("js/app.tsx")
+    refute source =~ ~s("include": ["js/**/*.ts", "js/**/*.tsx", "js/**/*.js", "js/**/*.jsx"])
+    assert source =~ ~s("@/types": ["./js/types/index"])
+    assert source =~ ~s(import type { ComponentType } from "react";)
+    assert source =~ ~S|import.meta.glob<PageModule>("./pages/**/*.tsx")|
+    assert source =~ "return pageModule.default"
+    assert source =~ "return pages[pagePath].default"
+  end
+
   test "full installer demo inlines contact form types into HomeProps" do
     source =
       Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)

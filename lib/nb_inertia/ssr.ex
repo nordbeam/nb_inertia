@@ -171,6 +171,7 @@ defmodule NbInertia.SSR do
 
   @dev_ssr_path "/ssr"
   @dev_ssr_health_path "/ssr-health"
+  @dev_ssr_hot_file "ssr-hot"
   @dev_render_retry_attempts 24
   @dev_render_retry_delay_ms 250
 
@@ -263,25 +264,15 @@ defmodule NbInertia.SSR do
         (is_list(config) && Keyword.get(config, :script_path)) ||
         default_script_path()
 
-    dev_server_url =
-      Keyword.get(opts, :dev_server_url, is_list(config) && Keyword.get(config, :dev_server_url))
+    configured_dev_server_url =
+      Keyword.get(opts, :dev_server_url) ||
+        (is_list(config) && Keyword.get(config, :dev_server_url)) ||
+        System.get_env("VITE_DEV_SERVER_URL")
 
     # Detect if we're in development mode
     dev_mode = dev_mode?()
 
-    # Build default dev server URL from environment or fallback to localhost:5173
-    default_dev_server_url =
-      case System.get_env("VITE_DEV_SERVER_URL") do
-        nil ->
-          vite_port = System.get_env("VITE_PORT", "5173")
-          # Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
-          # where Erlang's :httpc tries IPv4 first but Vite may listen on IPv6
-          vite_host = System.get_env("VITE_HOST", "127.0.0.1")
-          "http://#{vite_host}:#{vite_port}"
-
-        url ->
-          url
-      end
+    dev_server_url = configured_dev_server_url || default_dev_server_url()
 
     config_raise_on_failure =
       if is_list(config) do
@@ -297,7 +288,8 @@ defmodule NbInertia.SSR do
     state = %{
       enabled: enabled,
       script_path: script_path,
-      dev_server_url: dev_server_url || default_dev_server_url,
+      dev_server_url: dev_server_url,
+      dev_server_url_source: if(configured_dev_server_url, do: :configured, else: :auto),
       dev_mode: dev_mode,
       raise_on_failure: Keyword.get(opts, :raise_on_failure, config_raise_on_failure),
       script_loaded: false,
@@ -375,7 +367,8 @@ defmodule NbInertia.SSR do
             {:ok, _result, dev_server_url} ->
               %{state | script_loaded: true, dev_server_url: dev_server_url}
 
-            _ -> state
+            _ ->
+              state
           end
 
         reply =
@@ -396,6 +389,8 @@ defmodule NbInertia.SSR do
 
   @impl true
   def handle_info(:check_dev_server, state) do
+    state = refresh_dev_server_url(state)
+
     if state.dev_mode and state.enabled and not state.script_loaded do
       case check_dev_server_health(state.dev_server_url) do
         {:ok, dev_server_url} ->
@@ -424,6 +419,8 @@ defmodule NbInertia.SSR do
   end
 
   defp maybe_mark_dev_server_ready(%{dev_mode: true, enabled: true, script_loaded: false} = state) do
+    state = refresh_dev_server_url(state)
+
     case check_dev_server_health(state.dev_server_url) do
       {:ok, dev_server_url} ->
         Logger.info(
@@ -461,6 +458,50 @@ defmodule NbInertia.SSR do
     end
   end
 
+  defp default_dev_server_url do
+    dev_server_url_from_hot_file() || fallback_dev_server_url()
+  end
+
+  defp fallback_dev_server_url do
+    vite_port = System.get_env("VITE_PORT", "5173")
+    # Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
+    # where Erlang's :httpc tries IPv4 first but Vite may listen on IPv6
+    vite_host = System.get_env("VITE_HOST", "127.0.0.1")
+    "http://#{vite_host}:#{vite_port}"
+  end
+
+  defp refresh_dev_server_url(%{dev_server_url_source: :auto} = state) do
+    case dev_server_url_from_hot_file() do
+      nil -> state
+      dev_server_url -> %{state | dev_server_url: dev_server_url}
+    end
+  end
+
+  defp refresh_dev_server_url(state), do: state
+
+  defp dev_server_url_from_hot_file do
+    with {:ok, hot_path} <- dev_server_hot_path(),
+         {:ok, contents} <- File.read(hot_path),
+         dev_server_url when dev_server_url != "" <- String.trim(contents) do
+      dev_server_url
+    else
+      _ -> nil
+    end
+  end
+
+  defp dev_server_hot_path do
+    case infer_app_name() do
+      nil ->
+        :error
+
+      app ->
+        case :code.priv_dir(app) do
+          {:error, :bad_name} -> :error
+          priv_dir -> {:ok, Path.join(priv_dir, @dev_ssr_hot_file)}
+        end
+    end
+  end
+
   defp infer_app_name do
     # Try to infer the app name from the endpoint module
     case NbInertia.Config.endpoint() do
@@ -494,7 +535,7 @@ defmodule NbInertia.SSR do
                  :get,
                  {String.to_charlist(build_dev_server_url(candidate, @dev_ssr_health_path)), []},
                  [{:timeout, 5_000}],
-                 [body_format: :binary]
+                 body_format: :binary
                ),
              {:ok, %{"status" => "ok", "ready" => true}} <- Jason.decode(body) do
           {:ok, candidate}
@@ -627,15 +668,20 @@ defmodule NbInertia.SSR do
   end
 
   defp perform_dev_render(page_json, state) do
+    state = refresh_dev_server_url(state)
+
     state.dev_server_url
     |> candidate_dev_server_urls()
-    |> Enum.reduce_while({:retry, %{"message" => "Dev SSR endpoint is not ready"}}, fn dev_server_url, _acc ->
-      case request_dev_render(dev_server_url, page_json) do
-        {:ok, result} -> {:halt, {:ok, result, dev_server_url}}
-        {:error, error} -> {:halt, {:error, error}}
-        {:retry, error} -> {:cont, {:retry, error}}
+    |> Enum.reduce_while(
+      {:retry, %{"message" => "Dev SSR endpoint is not ready"}},
+      fn dev_server_url, _acc ->
+        case request_dev_render(dev_server_url, page_json) do
+          {:ok, result} -> {:halt, {:ok, result, dev_server_url}}
+          {:error, error} -> {:halt, {:error, error}}
+          {:retry, error} -> {:cont, {:retry, error}}
+        end
       end
-    end)
+    )
   end
 
   defp request_dev_render(dev_server_url, page_json) do
@@ -650,13 +696,18 @@ defmodule NbInertia.SSR do
              page_json
            },
            [{:timeout, 30_000}],
-           [body_format: :binary]
+           body_format: :binary
          ) do
       {:ok, {{_, 200, _}, _, body}} ->
         case Jason.decode(body) do
-          {:ok, %{"success" => true, "result" => result}} -> {:ok, result}
-          {:ok, %{"success" => false, "error" => error}} -> {:error, error}
-          {:error, reason} -> {:error, %{"message" => "Failed to decode response: #{inspect(reason)}"}}
+          {:ok, %{"success" => true, "result" => result}} ->
+            {:ok, result}
+
+          {:ok, %{"success" => false, "error" => error}} ->
+            {:error, error}
+
+          {:error, reason} ->
+            {:error, %{"message" => "Failed to decode response: #{inspect(reason)}"}}
         end
 
       {:ok, {{_, status, _}, _, body}} when status in [404, 502, 503, 504] ->

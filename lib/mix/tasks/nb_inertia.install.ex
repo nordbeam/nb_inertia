@@ -1109,10 +1109,22 @@ if Code.ensure_loaded?(Igniter) do
           "esModuleInterop": true,
           "baseUrl": ".",
           "paths": {
+            "@/types": ["./js/types/index"],
+            "@/types/*": ["./js/types/*"],
             "@/*": ["./js/*"]
-          }
+          },
+          "types": ["vite/client"]
         },
-        "include": ["js/**/*.ts", "js/**/*.tsx", "js/**/*.js", "js/**/*.jsx"],
+        "include": [
+          "js/app.tsx",
+          "js/env.d.ts",
+          "js/lib/**/*.ts",
+          "js/pages/**/*.tsx",
+          "js/routes/**/*.ts",
+          "js/ssr.tsx",
+          "js/ssr_prod.tsx",
+          "js/types/**/*"
+        ],
         "exclude": ["node_modules"]
       }
       """
@@ -1213,11 +1225,11 @@ if Code.ensure_loaded?(Igniter) do
 
       igniter
       # Create unified ssr.tsx - uses the same code as ssr_dev for Vite Module Runner API
-      |> Igniter.create_new_file("assets/js/ssr.#{extension}", ssr_dev_template(),
+      |> Igniter.create_new_file("assets/js/ssr.#{extension}", ssr_dev_template(extension),
         on_exists: :skip
       )
       # Also create ssr_prod for production builds with DenoRider (eager loading)
-      |> Igniter.create_new_file("assets/js/ssr_prod.#{extension}", ssr_prod_template(),
+      |> Igniter.create_new_file("assets/js/ssr_prod.#{extension}", ssr_prod_template(extension),
         on_exists: :skip
       )
     end
@@ -1484,11 +1496,15 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    defp ssr_dev_template() do
-      ~S"""
+    defp ssr_dev_template(extension) do
+      type_definitions = ssr_type_definitions(extension)
+      glob_call = ssr_glob_call(extension, eager?: false)
+      render_signature = ssr_render_signature(extension)
+
+      """
       import ReactDOMServer from "react-dom/server";
       import { createInertiaApp } from "@/lib/inertia";
-
+      #{type_definitions}
       /**
        * Development SSR entry point with on-demand page loading
        *
@@ -1496,10 +1512,10 @@ if Code.ensure_loaded?(Igniter) do
        * the specific requested page on each render.
        */
       // Lazy loading - create import functions once at module level
-      const pages = import.meta.glob("./pages/**/*.tsx");
+      const pages = #{glob_call};
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      export async function render(page: any) {
+      #{render_signature} {
         if (page?.component === "__nb_inertia_healthcheck__") {
           return { head: [], body: "" };
         }
@@ -1509,31 +1525,32 @@ if Code.ensure_loaded?(Igniter) do
           render: ReactDOMServer.renderToString,
           // Inertia v3: resolve receives (name, props)
           resolve: async (name, _props) => {
-            const pagePath = `./pages/${name}.tsx`;
+            const pagePath = `./pages/${name}.#{extension}`;
 
             if (!pages[pagePath]) {
               // List available pages for debugging
               const availablePages = Object.keys(pages)
-                .map(p => p.replace('./pages/', '').replace('.tsx', ''))
+                .map(p => p.replace('./pages/', '').replace('.#{extension}', ''))
                 .sort();
 
               throw new Error(
-                `❌ SSR Page Not Found\n\n` +
-                `Component: ${name}\n` +
-                `Expected file: assets/js/pages/${name}.tsx\n\n` +
-                `This page file doesn't exist or wasn't found by Vite's glob.\n\n` +
-                `Common causes:\n` +
-                `• The file hasn't been created yet\n` +
-                `• The file name doesn't match the component name\n` +
-                `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\n` +
-                `• The component name in your controller doesn't match the file path\n\n` +
-                `Available pages (${availablePages.length}):\n` +
-                availablePages.map(p => `  - ${p}`).join('\n')
+                `❌ SSR Page Not Found\\n\\n` +
+                `Component: ${name}\\n` +
+                `Expected file: assets/js/pages/${name}.#{extension}\\n\\n` +
+                `This page file doesn't exist or wasn't found by Vite's glob.\\n\\n` +
+                `Common causes:\\n` +
+                `• The file hasn't been created yet\\n` +
+                `• The file name doesn't match the component name\\n` +
+                `• The file has the wrong extension\\n` +
+                `• The component name in your controller doesn't match the file path\\n\\n` +
+                `Available pages (${availablePages.length}):\\n` +
+                availablePages.map(p => `  - ${p}`).join('\\n')
               );
             }
 
             // Dynamically import only the requested page
-            return await pages[pagePath]();
+            const pageModule = await pages[pagePath]();
+            return pageModule.default;
           },
           setup: ({ App, props }) => <App {...props} />,
         });
@@ -1541,11 +1558,15 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    defp ssr_prod_template() do
-      ~S"""
+    defp ssr_prod_template(extension) do
+      type_definitions = ssr_type_definitions(extension)
+      glob_call = ssr_glob_call(extension, eager?: true)
+      render_signature = ssr_render_signature(extension)
+
+      """
       import ReactDOMServer from "react-dom/server";
       import { createInertiaApp } from "@/lib/inertia";
-
+      #{type_definitions}
       /**
        * Production SSR entry point with eager page loading
        *
@@ -1554,7 +1575,7 @@ if Code.ensure_loaded?(Igniter) do
        * in the same way as Node.js.
        */
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      export async function render(page: any) {
+      #{render_signature} {
         if (page?.component === "__nb_inertia_healthcheck__") {
           return { head: [], body: "" };
         }
@@ -1565,38 +1586,66 @@ if Code.ensure_loaded?(Igniter) do
           // Inertia v3: resolve receives (name, props)
           resolve: async (name, _props) => {
             // Eager loading - all pages are bundled
-            const pages = import.meta.glob("./pages/**/*.tsx", { eager: true });
-            const pagePath = `./pages/${name}.tsx`;
+            const pages = #{glob_call};
+            const pagePath = `./pages/${name}.#{extension}`;
 
             if (!pages[pagePath]) {
               // List available pages for debugging
               const availablePages = Object.keys(pages)
-                .map(p => p.replace('./pages/', '').replace('.tsx', ''))
+                .map(p => p.replace('./pages/', '').replace('.#{extension}', ''))
                 .sort();
 
               throw new Error(
-                `❌ SSR Page Not Found\n\n` +
-                `Component: ${name}\n` +
-                `Expected file: assets/js/pages/${name}.tsx\n\n` +
-                `This page file doesn't exist or wasn't bundled in the SSR build.\n\n` +
-                `Common causes:\n` +
-                `• The file hasn't been created yet\n` +
-                `• The file name doesn't match the component name\n` +
-                `• The file has the wrong extension (e.g., .tsxx instead of .tsx)\n` +
-                `• The component name in your controller doesn't match the file path\n` +
-                `• The SSR bundle needs to be rebuilt (run your package manager's build:ssr script)\n\n` +
-                `Available pages (${availablePages.length}):\n` +
-                availablePages.map(p => `  - ${p}`).join('\n')
+                `❌ SSR Page Not Found\\n\\n` +
+                `Component: ${name}\\n` +
+                `Expected file: assets/js/pages/${name}.#{extension}\\n\\n` +
+                `This page file doesn't exist or wasn't bundled in the SSR build.\\n\\n` +
+                `Common causes:\\n` +
+                `• The file hasn't been created yet\\n` +
+                `• The file name doesn't match the component name\\n` +
+                `• The file has the wrong extension\\n` +
+                `• The component name in your controller doesn't match the file path\\n` +
+                `• The SSR bundle needs to be rebuilt (run your package manager's build:ssr script)\\n\\n` +
+                `Available pages (${availablePages.length}):\\n` +
+                availablePages.map(p => `  - ${p}`).join('\\n')
               );
             }
 
-            return pages[pagePath];
+            return pages[pagePath].default;
           },
           setup: ({ App, props }) => <App {...props} />,
         });
       }
       """
     end
+
+    defp ssr_type_definitions("tsx") do
+      """
+      import type { ComponentType } from "react";
+
+      type PageModule = {
+        default: ComponentType<Record<string, unknown>>;
+      };
+
+      """
+    end
+
+    defp ssr_type_definitions(_extension), do: ""
+
+    defp ssr_glob_call("tsx", eager?: false),
+      do: ~S|import.meta.glob<PageModule>("./pages/**/*.tsx")|
+
+    defp ssr_glob_call("tsx", eager?: true),
+      do: ~S|import.meta.glob<PageModule>("./pages/**/*.tsx", { eager: true })|
+
+    defp ssr_glob_call(extension, eager?: false),
+      do: ~s|import.meta.glob("./pages/**/*.#{extension}")|
+
+    defp ssr_glob_call(extension, eager?: true),
+      do: ~s|import.meta.glob("./pages/**/*.#{extension}", { eager: true })|
+
+    defp ssr_render_signature("tsx"), do: "export async function render(page: any)"
+    defp ssr_render_signature(_extension), do: "export async function render(page)"
 
     defp node_prefix_plugin() do
       """
