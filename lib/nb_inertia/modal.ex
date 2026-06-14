@@ -301,7 +301,9 @@ defmodule NbInertia.Modal do
   @doc """
   Sets a custom max-width CSS value for the modal panel.
   """
-  @spec max_width(t(), String.t()) :: t()
+  @spec max_width(t(), String.t() | nil) :: t()
+  def max_width(%Modal{} = modal, nil), do: modal
+
   def max_width(%Modal{} = modal, value) when is_binary(value) do
     put_config(modal, :maxWidth, value)
   end
@@ -309,7 +311,9 @@ defmodule NbInertia.Modal do
   @doc """
   Sets custom padding classes for the modal content.
   """
-  @spec padding_classes(t(), String.t()) :: t()
+  @spec padding_classes(t(), String.t() | nil) :: t()
+  def padding_classes(%Modal{} = modal, nil), do: modal
+
   def padding_classes(%Modal{} = modal, value) when is_binary(value) do
     put_config(modal, :paddingClasses, value)
   end
@@ -317,7 +321,9 @@ defmodule NbInertia.Modal do
   @doc """
   Sets custom panel classes for the modal container.
   """
-  @spec panel_classes(t(), String.t()) :: t()
+  @spec panel_classes(t(), String.t() | nil) :: t()
+  def panel_classes(%Modal{} = modal, nil), do: modal
+
   def panel_classes(%Modal{} = modal, value) when is_binary(value) do
     put_config(modal, :panelClasses, value)
   end
@@ -325,7 +331,9 @@ defmodule NbInertia.Modal do
   @doc """
   Sets custom backdrop classes for the modal overlay.
   """
-  @spec backdrop_classes(t(), String.t()) :: t()
+  @spec backdrop_classes(t(), String.t() | nil) :: t()
+  def backdrop_classes(%Modal{} = modal, nil), do: modal
+
   def backdrop_classes(%Modal{} = modal, value) when is_binary(value) do
     put_config(modal, :backdropClasses, value)
   end

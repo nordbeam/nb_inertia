@@ -85,6 +85,14 @@ defmodule NbInertia.ModalPropsTest do
         backdrop_classes: "bg-slate-950/80"
       )
     end
+
+    def string_component_with_nil_max_width(conn) do
+      render_inertia_modal(conn, "Users/Show", [user: %{id: 1}],
+        base_url: "/users",
+        max_width: nil,
+        padding_classes: "p-6"
+      )
+    end
   end
 
   setup do
@@ -211,5 +219,22 @@ defmodule NbInertia.ModalPropsTest do
     assert header_config["paddingClasses"] == "p-8"
     assert header_config["panelClasses"] == "rounded border"
     assert header_config["backdropClasses"] == "bg-slate-950/80"
+  end
+
+  test "documented nil max_width option is omitted without crashing" do
+    conn =
+      modal_conn()
+      |> ModalController.string_component_with_nil_max_width()
+
+    config = decoded_modal(conn)["config"]
+
+    refute Map.has_key?(config, "maxWidth")
+    assert config["paddingClasses"] == "p-6"
+
+    [config_header] = get_resp_header(conn, "x-inertia-modal-config")
+    header_config = Jason.decode!(config_header)
+
+    refute Map.has_key?(header_config, "maxWidth")
+    assert header_config["paddingClasses"] == "p-6"
   end
 end
