@@ -19,6 +19,10 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 - **Credo Checks**: Shortcut task to enable nb-specific custom checks from installed `nb_*` packages
 - **Page Modules**: LiveView-style single-module-per-page pattern with `mount/2`, `action/3`, `~TSX` sigil, and colocated frontend components
 
+## Development Tools
+
+Performance benchmarks and smoke budgets are documented in [docs/performance.md](docs/performance.md).
+
 ## Installation
 
 ### Quick Start (Recommended)

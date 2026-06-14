@@ -259,15 +259,30 @@ defmodule NbInertia.PageController do
 
   defp apply_modal_config_options(modal, opts) do
     Enum.reduce(opts, modal, fn
-      {:size, size}, acc -> NbInertia.Modal.size(acc, size)
-      {:position, position}, acc -> NbInertia.Modal.position(acc, position)
-      {:slideover, enabled}, acc -> NbInertia.Modal.slideover(acc, enabled)
-      {:close_button, enabled}, acc -> NbInertia.Modal.close_button(acc, enabled)
-      {:close_explicitly, enabled}, acc -> NbInertia.Modal.close_explicitly(acc, enabled)
-      {:close_on_click_outside, enabled}, acc -> NbInertia.Modal.close_on_click_outside(acc, enabled)
-      {:base_url, _}, acc -> acc
+      {:size, size}, acc ->
+        NbInertia.Modal.size(acc, size)
+
+      {:position, position}, acc ->
+        NbInertia.Modal.position(acc, position)
+
+      {:slideover, enabled}, acc ->
+        NbInertia.Modal.slideover(acc, enabled)
+
+      {:close_button, enabled}, acc ->
+        NbInertia.Modal.close_button(acc, enabled)
+
+      {:close_explicitly, enabled}, acc ->
+        NbInertia.Modal.close_explicitly(acc, enabled)
+
+      {:close_on_click_outside, enabled}, acc ->
+        NbInertia.Modal.close_on_click_outside(acc, enabled)
+
+      {:base_url, _}, acc ->
+        acc
+
       # Ignore unknown options
-      _, acc -> acc
+      _, acc ->
+        acc
     end)
   end
 

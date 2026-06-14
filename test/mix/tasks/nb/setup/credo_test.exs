@@ -77,15 +77,39 @@ defmodule Mix.Tasks.Nb.Setup.CredoTest do
     test "returns current-app and dependency require globs for supported nb libraries" do
       cwd = File.cwd!()
 
+      nb_serializer_path =
+        Path.join(System.tmp_dir!(), "nb_serializer_#{System.unique_integer([:positive])}")
+
+      check_path = Path.join([nb_serializer_path, "lib", "nb_serializer", "credo", "check"])
+
+      File.mkdir_p!(check_path)
+      File.write!(Path.join(check_path, "example_check.ex"), "defmodule ExampleCheck do\nend\n")
+
+      on_exit(fn -> File.rm_rf!(nb_serializer_path) end)
+
       patterns =
         Credo.recommended_require_patterns(
           [:nb_inertia, :nb_serializer],
-          %{nb_serializer: Path.expand("../nb_serializer", cwd)},
+          %{nb_serializer: nb_serializer_path},
           cwd
         )
 
+      expected_nb_serializer_suffix =
+        Path.join([
+          Path.basename(nb_serializer_path),
+          "lib",
+          "nb_serializer",
+          "credo",
+          "check",
+          "**",
+          "*.ex"
+        ])
+
       assert "lib/nb_inertia/credo/check/**/*.ex" in patterns
-      assert "../nb_serializer/lib/nb_serializer/credo/check/**/*.ex" in patterns
+
+      assert Enum.any?(patterns, fn pattern ->
+               String.ends_with?(pattern, expected_nb_serializer_suffix)
+             end)
     end
   end
 

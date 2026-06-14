@@ -46,6 +46,10 @@ jobs:
     - name: Run tests
       run: mix test
 
+    - name: Run performance gate
+      run: mix nb_inertia.perf_gate
+      if: matrix.elixir == '1.18' && matrix.otp == '27'
+
     - name: Check formatting
       run: mix format --check-formatted
       if: matrix.elixir == '1.18' && matrix.otp == '27'
