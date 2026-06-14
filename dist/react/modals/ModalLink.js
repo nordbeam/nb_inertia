@@ -2,76 +2,72 @@ import { routerPrefetch as e } from "../../shared/routerCompat.js";
 import { isRouteResult as t } from "../../shared/types.js";
 import { useModalStack as n } from "./modalStack.js";
 import { useCallback as r, useEffect as i, useMemo as a, useRef as o } from "react";
-import { jsxDEV as s } from "react/jsx-dev-runtime";
+import { jsx as s } from "react/jsx-runtime";
 //#region priv/nb_inertia/react/modals/ModalLink.tsx
-var c = "/Users/assim/Projects/nb/nb_inertia/.cas/worktrees/task_c2aa559a3477a2d9/priv/nb_inertia/react/modals/ModalLink.tsx", l = () => null, u = ({ href: u, method: d, data: f, modalConfig: p, loadingComponent: m, onClick: h, prefetch: g, cacheFor: _, cacheTags: v, children: y, className: b, ...x }) => {
-	let { modals: S, prefetchModal: C, visitModal: w } = n(), T = t(u) ? u.url : u, E = (t(u) && !d ? u.method : d) || "get", D = a(() => g ? g === !0 ? ["hover"] : typeof g == "string" ? [g] : g : [], [g]), O = r(() => {
-		if (E === "get") if (C) C(T, { cacheFor: _ });
+var c = () => null, l = ({ href: l, method: u, data: d, modalConfig: f, loadingComponent: p, onClick: m, prefetch: h, cacheFor: g, cacheTags: _, children: v, className: y, ...b }) => {
+	let { modals: x, prefetchModal: S, visitModal: C } = n(), w = t(l) ? l.url : l, T = (t(l) && !u ? l.method : u) || "get", E = a(() => h ? h === !0 ? ["hover"] : typeof h == "string" ? [h] : h : [], [h]), D = r(() => {
+		if (T === "get") if (S) S(w, { cacheFor: g });
 		else {
 			let t = {};
-			_ !== void 0 && (t.cacheFor = _), v !== void 0 && (t.cacheTags = v), e(T, { preserveState: !0 }, t);
+			g !== void 0 && (t.cacheFor = g), _ !== void 0 && (t.cacheTags = _), e(w, { preserveState: !0 }, t);
 		}
 	}, [
+		w,
 		T,
-		E,
+		g,
 		_,
-		v,
-		C
+		S
 	]);
 	i(() => {
-		if (D.includes("mount")) {
-			let e = setTimeout(O, 0);
+		if (E.includes("mount")) {
+			let e = setTimeout(D, 0);
 			return () => clearTimeout(e);
 		}
-	}, [D, O]);
-	let k = o(null), A = r((e) => {
-		x.onMouseEnter?.(e), D.includes("hover") && (k.current = setTimeout(O, 75));
+	}, [E, D]);
+	let O = o(null), k = r((e) => {
+		b.onMouseEnter?.(e), E.includes("hover") && (O.current = setTimeout(D, 75));
 	}, [
+		E,
 		D,
-		O,
-		x
-	]), j = r((e) => {
-		x.onMouseLeave?.(e), k.current &&= (clearTimeout(k.current), null);
-	}, [x]), M = r((e) => {
-		x.onMouseDown?.(e), D.includes("click") && O();
+		b
+	]), A = r((e) => {
+		b.onMouseLeave?.(e), O.current &&= (clearTimeout(O.current), null);
+	}, [b]), j = r((e) => {
+		b.onMouseDown?.(e), E.includes("click") && D();
 	}, [
+		E,
 		D,
-		O,
-		x
+		b
 	]);
 	return /* @__PURE__ */ s("a", {
-		href: T,
-		className: b,
+		href: w,
+		className: y,
 		onClick: r((e) => {
-			if (e.ctrlKey || e.metaKey || e.shiftKey || (e.preventDefault(), h && h(e), S.find((e) => e.url === T))) return;
+			if (e.ctrlKey || e.metaKey || e.shiftKey || (e.preventDefault(), m && m(e), x.find((e) => e.url === w))) return;
 			let t = typeof window < "u" ? window.location.href : "";
-			w(u, {
-				method: E,
-				data: f ?? {},
-				modalConfig: p,
-				loadingComponent: m || l,
+			C(l, {
+				method: T,
+				data: d ?? {},
+				modalConfig: f,
+				loadingComponent: p || c,
 				returnUrl: t
 			});
 		}, [
-			f,
-			E,
-			u,
-			m,
+			d,
+			T,
+			l,
 			p,
-			S,
-			h,
-			w
+			f,
+			x,
+			m,
+			C
 		]),
-		onMouseEnter: A,
-		onMouseLeave: j,
-		onMouseDown: M,
-		...x,
-		children: y
-	}, void 0, !1, {
-		fileName: c,
-		lineNumber: 296,
-		columnNumber: 5
-	}, void 0);
+		onMouseEnter: k,
+		onMouseLeave: A,
+		onMouseDown: j,
+		...b,
+		children: v
+	});
 };
 //#endregion
-export { u as ModalLink, u as default };
+export { l as ModalLink, l as default };

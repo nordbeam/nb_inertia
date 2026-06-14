@@ -6,7 +6,7 @@
  *
  * @example
  * ```tsx
- * import { ModalLink } from '@nordbeam/nb-inertia/modals';
+ * import { ModalLink } from '@nordbeam/nb-inertia/react/modals';
  * import { user_path } from '@/routes';
  *
  * // Open user show page in a modal
@@ -141,7 +141,7 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
  *
  * @example
  * ```tsx
- * import { ModalLink } from '@nordbeam/nb-inertia/modals';
+ * import { ModalLink } from '@nordbeam/nb-inertia/react/modals';
  * import { user_path, edit_user_path } from '@/routes';
  *
  * // Basic usage

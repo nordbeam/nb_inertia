@@ -6,7 +6,7 @@
  *
  * @example
  * ```tsx
- * import { ClientModalLink } from '@nordbeam/nb-inertia/modals';
+ * import { ClientModalLink } from '@nordbeam/nb-inertia/react/modals';
  * import { user_path } from '@/routes';
  *
  * // SSR-safe modal link

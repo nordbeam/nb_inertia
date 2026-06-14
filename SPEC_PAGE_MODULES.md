@@ -559,7 +559,7 @@ The preamble is generated from the module's `prop` declarations and `channel` bi
 | `prop :x, :string, default: ""` | `x: string` | — |
 
 When `channel` is declared, the preamble also generates:
-- `import { useChannelProps } from '@nordbeam/nb-inertia/react/realtime/useChannelProps'`
+- `import { useChannelProps } from '@nordbeam/nb-inertia/react/realtime'`
 - `import { socket } from '@/lib/socket'`
 - Strategy configuration constant
 
@@ -767,7 +767,7 @@ When `channel` is declared with a colocated `~TSX`, the extraction preamble incl
 
 ```tsx
 // AUTO-GENERATED channel configuration
-import { useChannelProps } from '@nordbeam/nb-inertia/react/realtime/useChannelProps'
+import { useChannelProps } from '@nordbeam/nb-inertia/react/realtime'
 import { socket } from '@/lib/socket'
 
 const __channelConfig = [

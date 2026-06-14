@@ -190,7 +190,7 @@ defmodule NbInertia.Extractor.Preamble do
   defp build_channel_section(channel_config, camelize?) do
     imports =
       "// AUTO-GENERATED channel configuration\n" <>
-        "import { useChannelProps } from '@nordbeam/nb-inertia/react/realtime/useChannelProps'\n" <>
+        "import { useChannelProps } from '@nordbeam/nb-inertia/react/realtime'\n" <>
         "import { socket } from '@/lib/socket'"
 
     events_array = build_channel_events_array(channel_config.events, camelize?)

@@ -39,6 +39,12 @@ function getEntryPoints(dir, baseDir = null) {
 }
 
 export default defineConfig({
+  // Force production JSX transform: use jsx-runtime (not jsx-dev-runtime), no fileName/lineNumber metadata
+  oxc: {
+    jsx: {
+      development: false,
+    },
+  },
   plugins: [
     react(),
     dts({

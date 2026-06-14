@@ -18,8 +18,9 @@ import { router, Link, usePage } from '@inertiajs/react';
 import { useForm } from '@nordbeam/nb-inertia/react/useForm';
 import { Head } from '@nordbeam/nb-inertia/react/Head';
 import { usePage } from '@nordbeam/nb-inertia/react/usePage';
-import { useFlash, useOnFlash } from '@nordbeam/nb-inertia/react';
-import { Modal, ModalLink, ModalProvider } from '@nordbeam/nb-inertia/react/modals';
+import { useFlash } from '@nordbeam/nb-inertia/react/useFlash';
+import { useOnFlash } from '@nordbeam/nb-inertia/react/useOnFlash';
+import { Modal, ModalLink, ModalStackProvider } from '@nordbeam/nb-inertia/react/modals';
 
 // Vue equivalents: '@nordbeam/nb-inertia/vue/useForm', etc.
 ```
