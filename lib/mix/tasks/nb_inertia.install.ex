@@ -192,8 +192,8 @@ if Code.ensure_loaded?(Igniter) do
       |> maybe_setup_nb_ts()
       |> maybe_setup_nb_flop()
       |> create_sample_page()
-      |> update_page_controller()
-      |> update_page_controller_test()
+      |> update_home_controller()
+      |> update_home_controller_test()
       |> create_lib_inertia()
       |> maybe_update_inertia_imports()
       |> copy_modal_components()
@@ -472,6 +472,12 @@ if Code.ensure_loaded?(Igniter) do
 
     defp home_controller_module(web_module),
       do: "defmodule #{inspect(web_module)}.HomeController do"
+
+    defp stock_controller_test_module(web_module),
+      do: "defmodule #{inspect(web_module)}." <> "Page" <> "ControllerTest do"
+
+    defp home_controller_test_module(web_module),
+      do: "defmodule #{inspect(web_module)}.HomeControllerTest do"
 
     @doc false
     def setup_router(igniter) do
@@ -2116,20 +2122,29 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
-    def update_page_controller(igniter) do
+    def update_home_controller(igniter) do
       # Rewrite the generated sample controller so the Home page renders through NbInertia.
       # With `--full`, overwrite the whole controller with a demo that exercises every nb_* package.
       full? = igniter.args.options[:full] || false
       web_module = Igniter.Libs.Phoenix.web_module(igniter)
+      stock_path = stock_controller_path(igniter)
+      home_path = home_controller_path(igniter)
 
-      controller_path =
-        Path.join([
-          "lib",
-          web_dir(igniter),
-          "controllers",
-          "page_controller.ex"
-        ])
+      cond do
+        Igniter.exists?(igniter, home_path) ->
+          update_existing_home_controller(igniter, home_path, web_module, full?)
 
+        Igniter.exists?(igniter, stock_path) ->
+          igniter
+          |> update_existing_home_controller(stock_path, web_module, full?)
+          |> Igniter.move_file(stock_path, home_path)
+
+        true ->
+          igniter
+      end
+    end
+
+    defp update_existing_home_controller(igniter, controller_path, web_module, full?) do
       cond do
         not Igniter.exists?(igniter, controller_path) ->
           igniter
@@ -2139,7 +2154,7 @@ if Code.ensure_loaded?(Igniter) do
           |> Igniter.include_existing_file(controller_path)
           |> Igniter.update_file(controller_path, fn source ->
             Rewrite.Source.update(source, :content, fn _ ->
-              full_page_controller_content(web_module)
+              full_home_controller_content(web_module)
             end)
           end)
 
@@ -2153,7 +2168,9 @@ if Code.ensure_loaded?(Igniter) do
                   content
                   |> String.replace(
                     stock_controller_module(web_module),
-                    home_controller_module(web_module), global: false)
+                    home_controller_module(web_module),
+                    global: false
+                  )
                 else
                   String.replace(
                     content,
@@ -2163,7 +2180,9 @@ if Code.ensure_loaded?(Igniter) do
                   )
                   |> String.replace(
                     stock_controller_module(web_module),
-                    home_controller_module(web_module), global: false)
+                    home_controller_module(web_module),
+                    global: false
+                  )
                 end
 
               content ->
@@ -2185,7 +2204,7 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    defp full_page_controller_content(web_module) do
+    defp full_home_controller_content(web_module) do
       web = inspect(web_module)
 
       """
@@ -2304,23 +2323,39 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
-    def update_page_controller_test(igniter) do
-      test_path =
-        Path.join([
-          "test",
-          web_dir(igniter),
-          "controllers",
-          "page_controller_test.exs"
-        ])
+    def update_home_controller_test(igniter) do
+      web_module = Igniter.Libs.Phoenix.web_module(igniter)
+      stock_path = stock_controller_test_path(igniter)
+      home_path = home_controller_test_path(igniter)
 
+      cond do
+        Igniter.exists?(igniter, home_path) ->
+          update_existing_home_controller_test(igniter, home_path, web_module)
+
+        Igniter.exists?(igniter, stock_path) ->
+          igniter
+          |> update_existing_home_controller_test(stock_path, web_module)
+          |> Igniter.move_file(stock_path, home_path)
+
+        true ->
+          igniter
+      end
+    end
+
+    defp update_existing_home_controller_test(igniter, test_path, web_module) do
       if Igniter.exists?(igniter, test_path) do
         igniter
         |> Igniter.include_existing_file(test_path)
         |> Igniter.update_file(test_path, fn source ->
           Rewrite.Source.update(source, :content, fn
             content when is_binary(content) ->
-              String.replace(
-                content,
+              content
+              |> String.replace(
+                stock_controller_test_module(web_module),
+                home_controller_test_module(web_module),
+                global: false
+              )
+              |> String.replace(
                 ~S|assert html_response(conn, 200) =~ "Peace of mind from prototype to production"|,
                 ~S|assert html_response(conn, 200) =~ ~s(data-page="app")|,
                 global: false
@@ -2333,6 +2368,22 @@ if Code.ensure_loaded?(Igniter) do
       else
         igniter
       end
+    end
+
+    defp stock_controller_path(igniter) do
+      Path.join(["lib", web_dir(igniter), "controllers", "page_controller.ex"])
+    end
+
+    defp home_controller_path(igniter) do
+      Path.join(["lib", web_dir(igniter), "controllers", "home_controller.ex"])
+    end
+
+    defp stock_controller_test_path(igniter) do
+      Path.join(["test", web_dir(igniter), "controllers", "page_controller_test.exs"])
+    end
+
+    defp home_controller_test_path(igniter) do
+      Path.join(["test", web_dir(igniter), "controllers", "home_controller_test.exs"])
     end
 
     @doc false

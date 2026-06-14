@@ -2,6 +2,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   use ExUnit.Case, async: true
 
   alias Mix.Tasks.NbInertia.Install
+  import Igniter.Test, only: [apply_igniter!: 1, test_project: 1]
 
   describe "info/2" do
     test "declares optional deps and composed installers for requested integrations" do
@@ -121,6 +122,57 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
                "react",
                "--typescript"
              ]) == ["--yes"]
+    end
+  end
+
+  describe "generated controller migration" do
+    test "renames stock Phoenix controller files to HomeController files" do
+      stock_controller = "Page" <> "Controller"
+
+      igniter =
+        test_project(
+          app_name: :sample,
+          files: %{
+            "lib/sample_web/controllers/page_controller.ex" => """
+            defmodule SampleWeb.#{stock_controller} do
+              use SampleWeb, :controller
+
+              def home(conn, _params) do
+                render(conn, :home)
+              end
+            end
+            """,
+            "test/sample_web/controllers/page_controller_test.exs" => """
+            defmodule SampleWeb.#{stock_controller}Test do
+              use SampleWeb.ConnCase
+
+              test "GET /", %{conn: conn} do
+                conn = get(conn, ~p"/")
+                assert html_response(conn, 200) =~ "Peace of mind from prototype to production"
+              end
+            end
+            """
+          }
+        )
+        |> Install.update_home_controller()
+        |> Install.update_home_controller_test()
+        |> apply_igniter!()
+
+      files = igniter.assigns.test_files
+
+      refute Map.has_key?(files, "lib/sample_web/controllers/page_controller.ex")
+      refute Map.has_key?(files, "test/sample_web/controllers/page_controller_test.exs")
+
+      assert home_controller = files["lib/sample_web/controllers/home_controller.ex"]
+      assert home_controller =~ "defmodule SampleWeb.HomeController do"
+      assert home_controller =~ "inertia_page :home do"
+
+      assert home_controller =~
+               ~S|render_inertia_page(conn, :home, greeting: "Welcome to Inertia.js!")|
+
+      assert home_controller_test = files["test/sample_web/controllers/home_controller_test.exs"]
+      assert home_controller_test =~ "defmodule SampleWeb.HomeControllerTest do"
+      assert home_controller_test =~ ~S|assert html_response(conn, 200) =~ ~s(data-page="app")|
     end
   end
 
