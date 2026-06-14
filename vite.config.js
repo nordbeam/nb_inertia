@@ -39,6 +39,12 @@ function getEntryPoints(dir, baseDir = null) {
 }
 
 export default defineConfig({
+  // Force production JSX transform: use jsx-runtime (not jsx-dev-runtime), no fileName/lineNumber metadata
+  oxc: {
+    jsx: {
+      development: false,
+    },
+  },
   plugins: [
     react(),
     dts({
@@ -57,6 +63,7 @@ export default defineConfig({
       external: [
         'react',
         'react/jsx-runtime',
+        'react/jsx-dev-runtime',
         'react-dom',
         '@inertiajs/react',
         '@inertiajs/vue3',

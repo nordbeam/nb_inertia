@@ -1,33 +1,32 @@
-import { router as e } from "@inertiajs/react";
-import { mergeModalHeaders as n, getCurrentModalRequestContext as a } from "./modals/requestContext.js";
-function u(r) {
-  return n(r, a());
+import { getCurrentModalRequestContext as e, mergeModalHeaders as t } from "./modals/requestContext.js";
+import { router as n } from "@inertiajs/react";
+//#region priv/nb_inertia/react/router.ts
+function r(n) {
+	return t(n, e());
 }
-const p = {
-  ...e,
-  visit(r, t) {
-    return e.visit(r, u(t));
-  },
-  get(r, t, o) {
-    return e.get(r, t, u(o));
-  },
-  post(r, t, o) {
-    return e.post(r, t, u(o));
-  },
-  put(r, t, o) {
-    return e.put(r, t, u(o));
-  },
-  patch(r, t, o) {
-    return e.patch(r, t, u(o));
-  },
-  delete(r, t) {
-    return e.delete(r, u(t));
-  },
-  reload(r) {
-    return e.reload(u(r));
-  }
+var i = {
+	...n,
+	visit(e, t) {
+		return n.visit(e, r(t));
+	},
+	get(e, t, i) {
+		return n.get(e, t, r(i));
+	},
+	post(e, t, i) {
+		return n.post(e, t, r(i));
+	},
+	put(e, t, i) {
+		return n.put(e, t, r(i));
+	},
+	patch(e, t, i) {
+		return n.patch(e, t, r(i));
+	},
+	delete(e, t) {
+		return n.delete(e, r(t));
+	},
+	reload(e) {
+		return n.reload(r(e));
+	}
 };
-export {
-  p as default,
-  p as router
-};
+//#endregion
+export { i as default, i as router };

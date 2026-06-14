@@ -938,7 +938,8 @@ end
 ### Frontend Usage (React)
 
 ```typescript
-import { useFlash, useOnFlash } from '@nordbeam/nb-inertia/react';
+import { useFlash } from '@nordbeam/nb-inertia/react/useFlash';
+import { useOnFlash } from '@nordbeam/nb-inertia/react/useOnFlash';
 
 // Access flash data
 function Layout({ children }) {
@@ -970,7 +971,7 @@ function UserForm() {
 
 ```vue
 <script setup lang="ts">
-import { useFlash, useOnFlash } from '@nordbeam/nb-inertia/vue';
+import { useFlash, useOnFlash } from '@nordbeam/nb-inertia/vue/useFlash';
 
 interface MyFlash {
   message?: string;
@@ -1518,6 +1519,8 @@ form.submit(options);  // Method and URL from route
 - ✅ **Official Inertia Compatibility** - router and Link work out of the box
 
 ### Vue Support
+
+> **Bundler required:** Vue subpaths (`@nordbeam/nb-inertia/vue/*`) ship TypeScript source files and must be processed by a bundler such as Vite. They are not pre-compiled to JavaScript. Install `radix-vue` if you use the Vue modal components.
 
 Vue 3 has full support for both official Inertia routing and nb_inertia's enhanced useForm:
 
@@ -2121,19 +2124,14 @@ end
 
 #### 3. Install Frontend Dependencies
 
-The modal components use Radix UI for React:
+The Vue modal components use `radix-vue` for accessible dialog primitives:
 
 ```bash
 cd assets
-npm install @radix-ui/react-dialog
+npm install radix-vue
 ```
 
-For Vue, the components use Headless UI:
-
-```bash
-cd assets
-npm install @headlessui/vue@latest
-```
+The React modal system is hook-first and has no required UI library dependency — you bring your own UI (Radix, shadcn, etc.) and use `useModalStack` to drive it.
 
 #### 4. Import Modal Components
 

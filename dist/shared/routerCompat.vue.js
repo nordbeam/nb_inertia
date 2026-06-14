@@ -1,7 +1,7 @@
-import { router as o } from "@inertiajs/vue3";
-function c(r, e, t) {
-  o.prefetch(r, e, t);
+import { router as e } from "@inertiajs/vue3";
+//#region priv/nb_inertia/shared/routerCompat.vue.ts
+function t(t, n, r) {
+	e.prefetch(t, n, r);
 }
-export {
-  c as routerPrefetch
-};
+//#endregion
+export { t as routerPrefetch };

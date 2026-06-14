@@ -1,42 +1,36 @@
-import { usePage as f } from "./usePage.js";
-import { useMemo as p } from "react";
-function l(e, a) {
-  const n = (...o) => e(a, ...o);
-  return Object.keys(e).forEach((o) => {
-    const t = e[o];
-    if (typeof t == "function")
-      n[o] = (...u) => t(a, ...u);
-    else if (typeof t == "object" && t !== null) {
-      const u = {};
-      Object.keys(t).forEach((r) => {
-        const s = t[r];
-        typeof s == "function" ? u[r] = (...c) => s(a, ...c) : u[r] = s;
-      }), n[o] = u;
-    } else
-      n[o] = t;
-  }), Object.defineProperty(n, "name", {
-    value: e.name,
-    writable: !1
-  }), n;
+import e from "./usePage.js";
+import { useMemo as t } from "react";
+//#region priv/nb_inertia/react/useRoutes.tsx
+function n(e, t) {
+	let n = (...n) => e(t, ...n);
+	return Object.keys(e).forEach((r) => {
+		let i = e[r];
+		if (typeof i == "function") n[r] = (...e) => i(t, ...e);
+		else if (typeof i == "object" && i) {
+			let e = {};
+			Object.keys(i).forEach((n) => {
+				let r = i[n];
+				typeof r == "function" ? e[n] = (...e) => r(t, ...e) : e[n] = r;
+			}), n[r] = e;
+		} else n[r] = i;
+	}), Object.defineProperty(n, "name", {
+		value: e.name,
+		writable: !1
+	}), n;
 }
-function b(e, a) {
-  const { props: n } = f(), { scopeParam: o, getScopeValue: t, throwOnMissing: u = !0 } = a, r = t(n);
-  if (r == null) {
-    if (u)
-      throw new Error(
-        `[useRoutes] Scope parameter "${o}" is not available in page props. Make sure the value returned by getScopeValue() is defined.`
-      );
-    return e;
-  }
-  return p(() => {
-    const s = {};
-    return Object.keys(e).forEach((c) => {
-      const i = e[c];
-      typeof i == "function" ? s[c] = l(i, r) : s[c] = i;
-    }), s;
-  }, [e, r]);
+function r(r, i) {
+	let { props: a } = e(), { scopeParam: o, getScopeValue: s, throwOnMissing: c = !0 } = i, l = s(a);
+	if (l == null) {
+		if (c) throw Error(`[useRoutes] Scope parameter "${o}" is not available in page props. Make sure the value returned by getScopeValue() is defined.`);
+		return r;
+	}
+	return t(() => {
+		let e = {};
+		return Object.keys(r).forEach((t) => {
+			let i = r[t];
+			typeof i == "function" ? e[t] = n(i, l) : e[t] = i;
+		}), e;
+	}, [r, l]);
 }
-export {
-  b as default,
-  b as useRoutes
-};
+//#endregion
+export { r as default, r as useRoutes };

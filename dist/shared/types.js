@@ -1,9 +1,14 @@
-function o(t) {
-  if (typeof t != "object" || t === null)
-    return !1;
-  const e = t;
-  return typeof e.url == "string" && typeof e.method == "string" && ["get", "post", "put", "patch", "delete"].includes(e.method);
+//#region priv/nb_inertia/shared/types.ts
+function e(e) {
+	if (typeof e != "object" || !e) return !1;
+	let t = e;
+	return typeof t.url == "string" && typeof t.method == "string" && [
+		"get",
+		"post",
+		"put",
+		"patch",
+		"delete"
+	].includes(t.method);
 }
-export {
-  o as isRouteResult
-};
+//#endregion
+export { e as isRouteResult };

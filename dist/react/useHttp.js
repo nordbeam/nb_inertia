@@ -1,37 +1,27 @@
-import { useHttp as r } from "@inertiajs/react";
-import { isRouteResult as p } from "../shared/types.js";
-function u(n) {
-  return typeof n == "function" || p(n);
+import { isRouteResult as e } from "../shared/types.js";
+import { useHttp as t } from "@inertiajs/react";
+//#region priv/nb_inertia/react/useHttp.tsx
+function n(t) {
+	return typeof t == "function" || e(t);
 }
-function m(...n) {
-  if (n.length === 0)
-    return r();
-  if (n.length === 3) {
-    const [e, t, f] = n;
-    return r(e, t, f);
-  }
-  if (n.length === 2) {
-    const [e, t] = n;
-    if (typeof e == "string" && !u(t))
-      return r(e, t);
-    if (u(e))
-      return r(e, t);
-    if (typeof e != "string" && u(t))
-      return r(t, e);
-  }
-  return r(n[0]);
+function r(...e) {
+	if (e.length === 0) return t();
+	if (e.length === 3) {
+		let [n, r, i] = e;
+		return t(n, r, i);
+	}
+	if (e.length === 2) {
+		let [r, i] = e;
+		if (typeof r == "string" && !n(i) || n(r)) return t(r, i);
+		if (typeof r != "string" && n(i)) return t(i, r);
+	}
+	return t(e[0]);
 }
-function d(n, e, t) {
-  const f = r(e, n);
-  return !t || t.url === e.url && t.method === e.method ? f : new Proxy(f, {
-    get(i, o, c) {
-      return o === "submit" ? (h) => i.submit(t.method, t.url, h) : Reflect.get(i, o, c);
-    }
-  });
+function i(e, n, r) {
+	let i = t(n, e);
+	return !r || r.url === n.url && r.method === n.method ? i : new Proxy(i, { get(e, t, n) {
+		return t === "submit" ? (t) => e.submit(r.method, r.url, t) : Reflect.get(e, t, n);
+	} });
 }
-export {
-  m as default,
-  p as isRouteResult,
-  m as useHttp,
-  d as useHttpWithPrecognition
-};
+//#endregion
+export { r as default, r as useHttp, e as isRouteResult, i as useHttpWithPrecognition };

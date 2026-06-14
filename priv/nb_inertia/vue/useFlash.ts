@@ -37,7 +37,7 @@ export interface UseFlashResult<T extends FlashData = FlashData> {
  * @example
  * ```vue
  * <script setup lang="ts">
- * import { useFlash } from '@nordbeam/nb-inertia/vue';
+ * import { useFlash } from '@nordbeam/nb-inertia/vue/useFlash';
  *
  * // Basic usage
  * const { flash, has, get } = useFlash();
@@ -108,7 +108,7 @@ export type OnFlashCallback<T = FlashData> = (flash: T) => void;
  * @example
  * ```vue
  * <script setup lang="ts">
- * import { useOnFlash } from '@nordbeam/nb-inertia/vue';
+ * import { useOnFlash } from '@nordbeam/nb-inertia/vue/useFlash';
  *
  * // Basic usage
  * useOnFlash(({ message }) => {

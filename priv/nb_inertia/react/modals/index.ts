@@ -11,7 +11,7 @@
  *   ModalStackProvider,
  *   useModalStack,
  *   InitialModalHandler,
- * } from '@nordbeam/nb-inertia/modals';
+ * } from '@nordbeam/nb-inertia/react/modals';
  * import { Dialog } from '@radix-ui/react-dialog';
  *
  * // Set up component resolver (using Vite's import.meta.glob)
@@ -45,7 +45,7 @@
  *
  * @example Using ModalLink with your UI
  * ```tsx
- * import { ModalLink } from '@nordbeam/nb-inertia/modals';
+ * import { ModalLink } from '@nordbeam/nb-inertia/react/modals';
  * import { user_path } from '@/routes';
  *
  * // ModalLink triggers the fetch, your renderer handles the display

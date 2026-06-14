@@ -1,14 +1,4 @@
-import { createSocket as o, useChannel as n, usePresence as s } from "./socket.js";
-import { useRealtimeProps as p } from "./useRealtimeProps.js";
-import { useChannelProps as c } from "./useChannelProps.js";
-import { Channel as f, Presence as l, Socket as u } from "phoenix";
-export {
-  f as Channel,
-  l as Presence,
-  u as Socket,
-  o as createSocket,
-  n as useChannel,
-  c as useChannelProps,
-  s as usePresence,
-  p as useRealtimeProps
-};
+import { Channel as e, Presence as t, Socket as n, createSocket as r, useChannel as i, usePresence as a } from "./socket.js";
+import o from "./useRealtimeProps.js";
+import s from "./useChannelProps.js";
+export { e as Channel, t as Presence, n as Socket, r as createSocket, i as useChannel, s as useChannelProps, a as usePresence, o as useRealtimeProps };

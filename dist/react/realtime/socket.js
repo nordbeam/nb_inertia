@@ -1,64 +1,70 @@
-import { useRef as m, useEffect as v, useState as S, useCallback as i } from "react";
-import { Socket as h, Presence as g } from "phoenix";
-import { Channel as E, Presence as M, Socket as O } from "phoenix";
-function d(c, e = {}) {
-  return new h(c, {
-    params: e.params ?? (() => ({ _csrf_token: document.querySelector('meta[name="csrf-token"]')?.content })),
-    logger: e.logger ?? ((r, s, u) => {
-    }),
-    reconnectAfterMs: e.reconnectAfterMs,
-    heartbeatIntervalMs: e.heartbeatIntervalMs
-  });
+import { useCallback as e, useEffect as t, useRef as n, useState as r } from "react";
+import { Channel as i, Presence as a, Socket as o } from "phoenix";
+//#region priv/nb_inertia/react/realtime/socket.ts
+function s(e, t = {}) {
+	return new o(e, {
+		params: t.params ?? (() => ({ _csrf_token: document.querySelector("meta[name=\"csrf-token\"]")?.content })),
+		logger: t.logger ?? ((e, t, n) => {
+			console.debug(`[socket:${e}]`, t, n);
+		}),
+		reconnectAfterMs: t.reconnectAfterMs,
+		heartbeatIntervalMs: t.heartbeatIntervalMs
+	});
 }
-function j(c, e, n, r = {}) {
-  const s = m(null), u = m(n), { enabled: f = !0 } = r;
-  return u.current = n, v(() => {
-    if (!c || !f || !e)
-      return;
-    c.connectionState() !== "open" && c.connect();
-    const o = c.channel(e, r.params);
-    return s.current = o, Object.keys(n).forEach((t) => {
-      o.on(t, (l) => {
-        u.current[t]?.(l);
-      });
-    }), o.join().receive("ok", (t) => {
-      r.onJoin?.(t);
-    }).receive("error", (t) => {
-      console.error(`[channel] Failed to join ${e}:`, t), r.onError?.(t);
-    }), o.onClose(() => {
-      r.onClose?.();
-    }), () => {
-      o.leave(), s.current = null;
-    };
-  }, [c, e, f, JSON.stringify(r.params)]), s.current;
+function c(e, r, i, a = {}) {
+	let o = n(null), s = n(i), { enabled: c = !0 } = a;
+	return s.current = i, t(() => {
+		if (!e || !c || !r) return;
+		e.connectionState() !== "open" && e.connect();
+		let t = e.channel(r, a.params);
+		return o.current = t, Object.keys(i).forEach((e) => {
+			t.on(e, (t) => {
+				s.current[e]?.(t);
+			});
+		}), t.join().receive("ok", (e) => {
+			console.debug(`[channel] Joined ${r}`), a.onJoin?.(e);
+		}).receive("error", (e) => {
+			console.error(`[channel] Failed to join ${r}:`, e), a.onError?.(e);
+		}), t.onClose(() => {
+			console.debug(`[channel] Left ${r}`), a.onClose?.();
+		}), () => {
+			t.leave(), o.current = null;
+		};
+	}, [
+		e,
+		r,
+		c,
+		JSON.stringify(a.params)
+	]), o.current;
 }
-function k(c, e, n = {}) {
-  const [r, s] = S({}), { enabled: u = !0 } = n;
-  v(() => {
-    if (!c || !u || !e)
-      return;
-    c.connectionState() !== "open" && c.connect();
-    const a = c.channel(e, n.params), t = new g(a);
-    return t.onSync(() => {
-      s({ ...t.state }), n.onSync?.();
-    }), n.onJoin && t.onJoin(n.onJoin), n.onLeave && t.onLeave(n.onLeave), a.join().receive("ok", (l) => {
-    }).receive("error", (l) => {
-      console.error(`[presence] Failed to join ${e}:`, l), n.onError?.(l);
-    }), () => {
-      a.leave();
-    };
-  }, [c, e, u, JSON.stringify(n.params)]);
-  const f = i(() => Object.entries(r).map(([a, { metas: t }]) => ({ id: a, metas: t })), [r]), o = i(
-    (a) => r[a]?.metas,
-    [r]
-  );
-  return { presences: r, list: f, getByKey: o };
+function l(n, i, o = {}) {
+	let [s, c] = r({}), { enabled: l = !0 } = o;
+	return t(() => {
+		if (!n || !l || !i) return;
+		n.connectionState() !== "open" && n.connect();
+		let e = n.channel(i, o.params), t = new a(e);
+		return t.onSync(() => {
+			c({ ...t.state }), o.onSync?.();
+		}), o.onJoin && t.onJoin(o.onJoin), o.onLeave && t.onLeave(o.onLeave), e.join().receive("ok", (e) => {
+			console.debug(`[presence] Joined ${i}`);
+		}).receive("error", (e) => {
+			console.error(`[presence] Failed to join ${i}:`, e), o.onError?.(e);
+		}), () => {
+			e.leave();
+		};
+	}, [
+		n,
+		i,
+		l,
+		JSON.stringify(o.params)
+	]), {
+		presences: s,
+		list: e(() => Object.entries(s).map(([e, { metas: t }]) => ({
+			id: e,
+			metas: t
+		})), [s]),
+		getByKey: e((e) => s[e]?.metas, [s])
+	};
 }
-export {
-  E as Channel,
-  M as Presence,
-  O as Socket,
-  d as createSocket,
-  j as useChannel,
-  k as usePresence
-};
+//#endregion
+export { i as Channel, a as Presence, o as Socket, s as createSocket, c as useChannel, l as usePresence };

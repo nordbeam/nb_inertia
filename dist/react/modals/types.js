@@ -1,18 +1,17 @@
-const o = {
-  size: "md",
-  position: "center",
-  slideover: !1,
-  closeButton: !0,
-  closeExplicitly: !1,
-  closeOnClickOutside: !0
+//#region priv/nb_inertia/react/modals/types.ts
+var e = {
+	size: "md",
+	position: "center",
+	slideover: !1,
+	closeButton: !0,
+	closeExplicitly: !1,
+	closeOnClickOutside: !0
 };
-function t(e) {
-  return {
-    ...o,
-    ...e
-  };
+function t(t) {
+	return {
+		...e,
+		...t
+	};
 }
-export {
-  o as DEFAULT_MODAL_CONFIG,
-  t as mergeModalConfig
-};
+//#endregion
+export { e as DEFAULT_MODAL_CONFIG, t as mergeModalConfig };

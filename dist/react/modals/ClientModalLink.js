@@ -1,48 +1,28 @@
-import { jsx as u } from "react/jsx-runtime";
-import { useState as d, useEffect as M } from "react";
-import { Link as a } from "@inertiajs/react";
-import { ModalLink as k } from "./ModalLink.js";
-function y({
-  href: t,
-  children: o,
-  className: n,
-  modalConfig: s,
-  loadingComponent: e,
-  prefetch: r,
-  cacheFor: i,
-  cacheTags: f
-}) {
-  const [m, l] = d(!1);
-  if (M(() => {
-    l(!0);
-  }, []), !m) {
-    const p = typeof t == "string" ? t : t.url;
-    return /* @__PURE__ */ u(
-      a,
-      {
-        href: p,
-        className: n,
-        prefetch: r,
-        cacheFor: i,
-        children: o
-      }
-    );
-  }
-  return /* @__PURE__ */ u(
-    k,
-    {
-      href: t,
-      className: n,
-      modalConfig: s,
-      loadingComponent: e,
-      prefetch: r,
-      cacheFor: i,
-      cacheTags: f,
-      children: o
-    }
-  );
+import { ModalLink as e } from "./ModalLink.js";
+import { useEffect as t, useState as n } from "react";
+import { Link as r } from "@inertiajs/react";
+import { jsx as i } from "react/jsx-runtime";
+//#region priv/nb_inertia/react/modals/ClientModalLink.tsx
+function a({ href: a, children: o, className: s, modalConfig: c, loadingComponent: l, prefetch: u, cacheFor: d, cacheTags: f }) {
+	let [p, m] = n(!1);
+	return t(() => {
+		m(!0);
+	}, []), p ? /* @__PURE__ */ i(e, {
+		href: a,
+		className: s,
+		modalConfig: c,
+		loadingComponent: l,
+		prefetch: u,
+		cacheFor: d,
+		cacheTags: f,
+		children: o
+	}) : /* @__PURE__ */ i(r, {
+		href: typeof a == "string" ? a : a.url,
+		className: s,
+		prefetch: u,
+		cacheFor: d,
+		children: o
+	});
 }
-export {
-  y as ClientModalLink,
-  y as default
-};
+//#endregion
+export { a as ClientModalLink, a as default };

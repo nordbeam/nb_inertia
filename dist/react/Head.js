@@ -1,17 +1,18 @@
-import { jsx as u } from "react/jsx-runtime";
-import { useRef as o, useEffect as f } from "react";
-import { Head as l } from "@inertiajs/react";
-import { useIsInModal as i } from "./modals/modalStack.js";
-const d = ({ title: r, children: n }) => {
-  const t = i(), e = o(null);
-  return f(() => {
-    if (!(!t || !r))
-      return e.current === null && (e.current = document.title), document.title = r, () => {
-        e.current !== null && (document.title = e.current);
-      };
-  }, [t, r]), t ? null : /* @__PURE__ */ u(l, { title: r, children: n });
+import { useIsInModal as e } from "./modals/modalStack.js";
+import { useEffect as t, useRef as n } from "react";
+import { Head as r } from "@inertiajs/react";
+import { jsx as i } from "react/jsx-runtime";
+//#region priv/nb_inertia/react/Head.tsx
+var a = ({ title: a, children: o }) => {
+	let s = e(), c = n(null);
+	return t(() => {
+		if (!(!s || !a)) return c.current === null && (c.current = document.title), document.title = a, () => {
+			c.current !== null && (document.title = c.current);
+		};
+	}, [s, a]), s ? null : /* @__PURE__ */ i(r, {
+		title: a,
+		children: o
+	});
 };
-export {
-  d as Head,
-  d as default
-};
+//#endregion
+export { a as Head, a as default };

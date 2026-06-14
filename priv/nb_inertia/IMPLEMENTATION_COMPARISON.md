@@ -389,12 +389,12 @@ export * from '@inertiajs/react';
 **Vue:**
 ```typescript
 export { router } from '@nordbeam/nb-inertia/vue/router';
-export { default as Link } from '@nordbeam/nb-inertia/vue/Link.vue';
+export { default as Link } from '@nordbeam/nb-inertia/vue/Link';
 export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
 export * from '@inertiajs/vue3';
 ```
 
-*Note: Vue uses `default as Link` because `.vue` files export default.*
+*Note: Vue uses `default as Link` because `Link.ts` re-exports Link as the default export.*
 
 ## Summary
 

@@ -8,7 +8,7 @@
  *
  * @example
  * ```tsx
- * import { ModalStackProvider, InitialModalHandler, ModalStackRenderer } from '@nordbeam/nb-inertia/modals';
+ * import { ModalStackProvider, InitialModalHandler, ModalStackRenderer } from '@nordbeam/nb-inertia/react/modals';
  *
  * function App({ Component, props }) {
  *   return (

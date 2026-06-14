@@ -1,100 +1,78 @@
-import { jsx as n, Fragment as p, jsxs as u } from "react/jsx-runtime";
-import { useModalStack as h, ModalPageProvider as C } from "./modalStack.js";
-import { HeadlessModal as v } from "./HeadlessModal.js";
-import { CloseButton as m } from "./CloseButton.js";
-import { mergeModalConfig as g } from "./types.js";
-const k = 50;
-function x(t) {
-  return k + t * 2;
+import { ModalPageProvider as e, useModalStack as t } from "./modalStack.js";
+import { CloseButton as n } from "./CloseButton.js";
+import { mergeModalConfig as r } from "./types.js";
+import { HeadlessModal as i } from "./HeadlessModal.js";
+import "react";
+import { Fragment as a, jsx as o, jsxs as s } from "react/jsx-runtime";
+//#region priv/nb_inertia/react/modals/ModalRenderer.tsx
+var c = 50;
+function l(e) {
+	return c + e * 2;
 }
-function y({
-  modal: t,
-  close: r,
-  config: i,
-  zIndex: o,
-  backdropClassName: c,
-  wrapperClassName: e
-}) {
-  const a = t.component, d = i.closeButton !== !1, s = i.closeOnClickOutside !== !1;
-  if (t.loading) {
-    const l = t.loadingComponent;
-    return /* @__PURE__ */ u(p, { children: [
-      /* @__PURE__ */ n(
-        "div",
-        {
-          className: c,
-          style: { zIndex: o },
-          onClick: i.closeExplicitly || !s ? void 0 : r,
-          "aria-hidden": "true"
-        }
-      ),
-      /* @__PURE__ */ n("div", { className: e, style: { zIndex: o + 1 }, children: /* @__PURE__ */ u("div", { className: "relative", children: [
-        d && /* @__PURE__ */ n(m, { onClick: r }),
-        l ? /* @__PURE__ */ n(l, {}) : null
-      ] }) })
-    ] });
-  }
-  return /* @__PURE__ */ u(p, { children: [
-    /* @__PURE__ */ n(
-      "div",
-      {
-        className: c,
-        style: { zIndex: o },
-        onClick: i.closeExplicitly || !s ? void 0 : r,
-        "aria-hidden": "true"
-      }
-    ),
-    /* @__PURE__ */ n(
-      "div",
-      {
-        className: e,
-        style: { zIndex: o + 1 },
-        role: "dialog",
-        "aria-modal": "true",
-        children: /* @__PURE__ */ u("div", { className: "relative", children: [
-          d && /* @__PURE__ */ n(m, { onClick: r }),
-          /* @__PURE__ */ n(a, { ...t.props, close: r })
-        ] })
-      }
-    )
-  ] });
+function u({ modal: e, close: t, config: r, zIndex: i, backdropClassName: c, wrapperClassName: l }) {
+	let u = e.component, d = r.closeButton !== !1, f = r.closeOnClickOutside !== !1;
+	if (e.loading) {
+		let u = e.loadingComponent;
+		return /* @__PURE__ */ s(a, { children: [/* @__PURE__ */ o("div", {
+			className: c,
+			style: { zIndex: i },
+			onClick: r.closeExplicitly || !f ? void 0 : t,
+			"aria-hidden": "true"
+		}), /* @__PURE__ */ o("div", {
+			className: l,
+			style: { zIndex: i + 1 },
+			children: /* @__PURE__ */ s("div", {
+				className: "relative",
+				children: [d && /* @__PURE__ */ o(n, { onClick: t }), u ? /* @__PURE__ */ o(u, {}) : null]
+			})
+		})] });
+	}
+	return /* @__PURE__ */ s(a, { children: [/* @__PURE__ */ o("div", {
+		className: c,
+		style: { zIndex: i },
+		onClick: r.closeExplicitly || !f ? void 0 : t,
+		"aria-hidden": "true"
+	}), /* @__PURE__ */ o("div", {
+		className: l,
+		style: { zIndex: i + 1 },
+		role: "dialog",
+		"aria-modal": "true",
+		children: /* @__PURE__ */ s("div", {
+			className: "relative",
+			children: [d && /* @__PURE__ */ o(n, { onClick: t }), /* @__PURE__ */ o(u, {
+				...e.props,
+				close: t
+			})]
+		})
+	})] });
 }
-const O = ({
-  renderModal: t,
-  backdropClassName: r = "fixed inset-0 bg-black/50",
-  wrapperClassName: i = "fixed inset-0 flex items-center justify-center"
-}) => {
-  const { modals: o, popModal: c } = h();
-  return o.length === 0 ? null : /* @__PURE__ */ n(p, { children: o.map((e, a) => {
-    const d = x(a), s = g(e.config), l = () => c(e.id), f = {
-      modal: e,
-      close: l,
-      config: s,
-      zIndex: d,
-      index: a
-    };
-    return /* @__PURE__ */ n(
-      C,
-      {
-        component: e.componentName,
-        props: e.props,
-        url: e.url,
-        baseUrl: e.baseUrl,
-        returnUrl: e.returnUrl,
-        children: /* @__PURE__ */ n(v, { modal: e, onClose: l, children: () => t ? t(f) : /* @__PURE__ */ n(
-          y,
-          {
-            ...f,
-            backdropClassName: s.backdropClasses ? `${r} ${s.backdropClasses}` : r,
-            wrapperClassName: i
-          }
-        ) })
-      },
-      e.id
-    );
-  }) });
+var d = ({ renderModal: n, backdropClassName: s = "fixed inset-0 bg-black/50", wrapperClassName: c = "fixed inset-0 flex items-center justify-center" }) => {
+	let { modals: d, popModal: f } = t();
+	return d.length === 0 ? null : /* @__PURE__ */ o(a, { children: d.map((t, a) => {
+		let d = l(a), p = r(t.config), m = () => f(t.id), h = {
+			modal: t,
+			close: m,
+			config: p,
+			zIndex: d,
+			index: a
+		};
+		return /* @__PURE__ */ o(e, {
+			component: t.componentName,
+			props: t.props,
+			url: t.url,
+			baseUrl: t.baseUrl,
+			returnUrl: t.returnUrl,
+			children: /* @__PURE__ */ o(i, {
+				modal: t,
+				onClose: m,
+				children: () => n ? n(h) : /* @__PURE__ */ o(u, {
+					...h,
+					backdropClassName: p.backdropClasses ? `${s} ${p.backdropClasses}` : s,
+					wrapperClassName: c
+				})
+			})
+		}, t.id);
+	}) });
 };
-export {
-  O as ModalRenderer,
-  O as default
-};
+//#endregion
+export { d as ModalRenderer, d as default };

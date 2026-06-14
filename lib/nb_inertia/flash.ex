@@ -37,7 +37,7 @@ defmodule NbInertia.Flash do
   On the frontend, flash data is available as a top-level field on the page object:
 
       // React
-      import { useFlash } from '@nordbeam/nb-inertia/react';
+      import { useFlash } from '@nordbeam/nb-inertia/react/useFlash';
 
       function Layout({ children }) {
         const { flash, has } = useFlash();
@@ -51,7 +51,7 @@ defmodule NbInertia.Flash do
       }
 
       // Vue
-      import { useFlash } from '@nordbeam/nb-inertia/vue';
+      import { useFlash } from '@nordbeam/nb-inertia/vue/useFlash';
 
       const { flash, has, get } = useFlash();
 

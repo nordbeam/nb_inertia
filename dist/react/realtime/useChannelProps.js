@@ -1,70 +1,64 @@
-import { useMemo as j } from "react";
-import { useChannel as w } from "./socket.js";
-import { useRealtimeProps as I } from "./useRealtimeProps.js";
-function R(b, y, h, P) {
-  const m = I(), { props: d, setProp: o, setProps: l, reload: f } = m, g = j(() => {
-    const i = {};
-    for (const [k, p] of Object.entries(h)) {
-      if (!p) continue;
-      if (typeof p == "function") {
-        i[k] = ((t) => {
-          p(t, {
-            props: d,
-            setProp: o,
-            setProps: l,
-            reload: f
-          });
-        });
-        continue;
-      }
-      const r = p, { prop: n, strategy: x } = r;
-      i[k] = ((t) => {
-        switch (x) {
-          case "append":
-            o(n, ((e) => [
-              ...e,
-              r.transform(t)
-            ]));
-            break;
-          case "prepend":
-            o(n, ((e) => [
-              r.transform(t),
-              ...e
-            ]));
-            break;
-          case "remove":
-            o(n, ((e) => e.filter((s) => !r.match(s, t))));
-            break;
-          case "update":
-            o(n, ((e) => {
-              const s = r.transform(t), a = r.key;
-              return e.map(
-                (c) => c[a] === s[a] ? s : c
-              );
-            }));
-            break;
-          case "upsert":
-            o(n, ((e) => {
-              const s = r.transform(t), a = r.key, c = e.findIndex(
-                (u) => u[a] === s[a]
-              );
-              return c >= 0 ? e.map((u, C) => C === c ? s : u) : [...e, s];
-            }));
-            break;
-          case "replace":
-            o(n, r.transform(t));
-            break;
-          case "reload":
-            f({ only: r.only });
-            break;
-        }
-      });
-    }
-    return i;
-  }, [d, o, l, f]);
-  return w(b, y, g, P), m;
+import { useChannel as e } from "./socket.js";
+import t from "./useRealtimeProps.js";
+import { useMemo as n } from "react";
+//#region priv/nb_inertia/react/realtime/useChannelProps.ts
+function r(r, i, a, o) {
+	let s = t(), { props: c, setProp: l, setProps: u, reload: d } = s;
+	return e(r, i, n(() => {
+		let e = {};
+		for (let [t, n] of Object.entries(a)) {
+			if (!n) continue;
+			if (typeof n == "function") {
+				e[t] = ((e) => {
+					n(e, {
+						props: c,
+						setProp: l,
+						setProps: u,
+						reload: d
+					});
+				});
+				continue;
+			}
+			let r = n, { prop: i, strategy: a } = r;
+			e[t] = ((e) => {
+				switch (a) {
+					case "append":
+						l(i, ((t) => [...t, r.transform(e)]));
+						break;
+					case "prepend":
+						l(i, ((t) => [r.transform(e), ...t]));
+						break;
+					case "remove":
+						l(i, ((t) => t.filter((t) => !r.match(t, e))));
+						break;
+					case "update":
+						l(i, ((t) => {
+							let n = r.transform(e), i = r.key;
+							return t.map((e) => e[i] === n[i] ? n : e);
+						}));
+						break;
+					case "upsert":
+						l(i, ((t) => {
+							let n = r.transform(e), i = r.key, a = t.findIndex((e) => e[i] === n[i]);
+							return a >= 0 ? t.map((e, t) => t === a ? n : e) : [...t, n];
+						}));
+						break;
+					case "replace":
+						l(i, r.transform(e));
+						break;
+					case "reload":
+						d({ only: r.only });
+						break;
+				}
+			});
+		}
+		return e;
+	}, [
+		c,
+		l,
+		u,
+		d
+	]), o), s;
 }
-export {
-  R as default,
-  R as useChannelProps
-};
+//#endregion
+export { r as default, r as useChannelProps };

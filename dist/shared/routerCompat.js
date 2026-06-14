@@ -1,7 +1,7 @@
-import { router as o } from "@inertiajs/react";
-function c(r, e, t) {
-  o.prefetch(r, e, t);
+import { router as e } from "@inertiajs/react";
+//#region priv/nb_inertia/shared/routerCompat.ts
+function t(t, n, r) {
+	e.prefetch(t, n, r);
 }
-export {
-  c as routerPrefetch
-};
+//#endregion
+export { t as routerPrefetch };
