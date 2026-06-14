@@ -1,12 +1,14 @@
 defmodule NbInertia.Modal.HttpClient do
   @moduledoc """
-  HTTP client for fetching base pages using Req with :plug option.
+  Internal HTTP client for fetching modal base pages through a Phoenix endpoint.
 
   This module handles internal requests to fetch the base page content
   when a modal is accessed directly via URL (not via Inertia XHR).
 
-  Uses `Req` with the `:plug` option to dispatch directly to the Phoenix
-  endpoint without network I/O, which is both fast and production-ready.
+  It dispatches directly to the Phoenix endpoint plug without network I/O.
+  Cookies and authorization headers from the modal request are forwarded so
+  the base page sees the same session/auth context as a normal browser
+  navigation.
   """
 
   import Plug.Conn
@@ -29,10 +31,8 @@ defmodule NbInertia.Modal.HttpClient do
   """
   @spec fetch_base_page_html(Plug.Conn.t(), String.t()) :: fetch_html_result()
   def fetch_base_page_html(conn, base_url) do
-    if Code.ensure_loaded?(Req) do
-      do_fetch_base_page_html(conn, base_url)
-    else
-      {:error, :req_not_available}
+    with {:ok, response} <- dispatch_base_page(conn, base_url, build_headers(conn)) do
+      extract_html_and_page_data(response)
     end
   end
 
@@ -50,61 +50,120 @@ defmodule NbInertia.Modal.HttpClient do
   """
   @spec fetch_base_page_json(Plug.Conn.t(), String.t()) :: fetch_result()
   def fetch_base_page_json(conn, base_url) do
-    if Code.ensure_loaded?(Req) do
-      do_fetch_base_page_json(conn, base_url)
-    else
-      {:error, :req_not_available}
+    with {:ok, response} <- dispatch_base_page(conn, base_url, build_inertia_headers(conn)) do
+      extract_json_page_data(response)
     end
   end
 
-  defp do_fetch_base_page_html(conn, base_url) do
-    endpoint = get_endpoint(conn)
-
-    unless endpoint do
-      {:error, {:fetch_failed, "No Phoenix endpoint found in conn.private"}}
-    else
-      headers = build_headers(conn)
-
-      try do
-        response =
-          Req.new(url: base_url, plug: endpoint)
-          |> Req.Request.put_headers(headers)
-          |> Req.request!()
-
-        extract_html_and_page_data(response)
-      rescue
-        e ->
-          Logger.error("Failed to fetch base page HTML #{base_url}: #{inspect(e)}")
-          {:error, {:fetch_failed, e}}
-      end
-    end
-  end
-
-  defp do_fetch_base_page_json(conn, base_url) do
-    endpoint = get_endpoint(conn)
-
-    unless endpoint do
-      {:error, {:fetch_failed, "No Phoenix endpoint found in conn.private"}}
-    else
-      headers = build_inertia_headers(conn)
-
-      try do
-        response =
-          Req.new(url: base_url, plug: endpoint)
-          |> Req.Request.put_headers(headers)
-          |> Req.request!()
-
-        extract_json_page_data(response)
-      rescue
-        e ->
-          Logger.error("Failed to fetch base page JSON #{base_url}: #{inspect(e)}")
-          {:error, {:fetch_failed, e}}
-      end
+  defp dispatch_base_page(conn, base_url, headers) do
+    with {:ok, endpoint} <- get_endpoint(conn),
+         {:ok, request_url} <- build_request_url(conn, base_url) do
+      do_dispatch_base_page(conn, endpoint, request_url, headers)
     end
   end
 
   defp get_endpoint(conn) do
-    conn.private[:phoenix_endpoint]
+    endpoint = conn.private[:phoenix_endpoint] || NbInertia.Config.endpoint()
+
+    cond do
+      is_atom(endpoint) and function_exported?(endpoint, :call, 2) ->
+        {:ok, endpoint}
+
+      is_atom(endpoint) ->
+        {:error,
+         {:fetch_failed,
+          "Modal base-page composition requires #{inspect(endpoint)} to be a Plug endpoint with call/2"}}
+
+      true ->
+        {:error,
+         {:fetch_failed,
+          "Modal base-page composition requires a Phoenix endpoint. Route modal requests through your endpoint or configure :endpoint for :nb_inertia."}}
+    end
+  end
+
+  defp build_request_url(conn, base_url) when is_binary(base_url) do
+    uri = URI.parse(base_url)
+
+    if uri.scheme && uri.host do
+      {:ok, base_url}
+    else
+      scheme = conn.scheme || :http
+      path = normalize_path(uri.path)
+
+      url =
+        %URI{
+          scheme: Atom.to_string(scheme),
+          host: conn.host || "localhost",
+          port: normalize_port(scheme, conn.port),
+          path: path,
+          query: uri.query
+        }
+        |> URI.to_string()
+
+      {:ok, url}
+    end
+  rescue
+    e -> {:error, {:fetch_failed, e}}
+  end
+
+  defp build_request_url(_conn, base_url) do
+    {:error, {:fetch_failed, "Modal base_url must be a string, got: #{inspect(base_url)}"}}
+  end
+
+  defp normalize_path(nil), do: "/"
+  defp normalize_path(""), do: "/"
+
+  defp normalize_path(path) do
+    if String.starts_with?(path, "/"), do: path, else: "/" <> path
+  end
+
+  defp normalize_port(:http, port) when port in [nil, 80], do: nil
+  defp normalize_port(:https, port) when port in [nil, 443], do: nil
+  defp normalize_port(_scheme, port), do: port
+
+  defp do_dispatch_base_page(conn, endpoint, request_url, headers) do
+    request_conn =
+      :get
+      |> Plug.Test.conn(request_url)
+      |> Map.put(:remote_ip, conn.remote_ip)
+      |> put_private(:phoenix_endpoint, endpoint)
+      |> put_headers(headers)
+
+    try do
+      response_conn = endpoint.call(request_conn, endpoint_opts(endpoint))
+
+      {:ok,
+       %{
+         status: response_conn.status,
+         body: response_conn.resp_body || "",
+         headers: response_conn.resp_headers
+       }}
+    rescue
+      e ->
+        Logger.error("Failed to fetch modal base page #{request_url}: #{inspect(e)}")
+        {:error, {:fetch_failed, e}}
+    catch
+      kind, reason ->
+        Logger.error("Failed to fetch modal base page #{request_url}: #{inspect({kind, reason})}")
+        {:error, {:fetch_failed, {kind, reason}}}
+    end
+  end
+
+  defp endpoint_opts(endpoint) do
+    if function_exported?(endpoint, :init, 1) do
+      case endpoint.init([]) do
+        {:ok, opts} -> opts
+        opts -> opts
+      end
+    else
+      []
+    end
+  end
+
+  defp put_headers(conn, headers) do
+    Enum.reduce(headers, conn, fn {key, value}, acc ->
+      put_req_header(acc, String.downcase(key), to_string(value))
+    end)
   end
 
   defp build_headers(conn) do
@@ -113,17 +172,10 @@ defmodule NbInertia.Modal.HttpClient do
       {"x-inertia-modal-base-request", "true"}
     ]
 
-    # Forward cookies for session/auth preservation
-    cookie_headers =
-      case get_req_header(conn, "cookie") do
-        [cookies | _] -> [{"cookie", cookies}]
-        [] -> []
-      end
-
     # We do NOT set X-Inertia header - we want HTML response
     # The modal data will be injected after we get the base page
 
-    base_headers ++ cookie_headers
+    base_headers ++ forwarded_auth_headers(conn)
   end
 
   defp build_inertia_headers(conn) do
@@ -141,14 +193,19 @@ defmodule NbInertia.Modal.HttpClient do
       {"x-inertia-modal-base-request", "true"}
     ]
 
-    # Forward cookies for session/auth preservation
-    cookie_headers =
-      case get_req_header(conn, "cookie") do
-        [cookies | _] -> [{"cookie", cookies}]
-        [] -> []
-      end
+    base_headers ++ forwarded_auth_headers(conn)
+  end
 
-    base_headers ++ cookie_headers
+  defp forwarded_auth_headers(conn) do
+    forward_first_header(conn, "cookie") ++
+      forward_first_header(conn, "authorization")
+  end
+
+  defp forward_first_header(conn, name) do
+    case get_req_header(conn, name) do
+      [value | _] -> [{name, value}]
+      [] -> []
+    end
   end
 
   defp get_inertia_version_from_request(conn) do
@@ -164,7 +221,8 @@ defmodule NbInertia.Modal.HttpClient do
   end
 
   defp extract_json_page_data(%{status: status, body: body}) when status in [200, 201] do
-    # Body may already be decoded by Req if content-type is application/json
+    # Keep accepting decoded maps for custom endpoint plugs/tests, although
+    # Phoenix responses normally arrive here as binaries.
     case body do
       %{} = page_data ->
         {:ok, page_data}

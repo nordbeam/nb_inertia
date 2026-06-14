@@ -1,7 +1,82 @@
 defmodule NbInertia.Modal.HttpClientTest do
   use ExUnit.Case, async: true
 
+  import Plug.Conn
+  import Plug.Test
+
   alias NbInertia.Modal.HttpClient
+
+  defmodule BasePageEndpoint do
+    import Plug.Conn
+
+    def init(opts), do: opts
+
+    def call(conn, _opts) do
+      page_data = %{
+        component: "Users/Index",
+        props: %{
+          base_request: get_req_header(conn, "x-inertia-modal-base-request") == ["true"],
+          cookie: List.first(get_req_header(conn, "cookie")),
+          authorization: List.first(get_req_header(conn, "authorization"))
+        },
+        url: conn.request_path,
+        version: "test-version"
+      }
+
+      if get_req_header(conn, "x-inertia") == ["true"] do
+        conn
+        |> put_resp_content_type("application/json")
+        |> send_resp(200, Jason.encode!(page_data))
+      else
+        html = """
+        <!doctype html>
+        <html>
+          <body>
+            <script data-page="app" type="application/json">#{Jason.encode!(page_data)}</script>
+            <div id="app"></div>
+          </body>
+        </html>
+        """
+
+        conn
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, html)
+      end
+    end
+  end
+
+  describe "fetch_base_page_json/2" do
+    test "dispatches internally through the endpoint and forwards auth headers" do
+      conn =
+        conn(:get, "/users/new")
+        |> put_private(:phoenix_endpoint, BasePageEndpoint)
+        |> put_req_header("cookie", "_app_session=signed")
+        |> put_req_header("authorization", "Bearer token")
+
+      assert {:ok, page_data} = HttpClient.fetch_base_page_json(conn, "/users")
+
+      assert page_data["component"] == "Users/Index"
+      assert page_data["props"]["base_request"] == true
+      assert page_data["props"]["cookie"] == "_app_session=signed"
+      assert page_data["props"]["authorization"] == "Bearer token"
+    end
+  end
+
+  describe "fetch_base_page_html/2" do
+    test "dispatches internally through the endpoint and extracts page data" do
+      conn =
+        conn(:get, "/users/new")
+        |> put_private(:phoenix_endpoint, BasePageEndpoint)
+        |> put_req_header("cookie", "_app_session=signed")
+
+      assert {:ok, html, page_data} = HttpClient.fetch_base_page_html(conn, "/users")
+
+      assert html =~ ~s(<div id="app"></div>)
+      assert page_data["component"] == "Users/Index"
+      assert page_data["props"]["base_request"] == true
+      assert page_data["props"]["cookie"] == "_app_session=signed"
+    end
+  end
 
   describe "extract_page_data_from_html/1" do
     test "extracts page data from Inertia v3 script tag" do

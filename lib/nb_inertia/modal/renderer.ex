@@ -52,8 +52,8 @@ defmodule NbInertia.Modal.Renderer do
   ## Error Handling
 
   - `:no_base_url` - Modal must have a base_url set
-  - `:req_not_available` - Requires the Req library for base page fetching
-  - Other errors from base page fetching
+  - `{:fetch_failed, reason}` - Base page could not be fetched through the Phoenix endpoint
+  - Other errors from base page fetching/parsing
   """
 
   import Plug.Conn
@@ -65,7 +65,6 @@ defmodule NbInertia.Modal.Renderer do
 
   @type render_error ::
           {:error, :no_base_url}
-          | {:error, :req_not_available}
           | {:error, term()}
 
   @doc """
@@ -84,7 +83,6 @@ defmodule NbInertia.Modal.Renderer do
 
     - `{:ok, conn}` - Success with the response sent
     - `{:error, :no_base_url}` - Modal must have a base_url set
-    - `{:error, :req_not_available}` - Requires Req library
     - `{:error, term()}` - Other errors
   """
   @spec render(Plug.Conn.t(), Modal.t(), map()) :: {:ok, Plug.Conn.t()} | render_error()
@@ -118,17 +116,6 @@ defmodule NbInertia.Modal.Renderer do
 
       {:error, :no_base_url} ->
         raise ArgumentError, "Modal must have a base_url set"
-
-      {:error, :req_not_available} ->
-        raise RuntimeError, """
-        Modal rendering requires the Req library for internal dispatch.
-
-        Add to your mix.exs:
-            {:req, "~> 0.5"}
-
-        Or ensure modal URLs are only accessed via Inertia XHR requests
-        (client-side navigation with ModalLink component).
-        """
 
       {:error, {:http_error, status}} ->
         raise RuntimeError, "Failed to fetch base page: HTTP #{status}"
@@ -182,14 +169,6 @@ defmodule NbInertia.Modal.Renderer do
         composed_page = inject_modal_into_page(base_page_data, modal_data, conn)
         {:ok, send_json_response(conn, composed_page, modal)}
 
-      {:error, :req_not_available} = error ->
-        Logger.error("""
-        Modal XHR requests require the Req library for internal dispatch.
-        Add {:req, "~> 0.5"} to your mix.exs dependencies.
-        """)
-
-        error
-
       {:error, reason} = error ->
         Logger.error("Failed to fetch base page #{modal.base_url}: #{inspect(reason)}")
         error
@@ -225,14 +204,6 @@ defmodule NbInertia.Modal.Renderer do
             Logger.error("Failed to inject modal data into HTML: #{inspect(reason)}")
             {:error, {:inject_failed, reason}}
         end
-
-      {:error, :req_not_available} = error ->
-        Logger.error("""
-        Direct modal URL access requires the Req library.
-        Add {:req, "~> 0.5"} to your mix.exs dependencies.
-        """)
-
-        error
 
       {:error, reason} = error ->
         Logger.error("Failed to fetch base page #{modal.base_url}: #{inspect(reason)}")

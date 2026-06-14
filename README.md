@@ -681,7 +681,7 @@ Configure NbInertia using the `:nb_inertia` namespace. All configuration is auto
 ```elixir
 # config/config.exs
 config :nb_inertia,
-  endpoint: MyAppWeb.Endpoint,           # Required for SSR and versioning
+  endpoint: MyAppWeb.Endpoint,           # Required for SSR, versioning, and modal composition fallback
   camelize_props: true,                  # Convert snake_case to camelCase (default: true)
   history: [],                           # Scroll position preservation
   static_paths: ["/css", "/js"],         # Static paths for asset versioning
@@ -696,7 +696,7 @@ config :nb_inertia,
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `:endpoint` | module | required | Phoenix endpoint for SSR and versioning |
+| `:endpoint` | module | required | Phoenix endpoint for SSR, versioning, and modal composition fallback |
 | `:camelize_props` | boolean | `true` | Auto-convert snake_case to camelCase |
 | `:history` | keyword | `[]` | History config for scroll preservation |
 | `:static_paths` | list | `[]` | Paths for asset versioning |
@@ -2091,7 +2091,13 @@ export default function CreateUser() {
 
 ### Setup
 
-#### 1. Add Modal Plug
+#### 1. Confirm Endpoint Configuration
+
+Modal base-page composition dispatches an internal GET through your Phoenix endpoint. No `Req` dependency or external HTTP client is required.
+
+Normal requests routed through Phoenix already provide the endpoint on the connection. Keep `endpoint: MyAppWeb.Endpoint` configured under `:nb_inertia` so tests or custom plugs that call modal rendering outside the endpoint still have a fallback. Cookies and the `Authorization` header are forwarded to the base-page fetch so session and auth-dependent props render as they do on normal navigation.
+
+#### 2. Add Modal Plug
 
 Add the modal headers plug to your router pipeline:
 
@@ -2114,7 +2120,7 @@ defmodule MyAppWeb.Router do
 end
 ```
 
-#### 2. Install Dependencies
+#### 3. Install Frontend Dependencies
 
 The modal components use Radix UI for React:
 
@@ -2130,7 +2136,7 @@ cd assets
 npm install @headlessui/vue@latest
 ```
 
-#### 3. Import Modal Components
+#### 4. Import Modal Components
 
 In your Inertia pages, import modal components from the nb_inertia package:
 

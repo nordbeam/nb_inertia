@@ -161,7 +161,7 @@ defmodule NbInertia do
 
       # config/config.exs
       config :nb_inertia,
-        endpoint: MyAppWeb.Endpoint,           # Required for SSR and versioning
+        endpoint: MyAppWeb.Endpoint,           # Required for SSR, versioning, and modal composition fallback
         camelize_props: true,                  # Default: true
         snake_case_params: true,               # Default: true
         history: [],                           # Default: []

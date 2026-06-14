@@ -93,7 +93,7 @@ end
 ```elixir
 # config/config.exs
 config :nb_inertia,
-  endpoint: MyAppWeb.Endpoint,           # Required for SSR/versioning
+  endpoint: MyAppWeb.Endpoint,           # Required for SSR/versioning/modal composition fallback
   camelize_props: true,                  # Auto snake_case → camelCase (default: true)
   deep_merge_shared_props: false,        # Deep merge shared props with page props (default: false)
   static_paths: ["/css", "/js"],         # Paths for asset versioning
@@ -715,7 +715,7 @@ See [DEBUGGING.md](DEBUGGING.md) for troubleshooting and [COOKBOOK.md](COOKBOOK.
 
 ```elixir
 config :nb_inertia,
-  endpoint: MyAppWeb.Endpoint,           # Required for SSR/versioning
+  endpoint: MyAppWeb.Endpoint,           # Required for SSR/versioning/modal composition fallback
   camelize_props: true,                  # Auto camelCase (default: true)
   deep_merge_shared_props: false,        # Deep merge shared props (default: false)
   static_paths: ["/css", "/js"],         # Asset versioning paths

@@ -11,7 +11,7 @@ defmodule NbInertia.Config do
 
   All configuration options are read from the `:nb_inertia` namespace:
 
-  - `:endpoint` - Your Phoenix endpoint module (required for SSR and asset versioning)
+  - `:endpoint` - Your Phoenix endpoint module (required for SSR, asset versioning, and modal composition fallback)
   - `:camelize_props` - Whether to automatically camelize Inertia props (default: `true`)
   - `:snake_case_params` - Whether to convert incoming camelCase params to snake_case (default: `true`)
   - `:history` - History configuration for preserving scroll positions (default: `[]`)
@@ -68,6 +68,10 @@ defmodule NbInertia.Config do
 
   @doc """
   Returns the Phoenix endpoint module.
+
+  Modal rendering normally gets the endpoint from `conn.private[:phoenix_endpoint]`.
+  This configuration is used as a fallback when modal rendering is invoked from
+  tests or custom plugs outside the endpoint dispatch path.
   """
   def endpoint do
     get(:endpoint)
