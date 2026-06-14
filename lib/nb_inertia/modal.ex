@@ -40,7 +40,11 @@ defmodule NbInertia.Modal do
           optional(:slideover) => boolean(),
           optional(:closeButton) => boolean(),
           optional(:closeExplicitly) => boolean(),
-          optional(:closeOnClickOutside) => boolean()
+          optional(:closeOnClickOutside) => boolean(),
+          optional(:maxWidth) => String.t(),
+          optional(:paddingClasses) => String.t(),
+          optional(:panelClasses) => String.t(),
+          optional(:backdropClasses) => String.t()
         }
 
   @type t :: %__MODULE__{
@@ -292,6 +296,38 @@ defmodule NbInertia.Modal do
   @spec close_on_click_outside(t(), boolean()) :: t()
   def close_on_click_outside(%Modal{} = modal, enabled \\ true) do
     put_config(modal, :closeOnClickOutside, enabled)
+  end
+
+  @doc """
+  Sets a custom max-width CSS value for the modal panel.
+  """
+  @spec max_width(t(), String.t()) :: t()
+  def max_width(%Modal{} = modal, value) when is_binary(value) do
+    put_config(modal, :maxWidth, value)
+  end
+
+  @doc """
+  Sets custom padding classes for the modal content.
+  """
+  @spec padding_classes(t(), String.t()) :: t()
+  def padding_classes(%Modal{} = modal, value) when is_binary(value) do
+    put_config(modal, :paddingClasses, value)
+  end
+
+  @doc """
+  Sets custom panel classes for the modal container.
+  """
+  @spec panel_classes(t(), String.t()) :: t()
+  def panel_classes(%Modal{} = modal, value) when is_binary(value) do
+    put_config(modal, :panelClasses, value)
+  end
+
+  @doc """
+  Sets custom backdrop classes for the modal overlay.
+  """
+  @spec backdrop_classes(t(), String.t()) :: t()
+  def backdrop_classes(%Modal{} = modal, value) when is_binary(value) do
+    put_config(modal, :backdropClasses, value)
   end
 
   # Private helpers

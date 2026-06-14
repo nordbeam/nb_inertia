@@ -50,6 +50,19 @@ defmodule NbInertia.Controller do
 
   @component_render_opts [:ssr]
   @page_render_opts [:deep_merge] ++ @component_render_opts
+  @modal_option_keys [
+    :base_url,
+    :size,
+    :position,
+    :slideover,
+    :close_button,
+    :close_explicitly,
+    :close_on_click_outside,
+    :max_width,
+    :padding_classes,
+    :panel_classes,
+    :backdrop_classes
+  ]
 
   @doc false
   defmacro __using__(_opts) do
@@ -2575,7 +2588,7 @@ defmodule NbInertia.Controller do
   """
   # 4-arity: All-in-one with props and options
   defmacro render_inertia_modal(conn, page_ref, props, opts)
-           when is_atom(page_ref) and is_list(props) and is_list(opts) do
+           when is_atom(page_ref) do
     quote do
       conn_value = unquote(conn)
       page_ref = unquote(page_ref)
@@ -2598,6 +2611,23 @@ defmodule NbInertia.Controller do
     end
   end
 
+  defmacro render_inertia_modal(conn, component, props, opts)
+           when is_binary(component) do
+    quote do
+      conn_value = unquote(conn)
+      component = unquote(component)
+      props = unquote(props)
+      opts = unquote(opts)
+
+      modal_props =
+        NbInertia.Controller.build_modal_props(props)
+
+      conn_value = Plug.Conn.put_private(conn_value, :inertia_modal_props, modal_props)
+
+      NbInertia.Controller.do_render_inertia_modal(conn_value, component, opts)
+    end
+  end
+
   # 3-arity: Either props-only or opts-only
   defmacro render_inertia_modal(conn, page_ref, props_or_opts) when is_atom(page_ref) do
     quote do
@@ -2605,18 +2635,16 @@ defmodule NbInertia.Controller do
       page_ref = unquote(page_ref)
       props_or_opts = unquote(props_or_opts)
 
-      # Determine if this is props or opts
-      {props, opts} =
-        if Keyword.keyword?(props_or_opts) and Keyword.has_key?(props_or_opts, :base_url) do
-          # It's opts only
-          {[], props_or_opts}
-        else
-          # It's props only
-          {props_or_opts, []}
-        end
+      {props, opts} = NbInertia.Controller.split_modal_props_and_opts(props_or_opts)
 
-      # Delegate to 4-arity version
-      NbInertia.Controller.render_inertia_modal(conn_value, page_ref, props, opts)
+      modal_props =
+        NbInertia.Controller.build_modal_props(props)
+
+      conn_value = Plug.Conn.put_private(conn_value, :inertia_modal_props, modal_props)
+
+      component = __MODULE__.page(page_ref)
+
+      NbInertia.Controller.do_render_inertia_modal(conn_value, component, opts)
     end
   end
 
@@ -2627,18 +2655,30 @@ defmodule NbInertia.Controller do
       component = unquote(component)
       props_or_opts = unquote(props_or_opts)
 
-      # Determine if this is props or opts
-      {_props, opts} =
-        if Keyword.keyword?(props_or_opts) and Keyword.has_key?(props_or_opts, :base_url) do
-          {[], props_or_opts}
-        else
-          {props_or_opts, []}
-        end
+      {props, opts} = NbInertia.Controller.split_modal_props_and_opts(props_or_opts)
 
-      # For string components, props should already be assigned via assign_prop
+      modal_props =
+        NbInertia.Controller.build_modal_props(props)
+
+      conn_value = Plug.Conn.put_private(conn_value, :inertia_modal_props, modal_props)
+
       NbInertia.Controller.do_render_inertia_modal(conn_value, component, opts)
     end
   end
+
+  @doc false
+  def split_modal_props_and_opts(props_or_opts) when is_list(props_or_opts) do
+    if Keyword.keyword?(props_or_opts) and Keyword.has_key?(props_or_opts, :base_url) do
+      {opts, props} =
+        Enum.split_with(props_or_opts, fn {key, _value} -> modal_option_key?(key) end)
+
+      {props, opts}
+    else
+      {props_or_opts, []}
+    end
+  end
+
+  def split_modal_props_and_opts(props_or_opts), do: {props_or_opts, []}
 
   @doc false
   def do_render_inertia_modal(conn, component, opts) do
@@ -2708,6 +2748,18 @@ defmodule NbInertia.Controller do
       {:close_on_click_outside, enabled}, acc ->
         NbInertia.Modal.close_on_click_outside(acc, enabled)
 
+      {:max_width, value}, acc ->
+        NbInertia.Modal.max_width(acc, value)
+
+      {:padding_classes, value}, acc ->
+        NbInertia.Modal.padding_classes(acc, value)
+
+      {:panel_classes, value}, acc ->
+        NbInertia.Modal.panel_classes(acc, value)
+
+      {:backdrop_classes, value}, acc ->
+        NbInertia.Modal.backdrop_classes(acc, value)
+
       {:base_url, _}, acc ->
         acc
 
@@ -2733,6 +2785,12 @@ defmodule NbInertia.Controller do
       # => %{contact: %{...}, organizations: [%{...}, ...]}
   """
   @spec build_modal_props(keyword()) :: map()
+  def build_modal_props(props) when is_map(props) do
+    props
+    |> Map.to_list()
+    |> build_modal_props()
+  end
+
   def build_modal_props(props) when is_list(props) do
     camelize? = NbInertia.Config.camelize_props?()
 
@@ -2744,6 +2802,8 @@ defmodule NbInertia.Controller do
     end)
     |> Map.new()
   end
+
+  defp modal_option_key?(key), do: key in @modal_option_keys
 
   defp transform_modal_prop_key({:preserve, key}, _camelize?), do: key
 

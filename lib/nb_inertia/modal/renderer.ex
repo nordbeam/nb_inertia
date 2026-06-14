@@ -234,7 +234,7 @@ defmodule NbInertia.Modal.Renderer do
     %{
       component: modal.component,
       props: props,
-      url: conn.request_path,
+      url: request_path(conn),
       baseUrl: modal.base_url,
       config: modal.config
     }
@@ -251,8 +251,15 @@ defmodule NbInertia.Modal.Renderer do
     # Keep the base page's component so the backdrop renders correctly
     base_page_data
     |> Map.put("props", updated_props)
-    |> Map.put("url", conn.request_path)
+    |> Map.put("url", request_path(conn))
   end
+
+  defp request_path(conn) do
+    IO.iodata_to_binary([conn.request_path, request_url_qs(conn.query_string)])
+  end
+
+  defp request_url_qs(""), do: ""
+  defp request_url_qs(qs), do: [??, qs]
 
   defp add_modal_headers(conn, %Modal{} = modal) do
     conn
