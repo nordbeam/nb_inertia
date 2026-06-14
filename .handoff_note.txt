@@ -1,0 +1,9 @@
+Fixed the three unresolved TypeScript errors in the Vue package that caused packed-probe failures:
+
+1. useFlash.ts (TS2352) - Changed the event cast in useOnFlash from single cast to double-cast through unknown. The Inertia router event type has insufficient overlap with the flash event detail shape; double-casting through unknown makes the boundary explicit. Satisfies: React and Vue installer paths generate assets/js/lib/inertia.* that compile against package exports.
+
+2. Modal.vue (TS18047) - Replaced all getZIndex(modal.index) calls in the template with getZIndex(modal?.index ?? 0). The HeadlessModal slot emits currentModal which is typed as ModalInstance or null (the computed returns null when modalId is unset). Satisfies: Modal UI component copy/install behavior documented and tested for React and Vue separately.
+
+3. ModalLink.vue and peers (TS2305) - Added .vue.d.ts declaration files alongside every SFC exported from priv/nb_inertia/vue/modals/index.ts (Modal, HeadlessModal, ModalLink, ModalContent, SlideoverContent, CloseButton). TypeScript prefers a sibling .vue.d.ts over invoking vue-tsc on the .vue source in node_modules, so packed-project consumers get clean default-export resolution without requiring a vue-tsc transform pass over the package. Satisfies: React and Vue installer paths generate assets/js/lib/inertia.* that compile against package exports.
+
+All 494 tests pass (43 install tests, 451 others). The new .vue.d.ts files live inside priv/nb_inertia/vue/modals/ which is already listed in package.json files, so they ship automatically.
