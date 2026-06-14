@@ -1106,34 +1106,94 @@ defmodule NbInertia.CoreController do
     |> Map.new()
   end
 
-  defp resolve_props(map, opts) when is_map(map) and not is_struct(map) do
+  defp resolve_props(value, opts) do
+    if opts[:camelize_props] do
+      {resolved, _key_cache} = do_resolve_props(value, opts, %{})
+      resolved
+    else
+      do_resolve_props(value, opts)
+    end
+  end
+
+  defp do_resolve_props(map, opts) when is_map(map) and not is_struct(map) do
     map
     |> Enum.reduce([], fn {key, value}, acc ->
-      [{transform_key(key, opts), resolve_props(value, opts)} | acc]
+      [{key, do_resolve_props(value, opts)} | acc]
     end)
     |> Map.new()
   end
 
-  defp resolve_props(list, opts) when is_list(list) do
-    Enum.map(list, &resolve_props(&1, opts))
+  defp do_resolve_props(list, opts) when is_list(list) do
+    Enum.map(list, &do_resolve_props(&1, opts))
   end
 
-  defp resolve_props({:optional, value}, opts), do: resolve_props(value, opts)
-  defp resolve_props({:keep, value}, opts), do: resolve_props(value, opts)
-  defp resolve_props({:merge, value}, opts), do: resolve_props(value, opts)
-  defp resolve_props({:prepend, value}, opts), do: resolve_props(value, opts)
-  defp resolve_props({:match_merge, {value, _}}, opts), do: resolve_props(value, opts)
-  defp resolve_props({:scroll_value, value}, opts), do: resolve_props(value, opts)
+  defp do_resolve_props({:optional, value}, opts), do: do_resolve_props(value, opts)
+  defp do_resolve_props({:keep, value}, opts), do: do_resolve_props(value, opts)
+  defp do_resolve_props({:merge, value}, opts), do: do_resolve_props(value, opts)
+  defp do_resolve_props({:prepend, value}, opts), do: do_resolve_props(value, opts)
+  defp do_resolve_props({:match_merge, {value, _}}, opts), do: do_resolve_props(value, opts)
+  defp do_resolve_props({:scroll_value, value}, opts), do: do_resolve_props(value, opts)
+  defp do_resolve_props({:raw, value}, _opts), do: value
+
+  defp do_resolve_props({:once_value, fun}, opts) when is_function(fun, 0),
+    do: do_resolve_props(fun.(), opts)
+
+  defp do_resolve_props(fun, opts) when is_function(fun, 0), do: do_resolve_props(fun.(), opts)
+  defp do_resolve_props(value, _opts), do: value
+
+  # Repeated list item maps usually share key shapes, so cache transformed keys
+  # within a single response instead of camelizing the same key for every item.
+  defp do_resolve_props(map, opts, key_cache) when is_map(map) and not is_struct(map) do
+    {entries, key_cache} =
+      Enum.reduce(map, {[], key_cache}, fn {key, value}, {entries, key_cache} ->
+        {transformed_key, key_cache} = transform_key(key, opts, key_cache)
+        {resolved_value, key_cache} = do_resolve_props(value, opts, key_cache)
+
+        {[{transformed_key, resolved_value} | entries], key_cache}
+      end)
+
+    {Map.new(entries), key_cache}
+  end
+
+  defp do_resolve_props(list, opts, key_cache) when is_list(list) do
+    {items, key_cache} =
+      Enum.reduce(list, {[], key_cache}, fn item, {items, key_cache} ->
+        {resolved_item, key_cache} = do_resolve_props(item, opts, key_cache)
+        {[resolved_item | items], key_cache}
+      end)
+
+    {Enum.reverse(items), key_cache}
+  end
+
+  defp do_resolve_props({:optional, value}, opts, key_cache),
+    do: do_resolve_props(value, opts, key_cache)
+
+  defp do_resolve_props({:keep, value}, opts, key_cache),
+    do: do_resolve_props(value, opts, key_cache)
+
+  defp do_resolve_props({:merge, value}, opts, key_cache),
+    do: do_resolve_props(value, opts, key_cache)
+
+  defp do_resolve_props({:prepend, value}, opts, key_cache),
+    do: do_resolve_props(value, opts, key_cache)
+
+  defp do_resolve_props({:match_merge, {value, _}}, opts, key_cache),
+    do: do_resolve_props(value, opts, key_cache)
+
+  defp do_resolve_props({:scroll_value, value}, opts, key_cache),
+    do: do_resolve_props(value, opts, key_cache)
 
   # Raw values from NbSerializer (raw: true fields) should NOT be camelized.
   # Return the value as-is without recursing into it.
-  defp resolve_props({:raw, value}, _opts), do: value
+  defp do_resolve_props({:raw, value}, _opts, key_cache), do: {value, key_cache}
 
-  defp resolve_props({:once_value, fun}, opts) when is_function(fun, 0),
-    do: resolve_props(fun.(), opts)
+  defp do_resolve_props({:once_value, fun}, opts, key_cache) when is_function(fun, 0),
+    do: do_resolve_props(fun.(), opts, key_cache)
 
-  defp resolve_props(fun, opts) when is_function(fun, 0), do: resolve_props(fun.(), opts)
-  defp resolve_props(value, _opts), do: value
+  defp do_resolve_props(fun, opts, key_cache) when is_function(fun, 0),
+    do: do_resolve_props(fun.(), opts, key_cache)
+
+  defp do_resolve_props(value, _opts, key_cache), do: {value, key_cache}
 
   # Applies any specified transformations to the key (such as conversion to
   # camel case), unless the key has been marked as "preserved".
@@ -1149,6 +1209,51 @@ defmodule NbInertia.CoreController do
       key
     end
   end
+
+  defp transform_key({:preserve, key}, _opts, key_cache), do: {key, key_cache}
+
+  defp transform_key(key, opts, key_cache) do
+    if opts[:camelize_props] do
+      case Map.fetch(key_cache, key) do
+        {:ok, transformed_key} ->
+          {transformed_key, key_cache}
+
+        :error ->
+          transformed_key = camelize_key(key)
+          {transformed_key, Map.put(key_cache, key, transformed_key)}
+      end
+    else
+      {key, key_cache}
+    end
+  end
+
+  defp camelize_key(key) when is_atom(key) do
+    key_string = Atom.to_string(key)
+    camelized = camelize_key_string(key_string)
+
+    if camelized == key_string do
+      key
+    else
+      String.to_atom(camelized)
+    end
+  end
+
+  defp camelize_key(key) do
+    key
+    |> to_string()
+    |> camelize_key_string()
+  end
+
+  defp camelize_key_string(<<first, _rest::binary>> = key)
+       when first in ?a..?z or first in ?0..?9 do
+    if :binary.match(key, "_") == :nomatch do
+      key
+    else
+      Phoenix.Naming.camelize(key, :lower)
+    end
+  end
+
+  defp camelize_key_string(key), do: Phoenix.Naming.camelize(key, :lower)
 
   defp atomize_if(value, true), do: String.to_atom(value)
   defp atomize_if(value, false), do: value

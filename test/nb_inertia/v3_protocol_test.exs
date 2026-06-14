@@ -73,6 +73,34 @@ defmodule NbInertia.V3ProtocolTest do
     assert page["props"]["items"] == [%{"id" => 1, "name" => "Updated"}]
   end
 
+  test "camelizes nested prop keys while honoring preserved keys" do
+    conn =
+      inertia_conn()
+      |> render_inertia("Users/Index", %{
+        user_profile: %{
+          :first_name => "Ada",
+          "alreadyCamel" => true,
+          preserve_case(:api_token) => "secret",
+          :organizations => [
+            %{display_name: "Acme", billing_plan: "team"},
+            %{display_name: "Globex", billing_plan: "enterprise"}
+          ]
+        }
+      })
+
+    page = Jason.decode!(conn.resp_body)
+    profile = page["props"]["userProfile"]
+
+    assert profile["firstName"] == "Ada"
+    assert profile["alreadyCamel"] == true
+    assert profile["api_token"] == "secret"
+
+    assert profile["organizations"] == [
+             %{"displayName" => "Acme", "billingPlan" => "team"},
+             %{"displayName" => "Globex", "billingPlan" => "enterprise"}
+           ]
+  end
+
   test "serializes scroll props with append merge behavior by default" do
     conn =
       inertia_conn()
