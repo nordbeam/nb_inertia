@@ -60,7 +60,7 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
                                       nb_vite + nb_routes + nb_serializer +
                                       nb_ts + nb_flop + React + TypeScript + SSR
         --client-framework FRAMEWORK  Framework to use for the client-side integration
-                                      (react, vue, or svelte). Default is react.
+                                      (react or vue). Default is react.
         --camelize-props              Enable camelCase for props (stored in :nb_inertia config)
         --history-encrypt             Enable history encryption (stored in :nb_inertia config)
         --typescript                  Enable TypeScript
@@ -731,10 +731,21 @@ if Code.ensure_loaded?(Igniter) do
             on_exists: :overwrite
           )
 
-        framework when framework in ["vue", "svelte"] ->
+        "vue" ->
           igniter
           |> install_client_package()
           |> maybe_create_typescript_config()
+
+        "svelte" ->
+          Igniter.add_warning(
+            igniter,
+            """
+            Svelte integration is not supported by nb_inertia.
+
+            Only --client-framework react and --client-framework vue are supported.
+            Svelte packages have not been installed. Use React or Vue instead.
+            """
+          )
 
         _ ->
           igniter
@@ -2758,13 +2769,13 @@ if Code.ensure_loaded?(Igniter) do
 
             Enhanced Inertia Components (Vue):
             - Created assets/js/lib/inertia.#{extension} with enhanced components
-            - Re-exports router, Link, and useForm from @nordbeam/nb-inertia
+            - Re-exports useForm, useFlash, and modal components from @nordbeam/nb-inertia
             - Provides automatic integration with nb_routes rich mode
             - Also re-exports all standard Inertia.js exports for convenience
 
             IMPORTANT: Import from @/lib/inertia instead of @inertiajs/vue3:
 
-              import { router, Link, useForm } from '@/lib/inertia';
+              import { useForm, useFlash, Modal, ModalLink } from '@/lib/inertia';
               import { user_path } from '@/routes';
 
               // Works seamlessly with nb_routes RouteResult objects
@@ -2773,6 +2784,27 @@ if Code.ensure_loaded?(Igniter) do
 
             This gives you enhanced functionality while maintaining full backward
             compatibility with standard Inertia.js usage.
+
+            Modal Components (Vue):
+            - Modal components are delivered via @nordbeam/nb-inertia/vue/modals (npm package)
+            - No local file copy required — components are imported directly from the package
+            - Available: Modal, HeadlessModal, ModalLink, SlideoverContent, CloseButton, createModalStack
+
+            To enable modals, set up the modal stack in your app:
+
+              import { createApp, h } from 'vue';
+              import { createInertiaApp } from '@inertiajs/vue3';
+              import { createModalStack } from '@/lib/inertia';
+
+              createInertiaApp({
+                setup({ el, App, props, plugin }) {
+                  const modalStack = createModalStack();
+                  createApp({ render: () => h(App, props) })
+                    .use(plugin)
+                    .use(modalStack)
+                    .mount(el);
+                },
+              });
             """
           else
             ""
@@ -2791,8 +2823,8 @@ if Code.ensure_loaded?(Igniter) do
       - Updated root layout for Inertia.js
       #{bundler_info}
       - Package manager: #{pkg_manager}#{config_info}
-      - Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}
-      - Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{if client_framework == "react", do: "\n- Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)", else: ""}#{full_stack_info}#{typescript_info}#{flop_info}#{lib_inertia_info}#{ssr_info}
+      #{if client_framework in ["react", "vue"], do: "- Installed #{client_framework} client packages#{if typescript, do: " with TypeScript", else: ""}", else: ""}
+      #{if client_framework == "react", do: "- Created sample page component at assets/js/pages/Home.#{if typescript, do: "tsx", else: "jsx"}", else: ""}#{if client_framework in ["react", "vue"], do: "\n- Created assets/js/lib/inertia.#{if typescript, do: "ts", else: "js"} with enhanced components", else: ""}#{if client_framework == "react", do: "\n- Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)", else: ""}#{if client_framework == "vue", do: "\n- Modal components available via @nordbeam/nb-inertia/vue/modals (no file copy needed)", else: ""}#{full_stack_info}#{typescript_info}#{flop_info}#{lib_inertia_info}#{ssr_info}
 
       Next steps:
       1. Create a controller action that renders a declared page:

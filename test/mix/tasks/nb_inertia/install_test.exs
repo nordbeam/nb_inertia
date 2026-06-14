@@ -4,6 +4,10 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   alias Mix.Tasks.NbInertia.Install
   import Igniter.Test, only: [apply_igniter!: 1, test_project: 1]
 
+  defp put_options(igniter, options) do
+    %{igniter | args: %{igniter.args | options: Keyword.merge(igniter.args.options, options)}}
+  end
+
   describe "info/2" do
     test "declares optional deps and composed installers for requested integrations" do
       info = Install.info(["--typescript", "--with-flop", "--table"], nil)
@@ -234,6 +238,228 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert transformed =~ ~s(input: "js/ssr_prod.tsx")
       assert transformed =~ "entryPoint: './js/ssr.tsx'"
       assert transformed =~ "nodePrefixPlugin()"
+    end
+  end
+
+  describe "create_lib_inertia/1" do
+    test "React + TypeScript generates assets/js/lib/inertia.ts with nb-inertia/react exports" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "react", typescript: true)
+        |> Install.create_lib_inertia()
+        |> apply_igniter!()
+
+      files = igniter.assigns.test_files
+
+      assert lib_ts = files["assets/js/lib/inertia.ts"]
+      assert lib_ts =~ "@nordbeam/nb-inertia/react/useForm"
+      assert lib_ts =~ "@nordbeam/nb-inertia/react/useFlash"
+      assert lib_ts =~ "@nordbeam/nb-inertia/react/modals"
+      assert lib_ts =~ "export * from '@inertiajs/react'"
+      refute Map.has_key?(files, "assets/js/lib/inertia.js")
+    end
+
+    test "React without TypeScript generates assets/js/lib/inertia.js" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "react", typescript: false)
+        |> Install.create_lib_inertia()
+        |> apply_igniter!()
+
+      files = igniter.assigns.test_files
+
+      assert Map.has_key?(files, "assets/js/lib/inertia.js")
+      refute Map.has_key?(files, "assets/js/lib/inertia.ts")
+    end
+
+    test "Vue + TypeScript generates assets/js/lib/inertia.ts with nb-inertia/vue exports" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "vue", typescript: true)
+        |> Install.create_lib_inertia()
+        |> apply_igniter!()
+
+      files = igniter.assigns.test_files
+
+      assert lib_ts = files["assets/js/lib/inertia.ts"]
+      assert lib_ts =~ "@nordbeam/nb-inertia/vue/useForm"
+      assert lib_ts =~ "@nordbeam/nb-inertia/vue/useFlash"
+      assert lib_ts =~ "@nordbeam/nb-inertia/vue/modals"
+      assert lib_ts =~ "export * from '@inertiajs/vue3'"
+      refute Map.has_key?(files, "assets/js/lib/inertia.js")
+    end
+
+    test "Vue without TypeScript generates assets/js/lib/inertia.js" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "vue", typescript: false)
+        |> Install.create_lib_inertia()
+        |> apply_igniter!()
+
+      files = igniter.assigns.test_files
+
+      assert Map.has_key?(files, "assets/js/lib/inertia.js")
+      refute Map.has_key?(files, "assets/js/lib/inertia.ts")
+    end
+
+    test "unsupported framework creates no lib/inertia file" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "svelte", typescript: true)
+        |> Install.create_lib_inertia()
+        |> apply_igniter!()
+
+      files = igniter.assigns.test_files
+
+      refute Map.has_key?(files, "assets/js/lib/inertia.ts")
+      refute Map.has_key?(files, "assets/js/lib/inertia.js")
+    end
+  end
+
+  describe "copy_modal_components/1" do
+    test "React copies ModalStackRenderer and index to assets/js/components/modals/" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "react", typescript: true)
+        |> Install.copy_modal_components()
+        |> apply_igniter!()
+
+      files = igniter.assigns.test_files
+
+      assert Map.has_key?(files, "assets/js/components/modals/ModalStackRenderer.tsx")
+      assert Map.has_key?(files, "assets/js/components/modals/index.ts")
+    end
+
+    test "Vue does not copy local modal files — modals come from the npm package" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "vue", typescript: true)
+        |> Install.copy_modal_components()
+        |> apply_igniter!()
+
+      files = igniter.assigns.test_files
+
+      refute Enum.any?(Map.keys(files), &String.contains?(&1, "modals/ModalStackRenderer"))
+    end
+  end
+
+  describe "lib/inertia template content" do
+    test "React template exports all named modal components from nb-inertia/react/modals" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "ModalStackProvider"
+      assert source =~ "InitialModalHandler"
+      assert source =~ "ModalLink"
+      assert source =~ "HeadlessModal"
+      assert source =~ "from '@nordbeam/nb-inertia/react/modals'"
+    end
+
+    test "Vue template exports modal components from nb-inertia/vue/modals" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "createModalStack"
+      assert source =~ "useModalStack"
+      assert source =~ "from '@nordbeam/nb-inertia/vue/modals'"
+    end
+
+    test "React template exports from @inertiajs/react not @inertiajs/vue3" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "export * from '@inertiajs/react'"
+    end
+
+    test "Vue template exports from @inertiajs/vue3 not @inertiajs/react" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "export * from '@inertiajs/vue3'"
+    end
+  end
+
+  describe "SSR entry templates" do
+    test "SSR dev template uses createInertiaApp from @/lib/inertia" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ ~s(import { createInertiaApp } from "@/lib/inertia";)
+      assert source =~ "ReactDOMServer.renderToString"
+      assert source =~ "export async function render(page"
+    end
+
+    test "SSR prod template uses eager glob for Deno compatibility" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ ~S|import.meta.glob<PageModule>("./pages/**/*.tsx", { eager: true })|
+      assert source =~ "return pages[pagePath].default"
+    end
+
+    test "SSR healthcheck guard is present in both dev and prod templates" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ ~s(page?.component === "__nb_inertia_healthcheck__")
+    end
+  end
+
+  describe "Svelte not advertised" do
+    test "installer docs do not list svelte as a supported framework" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      refute source =~ "(react, vue, or svelte)"
+      assert source =~ "(react or vue)"
+    end
+
+    test "svelte framework option triggers a warning, not a silent partial install" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "Svelte integration is not supported by nb_inertia"
+    end
+  end
+
+  describe "no removed Page APIs in installer output" do
+    test "next-steps controller example uses inertia_page DSL and render_inertia_page" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "inertia_page :home do"
+      assert source =~ "render_inertia_page(conn, :home,"
+      refute source =~ "NbInertia.Page"
+      refute source =~ "use NbInertia.Page"
+    end
+
+    test "Vue next-steps mention modal components via the npm package, not file copy" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "Modal components are delivered via @nordbeam/nb-inertia/vue/modals"
+      assert source =~ "No local file copy required"
+      assert source =~ "createModalStack"
+    end
+
+    test "React next-steps mention copying modal UI components" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)"
+      assert source =~ "Modal Components (shadcn/ui)"
     end
   end
 
