@@ -1204,10 +1204,7 @@ defmodule NbInertia.CoreController do
 
   defp transform_key(key, opts) do
     if opts[:camelize_props] do
-      key
-      |> to_string()
-      |> Phoenix.Naming.camelize(:lower)
-      |> atomize_if(is_atom(key))
+      camelize_prop_key(key)
     else
       key
     end
@@ -1222,7 +1219,7 @@ defmodule NbInertia.CoreController do
           {transformed_key, key_cache}
 
         :error ->
-          transformed_key = camelize_key(key)
+          transformed_key = transform_key(key, opts)
           {transformed_key, Map.put(key_cache, key, transformed_key)}
       end
     else
@@ -1230,36 +1227,36 @@ defmodule NbInertia.CoreController do
     end
   end
 
-  defp camelize_key(key) when is_atom(key) do
+  defp camelize_prop_key(key) when is_atom(key) do
     key_string = Atom.to_string(key)
-    camelized = camelize_key_string(key_string)
 
-    if camelized == key_string do
+    if camelize_noop?(key_string) do
       key
     else
-      String.to_atom(camelized)
+      key_string
+      |> Phoenix.Naming.camelize(:lower)
+      |> String.to_atom()
     end
   end
 
-  defp camelize_key(key) do
-    key
-    |> to_string()
-    |> camelize_key_string()
+  defp camelize_prop_key(key) do
+    key_string = to_string(key)
+
+    if camelize_noop?(key_string) do
+      key_string
+    else
+      Phoenix.Naming.camelize(key_string, :lower)
+    end
   end
 
-  defp camelize_key_string(<<first, _rest::binary>> = key)
+  # Phoenix.Naming.camelize(:lower) leaves lower/digit-leading keys unchanged
+  # unless they contain separators it normalizes.
+  defp camelize_noop?(<<first, _rest::binary>> = key)
        when first in ?a..?z or first in ?0..?9 do
-    if :binary.match(key, "_") == :nomatch do
-      key
-    else
-      Phoenix.Naming.camelize(key, :lower)
-    end
+    :binary.match(key, "_") == :nomatch and :binary.match(key, "/") == :nomatch
   end
 
-  defp camelize_key_string(key), do: Phoenix.Naming.camelize(key, :lower)
-
-  defp atomize_if(value, true), do: String.to_atom(value)
-  defp atomize_if(value, false), do: value
+  defp camelize_noop?(_key), do: false
 
   # Flash is now a top-level field in the Inertia response (not inside props).
   # This function is kept for backward compatibility but is now a no-op.

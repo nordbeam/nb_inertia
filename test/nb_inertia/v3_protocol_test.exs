@@ -101,6 +101,36 @@ defmodule NbInertia.V3ProtocolTest do
            ]
   end
 
+  test "camelizes slash-delimited string and atom keys with Phoenix.Naming semantics" do
+    conn =
+      inertia_conn()
+      |> render_inertia("Api/Show", %{
+        "api/token" => 1,
+        :"user/profile" => %{
+          "api/token" => 2,
+          :"account/id" => 3
+        },
+        records: [
+          %{"api/token" => "first"},
+          %{"api/token" => "second"}
+        ]
+      })
+
+    page = Jason.decode!(conn.resp_body)
+    props = page["props"]
+
+    assert props["api.Token"] == 1
+    refute Map.has_key?(props, "api/token")
+
+    assert props["user.Profile"]["api.Token"] == 2
+    assert props["user.Profile"]["account.Id"] == 3
+
+    assert props["records"] == [
+             %{"api.Token" => "first"},
+             %{"api.Token" => "second"}
+           ]
+  end
+
   test "unwraps preserved prop keys when camelization is disabled" do
     conn =
       inertia_conn()
