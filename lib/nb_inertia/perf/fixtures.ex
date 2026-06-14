@@ -4,6 +4,16 @@ defmodule NbInertia.Perf.Fixtures.Item do
   defstruct [:id, :name, :metadata, :children]
 end
 
+defimpl NbInertia.PropSerializer, for: NbInertia.Perf.Fixtures.Item do
+  @moduledoc false
+
+  def serialize(%NbInertia.Perf.Fixtures.Item{} = item, opts) do
+    item
+    |> Map.from_struct()
+    |> NbInertia.PropSerializer.serialize(opts)
+  end
+end
+
 defmodule NbInertia.Perf.Fixtures.SharedProps do
   @moduledoc false
 
