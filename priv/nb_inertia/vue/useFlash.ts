@@ -1,6 +1,5 @@
 import { router } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import type { PageWithFlash } from '../shared/types';
 import { usePage } from './usePage';
 
 /**
@@ -63,11 +62,11 @@ export interface UseFlashResult<T extends FlashData = FlashData> {
  * ```
  */
 export function useFlash<T extends FlashData = FlashData>(): UseFlashResult<T> {
-  const page = usePage() as PageWithFlash<Record<string, unknown>>;
+  const page = usePage();
 
   // Computed flash data
   const flash = computed(() => {
-    return (page.flash ?? {}) as T;
+    return (page.flash ?? {}) as unknown as T;
   });
 
   // Check if a key exists and has a truthy value
@@ -139,7 +138,7 @@ export function useOnFlash<T extends FlashData = FlashData>(
 
   onMounted(() => {
     removeListener.value = router.on('flash', (event) => {
-      const detail = (event as { detail: FlashEventDetail<T> }).detail;
+      const detail = (event as unknown as { detail: FlashEventDetail<T> }).detail;
       callback(detail.flash);
     });
   });
