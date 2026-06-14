@@ -316,6 +316,25 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     end
   end
 
+  describe "Vue modal dependency installation" do
+    test "Vue install command includes radix-vue for modal components" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "vue", typescript: true)
+        |> Install.setup_client()
+
+      cmd_tasks = Enum.filter(igniter.tasks, fn
+        {"cmd", _} -> true
+        {"cmd", _, _} -> true
+        _ -> false
+      end)
+
+      assert Enum.any?(cmd_tasks, fn {"cmd", [cmd | _]} ->
+        String.contains?(cmd, "radix-vue")
+      end)
+    end
+  end
+
   describe "copy_modal_components/1" do
     test "React copies ModalStackRenderer and index to assets/js/components/modals/" do
       igniter =
@@ -381,6 +400,23 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
       assert source =~ "export * from '@inertiajs/vue3'"
     end
+
+    test "Vue template re-exports Head as default alias to match package export shape" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "export { default as Head } from '@nordbeam/nb-inertia/vue/Head'"
+      refute source =~ "export { Head } from '@nordbeam/nb-inertia/vue/Head'"
+    end
+
+    test "Vue template documents radix-vue as auto-installed modal dependency" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "radix-vue is installed automatically"
+    end
   end
 
   describe "SSR entry templates" do
@@ -428,6 +464,19 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         |> File.read!()
 
       assert source =~ "Svelte integration is not supported by nb_inertia"
+    end
+
+    test "setup_client with svelte queues no cmd tasks" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "svelte", typescript: true)
+        |> Install.setup_client()
+
+      refute Enum.any?(igniter.tasks, fn
+               {"cmd", _} -> true
+               {"cmd", _, _} -> true
+               _ -> false
+             end)
     end
   end
 

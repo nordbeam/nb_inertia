@@ -955,23 +955,9 @@ if Code.ensure_loaded?(Igniter) do
           "@inertiajs/vue3@^3.0.3",
           nb_inertia_source,
           "vue@^3.0.0",
-          "vue-loader"
+          "vue-loader",
+          "radix-vue@^1.9.0"
         ])
-
-      Igniter.add_task(igniter, "cmd", [install_cmd])
-    end
-
-    defp install_client_main_packages(igniter, "svelte") do
-      pkg_manager = get_package_manager_command(igniter)
-      assets_dir = "assets"
-
-      install_cmd =
-        case pkg_manager do
-          "bun" -> "bun add --cwd #{assets_dir} @inertiajs/svelte svelte"
-          "pnpm" -> "pnpm add --dir #{assets_dir} @inertiajs/svelte svelte"
-          "yarn" -> "yarn --cwd #{assets_dir} add @inertiajs/svelte svelte"
-          _ -> "npm install --prefix #{assets_dir} @inertiajs/svelte svelte"
-        end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
     end
@@ -1019,21 +1005,6 @@ if Code.ensure_loaded?(Igniter) do
           pkg_manager,
           assets_dir,
           ["@vue/compiler-sfc", "vue-tsc", "typescript"],
-          dev: true
-        )
-
-      Igniter.add_task(igniter, "cmd", [install_cmd])
-    end
-
-    defp maybe_install_typescript_deps(igniter, "svelte", true) do
-      pkg_manager = get_package_manager_command(igniter)
-      assets_dir = "assets"
-
-      install_cmd =
-        package_manager_install_command(
-          pkg_manager,
-          assets_dir,
-          ["svelte-loader", "svelte-preprocess", "typescript"],
           dev: true
         )
 
@@ -2534,7 +2505,7 @@ if Code.ensure_loaded?(Igniter) do
       export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
       export { useHttp } from '@nordbeam/nb-inertia/vue/useHttp';
       export { usePage } from '@nordbeam/nb-inertia/vue/usePage';
-      export { Head } from '@nordbeam/nb-inertia/vue/Head';
+      export { default as Head } from '@nordbeam/nb-inertia/vue/Head';
 
       // Flash data composables
       export { useFlash } from '@nordbeam/nb-inertia/vue/useFlash';
@@ -2789,6 +2760,7 @@ if Code.ensure_loaded?(Igniter) do
             - Modal components are delivered via @nordbeam/nb-inertia/vue/modals (npm package)
             - No local file copy required — components are imported directly from the package
             - Available: Modal, HeadlessModal, ModalLink, SlideoverContent, CloseButton, createModalStack
+            - radix-vue is installed automatically as a peer dependency (required by modal components)
 
             To enable modals, set up the modal stack in your app:
 

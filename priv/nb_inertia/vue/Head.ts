@@ -48,10 +48,11 @@ export default defineComponent({
         return null;
       }
 
+      const slot = slots.default;
       return h(
         InertiaHead,
         { title: props.title },
-        slots.default ? { default: () => slots.default() as VNodeChild[] } : undefined
+        slot ? { default: () => slot() as VNodeChild[] } : undefined
       );
     };
   },
