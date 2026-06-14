@@ -106,8 +106,8 @@
       "types": "./priv/nb_inertia/vue/useHttp.ts"
     },
     "./vue/modals": {
-      "import": "./dist/vue/modals/index.js",
-      "types": "./priv/nb_inertia/vue/modals/index.d.ts"
+      "types": "./priv/nb_inertia/vue/modals/index.d.ts",
+      "import": "./dist/vue/modals/index.js"
     }
   },
   "files": [

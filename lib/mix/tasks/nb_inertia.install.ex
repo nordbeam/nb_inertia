@@ -1126,7 +1126,6 @@ if Code.ensure_loaded?(Igniter) do
           "allowJs": true,
           "forceConsistentCasingInFileNames": true,
           "esModuleInterop": true,
-          "baseUrl": ".",
           "paths": {
             "@/types": ["./js/types/index"],
             "@/types/*": ["./js/types/*"],

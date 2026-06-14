@@ -8,6 +8,80 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     %{igniter | args: %{igniter.args | options: Keyword.merge(igniter.args.options, options)}}
   end
 
+  defp project_root do
+    Path.expand("../../../../", __DIR__)
+  end
+
+  defp generated_installer_assets!(client_framework) do
+    test_project(app_name: :sample)
+    |> put_options(client_framework: client_framework, typescript: true)
+    |> Install.setup_client()
+    |> Install.create_lib_inertia()
+    |> apply_igniter!()
+    |> then(& &1.assigns.test_files)
+  end
+
+  defp run_command!(command, args, opts) do
+    {output, status} =
+      System.cmd(command, args, Keyword.merge([stderr_to_stdout: true], opts))
+
+    assert status == 0, """
+    expected #{Enum.join([command | args], " ")} to exit successfully
+
+    Output:
+    #{output}
+    """
+
+    output
+  end
+
+  defp npm_pack!(tmp_dir) do
+    output =
+      run_command!("npm", ["pack", "--silent", "--pack-destination", tmp_dir], cd: project_root())
+
+    Path.join(tmp_dir, String.trim(output))
+  end
+
+  defp assert_generated_barrel_compiles!(
+         tmp_dir,
+         package_tarball,
+         client_framework,
+         deps,
+         checker
+       ) do
+    files = generated_installer_assets!(client_framework)
+    assets_dir = Path.join([tmp_dir, client_framework, "assets"])
+
+    File.mkdir_p!(Path.join([assets_dir, "js", "lib"]))
+
+    File.write!(
+      Path.join([assets_dir, "js", "lib", "inertia.ts"]),
+      files["assets/js/lib/inertia.ts"]
+    )
+
+    File.write!(Path.join(assets_dir, "tsconfig.json"), files["assets/tsconfig.json"])
+
+    run_command!("npm", ["init", "-y"], cd: assets_dir)
+
+    run_command!(
+      "npm",
+      [
+        "install",
+        "--silent",
+        "--no-audit",
+        "--fund=false",
+        "--package-lock=false",
+        package_tarball
+        | deps
+      ],
+      cd: assets_dir
+    )
+
+    run_command!("npx", ["--no-install", checker, "--noEmit", "--pretty", "false"],
+      cd: assets_dir
+    )
+  end
+
   describe "info/2" do
     test "declares optional deps and composed installers for requested integrations" do
       info = Install.info(["--typescript", "--with-flop", "--table"], nil)
@@ -323,15 +397,16 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         |> put_options(client_framework: "vue", typescript: true)
         |> Install.setup_client()
 
-      cmd_tasks = Enum.filter(igniter.tasks, fn
-        {"cmd", _} -> true
-        {"cmd", _, _} -> true
-        _ -> false
-      end)
+      cmd_tasks =
+        Enum.filter(igniter.tasks, fn
+          {"cmd", _} -> true
+          {"cmd", _, _} -> true
+          _ -> false
+        end)
 
       assert Enum.any?(cmd_tasks, fn {"cmd", [cmd | _]} ->
-        String.contains?(cmd, "radix-vue")
-      end)
+               String.contains?(cmd, "radix-vue")
+             end)
     end
   end
 
@@ -507,7 +582,9 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
         |> File.read!()
 
-      assert source =~ "Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)"
+      assert source =~
+               "Copied modal UI components to assets/js/components/modals/ (shadcn/ui based)"
+
       assert source =~ "Modal Components (shadcn/ui)"
     end
   end
@@ -532,6 +609,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       |> File.read!()
 
     assert source =~ ~s("types": ["vite/client"])
+    refute source =~ ~s("baseUrl": ".")
     assert source =~ ~s("js/app.tsx")
     refute source =~ ~s("include": ["js/**/*.ts", "js/**/*.tsx", "js/**/*.js", "js/**/*.jsx"])
     assert source =~ ~s("@/types": ["./js/types/index"])
@@ -593,6 +671,15 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   end
 
   describe "vue/modals npm package export type compatibility" do
+    test "package.json ./vue/modals lists the types condition before the runtime import" do
+      package_json =
+        Path.expand("../../../../package.json", __DIR__)
+        |> File.read!()
+
+      assert package_json =~
+               ~r/"\.\/vue\/modals":\s*\{\s*"types":\s*"[^"]+index\.d\.ts",\s*"import":\s*"[^"]+index\.js"\s*\}/s
+    end
+
     test "package.json ./vue/modals types entry points to a .d.ts file, not raw .ts source" do
       package_json =
         Path.expand("../../../../package.json", __DIR__)
@@ -652,6 +739,63 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
       refute index_dts =~ "from './HeadlessModal.vue'"
       refute index_dts =~ "from './ModalLink.vue'"
+    end
+  end
+
+  describe "packed TypeScript installer smoke tests" do
+    @tag timeout: 180_000
+    test "generated React and Vue lib/inertia barrels compile against packed package exports" do
+      assert System.find_executable("npm") != nil,
+             "npm is required for packed installer smoke tests"
+
+      assert System.find_executable("npx") != nil,
+             "npx is required for packed installer smoke tests"
+
+      tmp_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "nb_inertia_installer_smoke_#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(tmp_dir)
+
+      on_exit(fn -> File.rm_rf(tmp_dir) end)
+
+      package_tarball = npm_pack!(tmp_dir)
+
+      assert_generated_barrel_compiles!(
+        tmp_dir,
+        package_tarball,
+        "react",
+        [
+          "@inertiajs/react@^3.0.3",
+          "react@^19.0.0",
+          "react-dom@^19.0.0",
+          "@radix-ui/react-visually-hidden",
+          "@types/react",
+          "@types/react-dom",
+          "typescript",
+          "vite"
+        ],
+        "tsc"
+      )
+
+      assert_generated_barrel_compiles!(
+        tmp_dir,
+        package_tarball,
+        "vue",
+        [
+          "@inertiajs/vue3@^3.0.3",
+          "vue@^3.0.0",
+          "vue-loader",
+          "radix-vue@^1.9.0",
+          "@vue/compiler-sfc",
+          "vue-tsc",
+          "typescript",
+          "vite"
+        ],
+        "vue-tsc"
+      )
     end
   end
 
