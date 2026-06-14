@@ -132,7 +132,7 @@ defmodule NbInertia.ControllerRenderApiTest do
       end
     end
 
-    defmodule SerializedPageController do
+    defmodule SerializedScreenController do
       use NbInertia.Controller
 
       inertia_page :users_index do
@@ -321,7 +321,7 @@ defmodule NbInertia.ControllerRenderApiTest do
     test "pipe-friendly atom page render validates previously assigned serialized props" do
       props =
         inertia_conn()
-        |> __MODULE__.SerializedPageController.index()
+        |> __MODULE__.SerializedScreenController.index()
         |> page_props()
 
       assert props["users"] == [%{"id" => 1, "name" => "Ada"}]

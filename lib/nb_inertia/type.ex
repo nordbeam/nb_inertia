@@ -2,8 +2,8 @@ defmodule NbInertia.Type do
   @moduledoc """
   Elixir-native type helpers for `NbInertia` props and `form_inputs`.
 
-  These helpers are imported automatically by `use NbInertia.Controller` and
-  `use NbInertia.Page`. They compile down to plain Elixir tuples so the DSL
+  These helpers are imported automatically by `use NbInertia.Controller`.
+  They compile down to plain Elixir tuples so the DSL
   stays inspectable at macro expansion time.
 
   Prefer these helpers for common shapes and keep `~TS` as an escape hatch for

@@ -81,57 +81,36 @@ defmodule NbInertia.SigilTest do
     end
   end
 
-  describe "sigils in Page module context" do
-    defmodule SigilPage do
-      use NbInertia.Page, component: "Test/Sigil"
+  defmodule SnippetContainer do
+    import NbInertia.Sigil
 
-      prop(:name, :string)
-
-      def mount(_conn, _params) do
-        %{name: "test"}
-      end
-
-      def render do
-        ~TSX"""
-        export default function SigilTest({ name }: Props) {
-          return <h1>{name}</h1>
-        }
-        """
-      end
+    def tsx_snippet do
+      ~TSX"""
+      export default function SigilTest({ name }: Props) {
+        return <h1>{name}</h1>
+      }
+      """
     end
 
-    defmodule JsxSigilPage do
-      use NbInertia.Page, component: "Test/JsxSigil"
-
-      prop(:name, :string)
-
-      def mount(_conn, _params) do
-        %{name: "test"}
-      end
-
-      def render do
-        ~JSX"""
-        export default function JsxTest({ name }) {
-          return <h1>{name}</h1>
-        }
-        """
-      end
+    def jsx_snippet do
+      ~JSX"""
+      export default function JsxTest({ name }) {
+        return <h1>{name}</h1>
+      }
+      """
     end
+  end
 
-    test "~TSX works inside render/0 in a Page module" do
-      result = SigilPage.render()
+  describe "sigils in module functions" do
+    test "~TSX works in a regular function" do
+      result = SnippetContainer.tsx_snippet()
       assert result =~ "export default function SigilTest"
       assert result =~ "{name}"
     end
 
-    test "~JSX works inside render/0 in a Page module" do
-      result = JsxSigilPage.render()
+    test "~JSX works in a regular function" do
+      result = SnippetContainer.jsx_snippet()
       assert result =~ "export default function JsxTest"
-    end
-
-    test "Page module with render/0 reports __inertia_has_render__ as true" do
-      assert SigilPage.__inertia_has_render__() == true
-      assert JsxSigilPage.__inertia_has_render__() == true
     end
   end
 end

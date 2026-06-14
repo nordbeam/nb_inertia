@@ -67,7 +67,6 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
         --ssr                         Enable Server-Side Rendering (SSR) support
         --with-flop                   Install nb_flop for pagination, sorting, and filtering
         --table                       Generate sample Table DSL module (requires --with-flop)
-        --pages                       Enable Page module support (NbInertia.Page)
         --yes                         Don't prompt for confirmations
 
     ## Examples
@@ -94,8 +93,6 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     # Install with Flop and sample Table DSL
     mix nb_inertia.install --client-framework react --typescript --with-flop --table
 
-    # Install with Page module support (NbInertia.Page)
-    mix nb_inertia.install --client-framework react --typescript --pages
     ```
 
     ## Using with nb_vite
@@ -140,15 +137,13 @@ if Code.ensure_loaded?(Igniter) do
       ssr: :boolean,
       with_flop: :boolean,
       table: :boolean,
-      pages: :boolean,
       yes: :boolean
     ]
     @defaults [
       full: false,
       client_framework: "react",
       with_flop: false,
-      table: false,
-      pages: false
+      table: false
     ]
     @full_defaults [
       client_framework: "react",
@@ -187,6 +182,7 @@ if Code.ensure_loaded?(Igniter) do
       |> setup_controller_helpers()
       |> setup_html_helpers()
       |> setup_router()
+      |> update_home_route()
       |> add_inertia_config()
       |> create_modal_config()
       |> update_root_layout()
@@ -201,7 +197,6 @@ if Code.ensure_loaded?(Igniter) do
       |> create_lib_inertia()
       |> maybe_update_inertia_imports()
       |> copy_modal_components()
-      |> maybe_setup_pages()
       |> print_next_steps()
     end
 
@@ -443,6 +438,42 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
+    def update_home_route(igniter) do
+      web_module = Igniter.Libs.Phoenix.web_module(igniter)
+      router_module = Module.concat(web_module, Router)
+
+      case Igniter.Project.Module.find_module(igniter, router_module) do
+        {:ok, {igniter, _source, _zipper}} ->
+          router_path = Igniter.Project.Module.proper_location(igniter, router_module)
+
+          igniter
+          |> Igniter.include_existing_file(router_path)
+          |> Igniter.update_file(router_path, fn source ->
+            Rewrite.Source.update(source, :content, fn
+              content when is_binary(content) ->
+                String.replace(content, stock_home_route(), "get \"/\", HomeController, :home",
+                  global: false
+                )
+
+              content ->
+                content
+            end)
+          end)
+
+        {:error, igniter} ->
+          igniter
+      end
+    end
+
+    defp stock_home_route, do: "get \"/\", " <> "Page" <> "Controller, :home"
+
+    defp stock_controller_module(web_module),
+      do: "defmodule #{inspect(web_module)}." <> "Page" <> "Controller do"
+
+    defp home_controller_module(web_module),
+      do: "defmodule #{inspect(web_module)}.HomeController do"
+
+    @doc false
     def setup_router(igniter) do
       full? = igniter.args.options[:full] || false
 
@@ -458,7 +489,7 @@ if Code.ensure_loaded?(Igniter) do
           )
           |> Igniter.Libs.Phoenix.append_to_scope(
             "/",
-            "post \"/contact\", PageController, :contact",
+            "post \"/contact\", HomeController, :contact",
             arg2: Igniter.Libs.Phoenix.web_module(igniter),
             with_pipelines: [:browser]
           )
@@ -2063,7 +2094,7 @@ if Code.ensure_loaded?(Igniter) do
             <div style={{ marginTop: "2rem", padding: "1rem", background: "#f0f0f0", borderRadius: "0.5rem" }}>
               <h3>Example Controller</h3>
               <pre style={{ background: "white", padding: "1rem", borderRadius: "0.25rem", overflow: "auto" }}>
-                {`defmodule MyAppWeb.PageController do
+                {`defmodule MyAppWeb.HomeController do
         use MyAppWeb, :controller
 
         inertia_page :home do
@@ -2086,7 +2117,7 @@ if Code.ensure_loaded?(Igniter) do
 
     @doc false
     def update_page_controller(igniter) do
-      # Rewrite the PageController so the sample Home page renders through NbInertia.
+      # Rewrite the generated sample controller so the Home page renders through NbInertia.
       # With `--full`, overwrite the whole controller with a demo that exercises every nb_* package.
       full? = igniter.args.options[:full] || false
       web_module = Igniter.Libs.Phoenix.web_module(igniter)
@@ -2120,6 +2151,9 @@ if Code.ensure_loaded?(Igniter) do
               content when is_binary(content) ->
                 if String.contains?(content, "render_inertia") do
                   content
+                  |> String.replace(
+                    stock_controller_module(web_module),
+                    home_controller_module(web_module), global: false)
                 else
                   String.replace(
                     content,
@@ -2127,6 +2161,9 @@ if Code.ensure_loaded?(Igniter) do
                     basic_home_action_body(),
                     global: false
                   )
+                  |> String.replace(
+                    stock_controller_module(web_module),
+                    home_controller_module(web_module), global: false)
                 end
 
               content ->
@@ -2152,7 +2189,7 @@ if Code.ensure_loaded?(Igniter) do
       web = inspect(web_module)
 
       """
-      defmodule #{web}.PageController do
+      defmodule #{web}.HomeController do
         use #{web}, :controller
         use NbInertia.Plugs.Precognition
 
@@ -2491,332 +2528,6 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    # ── Page module setup (--pages) ──────────────────────────────────────────
-
-    @doc false
-    def maybe_setup_pages(igniter) do
-      pages_enabled = igniter.args.options[:pages] || false
-
-      if pages_enabled do
-        igniter
-        |> add_router_import()
-        |> create_sample_page_module()
-        |> add_sample_inertia_route()
-        |> add_nb_inertia_to_gitignore()
-        |> add_extractor_compiler()
-        |> add_pages_config()
-        |> maybe_add_vite_nb_inertia_plugin()
-        |> print_pages_hints()
-      else
-        igniter
-      end
-    end
-
-    defp add_router_import(igniter) do
-      web_module = Igniter.Libs.Phoenix.web_module(igniter)
-      router_module = Module.concat(web_module, Router)
-
-      case Igniter.Project.Module.find_module(igniter, router_module) do
-        {:ok, {igniter, _source, _zipper}} ->
-          Igniter.Project.Module.find_and_update_module!(igniter, router_module, fn zipper ->
-            import_code = "import NbInertia.Router"
-
-            # Check if already imported
-            source = Sourceror.Zipper.root(zipper) |> Sourceror.to_string()
-
-            if String.contains?(source, "import NbInertia.Router") do
-              {:ok, zipper}
-            else
-              # Add after the use Phoenix.Router or use MyAppWeb, :router line
-              case Igniter.Code.Common.move_to(zipper, fn node ->
-                     Igniter.Code.Function.function_call?(node, :use)
-                   end) do
-                {:ok, zipper} ->
-                  {:ok, Igniter.Code.Common.add_code(zipper, import_code)}
-
-                _ ->
-                  {:ok, Igniter.Code.Common.add_code(zipper, import_code)}
-              end
-            end
-          end)
-
-        {:error, igniter} ->
-          Igniter.add_warning(
-            igniter,
-            """
-            Could not find router module #{inspect(router_module)}.
-            You may need to manually add `import NbInertia.Router` to your router.
-            """
-          )
-      end
-    end
-
-    defp create_sample_page_module(igniter) do
-      web_module = Igniter.Libs.Phoenix.web_module(igniter)
-      page_module = Module.concat([web_module, HomePage, Index])
-
-      page_dir =
-        Path.join([
-          "lib",
-          web_dir(igniter),
-          "inertia",
-          "home_page"
-        ])
-
-      page_path = Path.join(page_dir, "index.ex")
-
-      page_content = """
-      defmodule #{inspect(page_module)} do
-        use NbInertia.Page
-
-        prop :greeting, :string
-
-        def mount(_conn, _params) do
-          %{greeting: "Welcome to your new Inertia.js app with Page modules!"}
-        end
-      end
-      """
-
-      Igniter.create_new_file(igniter, page_path, page_content, on_exists: :skip)
-    end
-
-    defp add_sample_inertia_route(igniter) do
-      web_module = Igniter.Libs.Phoenix.web_module(igniter)
-      router_module = Module.concat(web_module, Router)
-
-      case Igniter.Project.Module.find_module(igniter, router_module) do
-        {:ok, {igniter, _source, _zipper}} ->
-          # Add inertia route to the router using source-level update
-          igniter
-          |> Igniter.include_existing_file(
-            Igniter.Project.Module.proper_location(igniter, router_module)
-          )
-          |> Igniter.update_file(
-            Igniter.Project.Module.proper_location(igniter, router_module),
-            fn source ->
-              Rewrite.Source.update(source, :content, fn
-                content when is_binary(content) ->
-                  if String.contains?(content, "inertia \"/\"") do
-                    # Already has an inertia route for root
-                    content
-                  else
-                    # Try to add after existing get "/" route, or at the end of a scope
-                    cond do
-                      String.contains?(content, "get \"/\", PageController, :home") ->
-                        # Replace the old controller route with the inertia route
-                        String.replace(
-                          content,
-                          "get \"/\", PageController, :home",
-                          "inertia \"/\", HomePage.Index",
-                          global: false
-                        )
-
-                      Regex.match?(
-                        ~r/scope\s+"\/",\s+#{Regex.escape(inspect(web_module))}/,
-                        content
-                      ) ->
-                        # Add inside the first scope block
-                        Regex.replace(
-                          ~r/(scope\s+"\/",\s+#{Regex.escape(inspect(web_module))}\s+do\s*\n)/,
-                          content,
-                          "\\1      inertia \"/\", HomePage.Index\n",
-                          global: false
-                        )
-
-                      true ->
-                        content
-                    end
-                  end
-
-                content ->
-                  content
-              end)
-            end
-          )
-
-        {:error, igniter} ->
-          igniter
-      end
-    end
-
-    defp add_nb_inertia_to_gitignore(igniter) do
-      gitignore_path = ".gitignore"
-
-      if Igniter.exists?(igniter, gitignore_path) do
-        igniter
-        |> Igniter.include_existing_file(gitignore_path)
-        |> Igniter.update_file(gitignore_path, fn source ->
-          Rewrite.Source.update(source, :content, fn
-            content when is_binary(content) ->
-              if String.contains?(content, ".nb_inertia") do
-                content
-              else
-                content <> "\n# NbInertia extracted components\n.nb_inertia/\n"
-              end
-
-            content ->
-              content
-          end)
-        end)
-      else
-        Igniter.create_new_file(
-          igniter,
-          gitignore_path,
-          "# NbInertia extracted components\n.nb_inertia/\n"
-        )
-      end
-    end
-
-    defp add_extractor_compiler(igniter) do
-      # Add :nb_inertia_extract to the compilers list in mix.exs
-      igniter
-      |> Igniter.include_existing_file("mix.exs")
-      |> Igniter.update_file("mix.exs", fn source ->
-        Rewrite.Source.update(source, :content, fn
-          content when is_binary(content) ->
-            if String.contains?(content, ":nb_inertia_extract") do
-              content
-            else
-              # Find the compilers line or project function
-              cond do
-                Regex.match?(~r/compilers:\s*Mix\.compilers\(\)\s*\+\+\s*\[/, content) ->
-                  # Already has custom compilers, append to the list
-                  Regex.replace(
-                    ~r/(compilers:\s*Mix\.compilers\(\)\s*\+\+\s*\[)(.*?)(\])/s,
-                    content,
-                    fn _, pre, existing, post ->
-                      existing = String.trim(existing)
-
-                      if existing == "" do
-                        "#{pre}:nb_inertia_extract#{post}"
-                      else
-                        "#{pre}#{existing}, :nb_inertia_extract#{post}"
-                      end
-                    end,
-                    global: false
-                  )
-
-                Regex.match?(~r/def project do/, content) ->
-                  # Add compilers key to project function
-                  Regex.replace(
-                    ~r/(def project do\s*\n\s*\[)/,
-                    content,
-                    "\\1\n      compilers: Mix.compilers() ++ [:nb_inertia_extract],",
-                    global: false
-                  )
-
-                true ->
-                  content
-              end
-            end
-
-          content ->
-            content
-        end)
-      end)
-    end
-
-    defp add_pages_config(igniter) do
-      igniter
-      |> Igniter.Project.Config.configure(
-        "config.exs",
-        :nb_inertia,
-        [:pages, :output_dir],
-        ".nb_inertia/pages"
-      )
-      |> Igniter.Project.Config.configure(
-        "config.exs",
-        :nb_inertia,
-        [:pages, :auto_extract],
-        true
-      )
-    end
-
-    defp maybe_add_vite_nb_inertia_plugin(igniter) do
-      if using_nb_vite?(igniter) do
-        vite_config_path = "assets/vite.config.js"
-
-        if Igniter.exists?(igniter, vite_config_path) do
-          igniter
-          |> Igniter.include_existing_file(vite_config_path)
-          |> Igniter.update_file(vite_config_path, fn source ->
-            Rewrite.Source.update(source, :content, fn
-              content when is_binary(content) ->
-                if String.contains?(content, "nbInertia") do
-                  content
-                else
-                  content
-                  |> add_nb_inertia_import_to_vite()
-                  |> add_nb_inertia_plugin_to_vite()
-                end
-
-              content ->
-                content
-            end)
-          end)
-        else
-          igniter
-        end
-      else
-        igniter
-      end
-    end
-
-    defp add_nb_inertia_import_to_vite(content) do
-      if String.contains?(content, "import") do
-        lines = String.split(content, "\n")
-
-        {imports, rest} =
-          Enum.split_while(lines, fn line ->
-            String.starts_with?(String.trim(line), "import") or String.trim(line) == ""
-          end)
-
-        nb_inertia_import = "import { nbInertia } from '@nordbeam/nb-vite/nb-inertia'"
-        Enum.join(imports ++ [nb_inertia_import, ""] ++ rest, "\n")
-      else
-        "import { nbInertia } from '@nordbeam/nb-vite/nb-inertia'\n\n" <> content
-      end
-    end
-
-    defp add_nb_inertia_plugin_to_vite(content) do
-      nb_inertia_plugin = "    nbInertia({ enabled: true }),\n"
-
-      content
-      |> String.replace(
-        ~r/(plugins:\s*\[\s*\n)/,
-        "\\1#{nb_inertia_plugin}",
-        global: false
-      )
-    end
-
-    defp print_pages_hints(igniter) do
-      Igniter.add_notice(igniter, """
-
-      Page Modules (NbInertia.Page) have been set up!
-
-      What was configured:
-      - Added `import NbInertia.Router` to your router
-      - Created sample Page module (HomePage.Index)
-      - Added `inertia "/"` route to your router
-      - Added `.nb_inertia/` to .gitignore
-      - Added `:nb_inertia_extract` compiler to mix.exs
-      - Configured pages output directory in config.exs#{if using_nb_vite?(igniter), do: "\n  - Added nbInertia() Vite plugin to vite.config.js", else: ""}
-
-      IDE Support:
-      - Neovim/Helix/Zed: Copy tree-sitter injection queries from editor/nvim/
-      - VS Code: See editor/vscode/ for syntax highlighting extension
-      - See editor/README.md for full setup instructions
-
-      Quick reference:
-      - Define pages:     lib/#{web_dir(igniter)}/inertia/<resource>_page/<action>.ex
-      - Route macros:     inertia "/path", PageModule
-                          inertia_resource "/path", ResourcePage
-      - Colocated TSX:    def render, do: ~TSX\"\"\"<component>\"\"\"
-      - Extract manually: mix nb_inertia.extract
-      - Migrate from controllers: mix nb_inertia.migrate_to_pages --controller MyAppWeb.UserController
-      """)
-    end
-
     defp print_next_steps(igniter) do
       full_install = igniter.args.options[:full] || false
       client_framework = igniter.args.options[:client_framework]
@@ -3035,7 +2746,7 @@ if Code.ensure_loaded?(Igniter) do
       Next steps:
       1. Create a controller action that renders a declared page:
 
-         defmodule MyAppWeb.PageController do
+         defmodule MyAppWeb.HomeController do
            use MyAppWeb, :controller
 
            inertia_page :home do
@@ -3059,7 +2770,7 @@ if Code.ensure_loaded?(Igniter) do
 
       2. Add a route in your router:
 
-         get "/", PageController, :home
+         get "/", HomeController, :home
 
       3. Create page components in assets/js/pages/
          - NbInertia automatically converts :home to "Home"

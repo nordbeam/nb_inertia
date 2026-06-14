@@ -8,7 +8,7 @@ if Code.ensure_loaded?(Credo.Check) do
     Generic types lose structure information on the frontend, making it harder
     for TypeScript to provide type safety and IDE autocomplete.
 
-    Works in both Controller `inertia_page` blocks and Page module-level `prop` declarations.
+    Works in Controller `inertia_page` blocks.
 
     ## Example
 
@@ -24,15 +24,6 @@ if Code.ensure_loaded?(Credo.Check) do
         inertia_page :index do
           prop :filters, shape(search: optional(:string), status: optional(:string))
           prop :data, list_of(ref(ItemSerializer))
-        end
-
-    Also applies to Page modules:
-
-        defmodule MyAppWeb.UsersPage.Index do
-          use NbInertia.Page
-
-          prop :filters, :map           # Warning: generic type
-          prop :data, list_of(ref(ItemSerializer))  # Good: specific type
         end
 
     """

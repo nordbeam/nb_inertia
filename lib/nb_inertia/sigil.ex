@@ -1,53 +1,32 @@
 defmodule NbInertia.Sigil do
   @moduledoc """
-  Provides `~TSX` and `~JSX` sigils for colocating frontend components in Page modules.
+  Provides `~TSX` and `~JSX` sigils for embedding frontend snippets in Elixir code.
 
-  These sigils are **no-ops in Elixir** — they simply return the string content unchanged.
-  The real work is done by `NbInertia.Extractor`, which finds all Page modules with
-  `render/0` containing sigil content, generates a TypeScript type preamble from prop
-  declarations, and writes the complete `.tsx`/`.jsx` file to `.nb_inertia/pages/`.
+  These sigils are **no-ops in Elixir**: they return the string content unchanged.
 
   ## Usage
 
-      defmodule MyAppWeb.UsersPage.Index do
-        use NbInertia.Page
+      import NbInertia.Sigil
 
-        prop :users, list_of(ref(UserSerializer))
-        prop :total, :integer
-
-        def mount(_conn, _params) do
-          %{users: Accounts.list_users(), total: Accounts.count_users()}
-        end
-
-        def render do
-          ~TSX\"\"\"
-          export default function UsersIndex({ users, total }: Props) {
-            return <div>{total} users</div>
-          }
-          \"\"\"
-        end
-      end
+      snippet = ~TSX\"\"\"
+      export default function UsersIndex({ users }) {
+        return <div>{users.length} users</div>
+      }
+      \"\"\"
 
   ## ~JSX Variant
 
-  For JavaScript projects (no TypeScript), use `~JSX` instead. Extracted files
-  will use the `.jsx` extension and no type preamble will be generated.
+  For JavaScript snippets, use `~JSX` instead.
 
-      def render do
-        ~JSX\"\"\"
-        export default function UsersIndex({ users }) {
-          return <div>{users.length} users</div>
-        }
-        \"\"\"
-      end
+      snippet = ~JSX\"\"\"
+      export default function UsersIndex({ users }) {
+        return <div>{users.length} users</div>
+      }
+      \"\"\"
   """
 
   @doc """
-  TSX sigil for colocated React/TypeScript components.
-
-  Returns the string content unchanged. The extraction pipeline
-  (`NbInertia.Extractor`) processes the content at compile time
-  to generate `.tsx` files with type preambles.
+  TSX sigil that returns the string content unchanged.
   """
   defmacro sigil_TSX({:<<>>, _meta, [content]}, _modifiers) when is_binary(content) do
     content
@@ -60,11 +39,7 @@ defmodule NbInertia.Sigil do
   end
 
   @doc """
-  JSX sigil for colocated React/JavaScript components.
-
-  Returns the string content unchanged. The extraction pipeline
-  (`NbInertia.Extractor`) processes the content at compile time
-  to generate `.jsx` files without type preambles.
+  JSX sigil that returns the string content unchanged.
   """
   defmacro sigil_JSX({:<<>>, _meta, [content]}, _modifiers) when is_binary(content) do
     content

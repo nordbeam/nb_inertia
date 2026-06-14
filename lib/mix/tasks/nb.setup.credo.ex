@@ -25,22 +25,15 @@ defmodule Mix.Tasks.Nb.Setup.Credo do
     {NbInertia.Credo.Check.Design.FormInputsOptionalFieldConsistency, []},
     {NbInertia.Credo.Check.Readability.InertiaPageComponentNameCase, []},
     {NbInertia.Credo.Check.Readability.PropFromAssigns, []},
-    {NbInertia.Credo.Check.Warning.ActionWithoutMount, []},
     {NbInertia.Credo.Check.Warning.AvoidRawInertiaRender, []},
     {NbInertia.Credo.Check.Warning.DirectRepoInController, []},
     {NbInertia.Credo.Check.Warning.InconsistentOptionalProps, []},
     {NbInertia.Credo.Check.Warning.MissingInertiaPageProps, []},
     {NbInertia.Credo.Check.Warning.MissingInertiaSharedProps, []},
-    {NbInertia.Credo.Check.Warning.MissingMount, []},
     {NbInertia.Credo.Check.Warning.MissingSerializerInertiaProps, []},
     {NbInertia.Credo.Check.Warning.MixedInertiaControllerType, []},
-    {NbInertia.Credo.Check.Warning.MixedPageAndController, []},
     {NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl, []},
-    {NbInertia.Credo.Check.Warning.ModalWithoutBaseUrl, []},
-    {NbInertia.Credo.Check.Warning.RenderWithoutProps, []},
-    {NbInertia.Credo.Check.Warning.UndeclaredPropInMount, []},
     {NbInertia.Credo.Check.Warning.UntypedInertiaProps, []},
-    {NbInertia.Credo.Check.Warning.UnusedPropInMount, []},
     {NbInertia.Credo.Check.Warning.UseNbInertiaController, []}
   ]
 

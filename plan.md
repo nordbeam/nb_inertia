@@ -17,9 +17,6 @@ This plan focuses on preserving those strengths while reducing duplication and â
 The current DSL is split across several cooperating layers:
 
 - `lib/nb_inertia/controller.ex` defines the controller-side contract DSL (`inertia_page`, `prop`, `render_inertia`, shared prop handling, serializer integration, runtime prop wrapping).
-- `lib/nb_inertia/page.ex` defines the single-module-per-page DSL (`use NbInertia.Page`, `prop`, `shared`, `modal`, `channel`) and generates page introspection functions in `__before_compile__/1`.
-- `lib/nb_inertia/page_controller.ex` resolves Page module requests, applies defaults/from-assigns/shared props, serializes values, and decides between normal page and modal rendering.
-- `lib/nb_inertia/router.ex` provides the routing DSL (`inertia`, `inertia_resource`, `inertia_shared`) that binds router semantics to Page modules.
 - `lib/nb_inertia/core_controller.ex` owns the protocol-level prop primitives (`inertia_optional`, `inertia_merge`, `inertia_prepend`, `inertia_match_merge`, `inertia_scroll`, `inertia_defer`, `inertia_once`) and page object assembly.
 - `lib/nb_inertia/shared_props.ex` defines reusable shared-prop modules with validation.
 - `lib/nb_inertia/validation.ex` and the Credo checks under `lib/nb_inertia/credo/check/**` provide additional static and runtime safeguards.
@@ -28,12 +25,9 @@ The current DSL is split across several cooperating layers:
 
 1. **Explicit page contracts**
    - `inertia_page` and `prop` make page shape visible in one place.
-   - `NbInertia.Page` keeps `mount/2`, prop declarations, modal config, shared modules, and channel config colocated.
 
 2. **Strong compile-time direction**
    - controller macros validate missing and extra props during macro expansion in dev/test
-   - Page modules fail compilation when `mount/2` is missing
-   - channel declarations validate referenced props at compile time
    - Credo checks reinforce the intended architecture before compile
 
 3. **Good adapter-level protocol coverage**

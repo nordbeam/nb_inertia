@@ -5,17 +5,10 @@ if Code.ensure_loaded?(Credo.Check) do
     Warns when using `render_inertia/3` or `render_inertia_page/3` with an atom page reference in a controller
     that doesn't appear to have `use NbInertia.Controller`.
 
-    Also recognizes `use NbInertia.Page` as a valid pattern — Page modules
-    with `prop` declarations are valid Inertia page declarations.
-
     When using nb_inertia's atom-based page references (e.g., `:users_index`),
     you must:
     1. Add `use NbInertia.Controller` to your controller
     2. Declare the page using `inertia_page :page_name do ... end`
-
-    Or use the Page module pattern:
-    1. Add `use NbInertia.Page` to the module
-    2. Declare props using `prop :name, :type`
 
     ## Example
 
@@ -93,7 +86,6 @@ if Code.ensure_loaded?(Credo.Check) do
         # Current module's info
         current_module: nil,
         has_nb_inertia_controller: false,
-        has_nb_inertia_page: false,
         declared_pages: MapSet.new()
       }
 
@@ -112,7 +104,6 @@ if Code.ensure_loaded?(Credo.Check) do
             %{
               module: state.current_module,
               has_nb_inertia_controller: state.has_nb_inertia_controller,
-              has_nb_inertia_page: state.has_nb_inertia_page,
               declared_pages: state.declared_pages
             }
             | state.module_stack
@@ -126,7 +117,6 @@ if Code.ensure_loaded?(Credo.Check) do
         | current_module: module_name,
           module_stack: new_stack,
           has_nb_inertia_controller: false,
-          has_nb_inertia_page: false,
           declared_pages: MapSet.new()
       }
 
@@ -139,14 +129,6 @@ if Code.ensure_loaded?(Credo.Check) do
            state
          ) do
       {ast, %{state | has_nb_inertia_controller: true}}
-    end
-
-    # Track `use NbInertia.Page` — Page modules are valid Inertia page declarations
-    defp traverse(
-           {:use, _meta, [{:__aliases__, _, [:NbInertia, :Page]} | _]} = ast,
-           state
-         ) do
-      {ast, %{state | has_nb_inertia_page: true}}
     end
 
     # Track `inertia_page :name do ... end`
@@ -169,10 +151,6 @@ if Code.ensure_loaded?(Credo.Check) do
          )
          when render_fn in [:render_inertia, :render_inertia_page] and is_atom(page_name) do
       cond do
-        # Skip check for Page modules — they use mount/2, not render_inertia
-        state.has_nb_inertia_page ->
-          {ast, state}
-
         # If the module doesn't have NbInertia.Controller, warn
         not state.has_nb_inertia_controller ->
           new_issue = issue_for_missing_use(state.issue_meta, meta[:line], page_name, render_fn)

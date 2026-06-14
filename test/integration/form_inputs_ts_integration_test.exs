@@ -67,7 +67,7 @@ defmodule NbInertia.FormInputsTsIntegrationTest do
     end
 
     test "form definitions persist across multiple pages" do
-      defmodule MultiPageController do
+      defmodule MultiScreenController do
         use NbInertia.Controller
 
         inertia_page :page_one do
@@ -83,7 +83,7 @@ defmodule NbInertia.FormInputsTsIntegrationTest do
         end
       end
 
-      forms = MultiPageController.__inertia_forms__()
+      forms = MultiScreenController.__inertia_forms__()
 
       # Both forms should be available
       assert Map.has_key?(forms, :form_a)

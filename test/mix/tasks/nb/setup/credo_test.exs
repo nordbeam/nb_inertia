@@ -56,7 +56,7 @@ defmodule Mix.Tasks.Nb.Setup.CredoTest do
         |> Enum.map(&elem(&1, 0))
 
       assert NbInertia.Credo.Check.Warning.UseNbInertiaController in modules
-      assert NbInertia.Credo.Check.Warning.MissingMount in modules
+      assert NbInertia.Credo.Check.Design.DeclareInertiaPage in modules
       refute NbSerializer.Credo.Check.Warning.MissingDatetimeFormat in modules
       assert length(modules) == length(Enum.uniq(modules))
     end
@@ -77,15 +77,30 @@ defmodule Mix.Tasks.Nb.Setup.CredoTest do
     test "returns current-app and dependency require globs for supported nb libraries" do
       cwd = File.cwd!()
 
+      dep_root =
+        Path.join(cwd, "tmp/nb_serializer_credo_test_#{System.unique_integer([:positive])}")
+
+      check_dir = Path.join(dep_root, "lib/nb_serializer/credo/check/warning")
+
+      File.mkdir_p!(check_dir)
+      File.write!(Path.join(check_dir, "example.ex"), "defmodule ExampleCheck, do: nil\n")
+
+      on_exit(fn -> File.rm_rf!(dep_root) end)
+
+      expected_serializer_pattern =
+        dep_root
+        |> Path.relative_to(cwd)
+        |> Path.join("lib/nb_serializer/credo/check/**/*.ex")
+
       patterns =
         Credo.recommended_require_patterns(
           [:nb_inertia, :nb_serializer],
-          %{nb_serializer: Path.expand("../nb_serializer", cwd)},
+          %{nb_serializer: dep_root},
           cwd
         )
 
       assert "lib/nb_inertia/credo/check/**/*.ex" in patterns
-      assert "../nb_serializer/lib/nb_serializer/credo/check/**/*.ex" in patterns
+      assert expected_serializer_pattern in patterns
     end
   end
 
