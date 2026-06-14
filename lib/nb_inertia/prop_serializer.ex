@@ -84,6 +84,8 @@ defprotocol NbInertia.PropSerializer do
   opt into custom serialization by implementing the protocol for your types.
   """
 
+  @fallback_to_any true
+
   @doc """
   Serializes a value for Inertia prop transmission.
 

@@ -252,8 +252,10 @@ defmodule NbInertia.Plug do
   defp has_fragment?(_), do: false
 
   defp external_redirect?(%{status: status} = conn) when status in 300..308 do
-    [location] = get_resp_header(conn, "location")
-    conn.private[:inertia_force_redirect] || !String.starts_with?(location, "/")
+    case get_resp_header(conn, "location") do
+      [location] -> conn.private[:inertia_force_redirect] || !String.starts_with?(location, "/")
+      _ -> false
+    end
   end
 
   defp external_redirect?(_conn), do: false

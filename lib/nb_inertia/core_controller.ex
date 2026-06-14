@@ -852,8 +852,7 @@ defmodule NbInertia.CoreController do
   defp resolve_merge_props(props, opts) do
     Enum.reduce(props, {[], [], [], [], [], %{}}, fn {key, value},
                                                      {props, merge_keys, deep_merge_keys,
-                                                      prepend_keys, match_props_on,
-                                                      scroll_props} ->
+                                                      prepend_keys, match_props_on, scroll_props} ->
       transformed_key =
         key
         |> transform_key(opts)
@@ -1379,7 +1378,13 @@ defmodule NbInertia.CoreController do
   end
 
   defp detect_ssr(conn, opts) do
-    put_private(conn, :inertia_ssr, opts[:ssr] || ssr_enabled_globally?())
+    ssr_enabled =
+      case Keyword.fetch(opts, :ssr) do
+        {:ok, enabled} -> enabled
+        :error -> ssr_enabled_globally?()
+      end
+
+    put_private(conn, :inertia_ssr, ssr_enabled)
   end
 
   defp ssr_enabled_globally? do

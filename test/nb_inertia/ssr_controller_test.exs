@@ -1,8 +1,36 @@
 defmodule NbInertia.SSRControllerTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
+  import Plug.Conn
   import Plug.Test
   import NbInertia.Controller
+
+  defp inertia_conn do
+    version =
+      conn(:get, "/")
+      |> init_test_session(%{})
+      |> assign(:flash, %{})
+      |> NbInertia.Plug.call([])
+      |> then(& &1.private[:inertia_version])
+
+    conn(:get, "/")
+    |> init_test_session(%{})
+    |> assign(:flash, %{})
+    |> put_req_header("x-inertia", "true")
+    |> put_req_header("x-inertia-version", version)
+    |> NbInertia.Plug.call([])
+  end
+
+  defp restore_env_on_exit(key) do
+    original = Application.fetch_env(:nb_inertia, key)
+
+    on_exit(fn ->
+      case original do
+        {:ok, value} -> Application.put_env(:nb_inertia, key, value)
+        :error -> Application.delete_env(:nb_inertia, key)
+      end
+    end)
+  end
 
   describe "enable_ssr/1" do
     test "sets SSR enabled flag in conn private" do
@@ -116,6 +144,22 @@ defmodule NbInertia.SSRControllerTest do
 
       assert ssr_enabled?(dashboard_conn)
       refute ssr_enabled?(settings_conn)
+    end
+  end
+
+  describe "CoreController render options" do
+    test "explicit ssr false overrides globally enabled SSR" do
+      restore_env_on_exit(:ssr)
+      Application.put_env(:nb_inertia, :ssr, true)
+
+      conn =
+        inertia_conn()
+        |> NbInertia.CoreController.render_inertia("Dashboard", ssr: false)
+
+      refute conn.private[:inertia_ssr]
+
+      page = Jason.decode!(conn.resp_body)
+      assert page["component"] == "Dashboard"
     end
   end
 end
