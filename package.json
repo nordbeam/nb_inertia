@@ -107,7 +107,7 @@
     },
     "./vue/modals": {
       "import": "./priv/nb_inertia/vue/modals/index.ts",
-      "types": "./priv/nb_inertia/vue/modals/index.ts"
+      "types": "./priv/nb_inertia/vue/modals/index.d.ts"
     }
   },
   "files": [

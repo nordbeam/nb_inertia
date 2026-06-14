@@ -592,6 +592,45 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     refute source =~ "meta: {FlopMetaSerializer, meta, schema: Post}"
   end
 
+  describe "vue/modals npm package export type compatibility" do
+    test "package.json ./vue/modals types entry points to a .d.ts file, not raw .ts source" do
+      package_json =
+        Path.expand("../../../../package.json", __DIR__)
+        |> File.read!()
+        |> Jason.decode!()
+
+      vue_modals = get_in(package_json, ["exports", "./vue/modals"])
+
+      assert vue_modals != nil, "expected ./vue/modals export to be defined"
+
+      assert String.ends_with?(vue_modals["types"], ".d.ts"),
+             "expected ./vue/modals types to be a .d.ts file so vue-tsc can resolve it " <>
+               "without allowArbitraryExtensions; got: #{vue_modals["types"]}"
+    end
+
+    test "vue/modals index.d.ts exists and declares components without .vue file imports" do
+      index_dts_path = Path.expand("../../../../priv/nb_inertia/vue/modals/index.d.ts", __DIR__)
+
+      assert File.exists?(index_dts_path),
+             "expected priv/nb_inertia/vue/modals/index.d.ts to exist for vue-tsc compatibility"
+
+      index_dts = File.read!(index_dts_path)
+
+      assert index_dts =~ "createModalStack"
+      assert index_dts =~ "useModalStack"
+      assert index_dts =~ "MODAL_STACK_KEY"
+      assert index_dts =~ "Modal"
+      assert index_dts =~ "ModalLink"
+      assert index_dts =~ "ModalConfig"
+
+      refute index_dts =~ "from './Modal.vue'",
+             "index.d.ts must not import .vue files — those require allowArbitraryExtensions"
+
+      refute index_dts =~ "from './HeadlessModal.vue'"
+      refute index_dts =~ "from './ModalLink.vue'"
+    end
+  end
+
   test "installer next-step text avoids stale versioned deps and ~TS string guidance" do
     source =
       Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
