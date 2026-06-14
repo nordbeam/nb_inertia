@@ -1,0 +1,77 @@
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=a5b363a87b96019a525bdfcdbad04df4e85613a28b0788df422f8692c4770d30 CAS_HOOK_PROVIDER=codex cas hook PermissionRequest --provider codex",
+            "statusMessage": "cas permission",
+            "timeout": 2,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=ac9d73184e93b3d53c3fe2b3531a4fe512da790604715c77d277de75f774c0d8 CAS_HOOK_PROVIDER=codex cas hook PostToolUse --provider codex",
+            "statusMessage": "cas trace",
+            "timeout": 3,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=bc739b76fa300dfb14b3be097ffcdf86c0a5f53dfb1c436be811f2c73a474074 CAS_HOOK_PROVIDER=codex cas hook PreToolUse --provider codex",
+            "statusMessage": "cas policy",
+            "timeout": 2,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=c032e550d7eb15ce613d70a1db11c940b27ff01673596092b5b8dca08fb9d3ee CAS_HOOK_PROVIDER=codex cas hook SessionStart --provider codex",
+            "statusMessage": "cas context",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "startup|resume"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=2c382e67044687bf9529960c2f8fe07fc9fefa07f9c1c91a9b107f49ef1bdb01 CAS_HOOK_PROVIDER=codex cas hook Stop --provider codex",
+            "statusMessage": "cas handoff",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=38391957682f1bcaa62694daa74556c2fb63b9569a61e2e5507471e7af2a2fde CAS_HOOK_PROVIDER=codex cas hook UserPromptSubmit --provider codex",
+            "statusMessage": "cas planner",
+            "timeout": 3,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "files": {
+    "SKILL.md": "sha256:70662a089a929987e6ca2e4fcaf3b8c3496574f83738853b2f2c45880938823d",
+    "references/cli-reference.md": "sha256:069e2f6cca8d156b54fc6a0ba89e3bebb4b1fcffab38783eef56f93fef22dd1c",
+    "references/data-model.md": "sha256:851d1a1771ed361ee989d5ef1f37ddc71b862b3a31d26efc8796f933fb030932",
+    "references/delegation-playbook.md": "sha256:0c471613781b0435cf02cb73af04ec4203f1331d3d362ce4325299436fa2257b",
+    "references/events-and-polling.md": "sha256:6805b665c6127e6262c7059858a9a0310416ae4bde198353dfc6d2f9eeb3b78b",
+    "references/hooks-and-policy.md": "sha256:25fb5292e261262e0a10725e64b2824fbb0f67634c0892e44be5bdd102ac1f59",
+    "references/lifecycle.md": "sha256:38eae04b7abd77f30a0a1cffd5d489d067074ab074792f6fec00f222d9f4f399"
+  }
+}

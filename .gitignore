@@ -40,3 +40,23 @@ Thumbs.db
 # Node/Bun
 node_modules/
 bun.lock
+
+# CAS local runtime state
+.cas/cas.db
+.cas/cas.db-*
+.cas/*.sock
+.cas/*.pid
+.cas/*.log
+.cas/artifacts/
+.cas/assets/
+.cas/backups/
+.cas/bin/
+.cas/cache/
+.cas/events/
+.cas/hook-diagnostics/
+.cas/leases/
+.cas/runtime/
+.cas/tools/
+.cas/transcripts/
+.cas/update/
+.cas/worktrees/

@@ -1,0 +1,141 @@
+# CAS factory config.
+# Edit this file to choose agent runtimes, models, and label-based routing.
+# Supported runtimes today: codex, claude, claude-print, mock.
+
+schema_version = 3
+state_dir = "/Users/assim/Projects/nb/nb_inertia/.cas"
+log_level = "info"
+log_format = "json"
+
+[daemon]
+# Project-local Unix socket by default. Use 127.0.0.1:<port> if remote HTTP access is needed.
+addr = "unix:/Users/assim/Projects/nb/nb_inertia/.cas/daemon.sock"
+
+[automation]
+auto_spawn = true
+auto_close_epics = false
+max_workers = 4
+max_review_retries = 3
+max_identical_review_retries = 2
+spawn_status = "open"
+retry_failed = true
+provider_limit_cooldown = "15m"
+poll_interval = "2s"
+
+[automation.defaults]
+role = "implementer"
+
+[sessions]
+resume_enabled = true
+resume_after_daemon_restart = true
+max_resume_attempts = 2
+
+[model_routing]
+default_runtime = "codex"
+
+[model_routing.roles.classifier]
+runtime = "codex"
+fallback_runtimes = ["claude"]
+model = "gpt-5.4-mini"
+reasoning_effort = "low"
+
+[model_routing.roles.implementer]
+runtime = "codex"
+fallback_runtimes = ["claude"]
+model = "gpt-5.5"
+reasoning_effort = "xhigh"
+
+[model_routing.roles.merger]
+runtime = "codex"
+fallback_runtimes = ["claude"]
+model = "gpt-5.5"
+reasoning_effort = "xhigh"
+
+[model_routing.roles.reviewer]
+runtime = "codex"
+fallback_runtimes = ["claude"]
+model = "gpt-5.5"
+reasoning_effort = "xhigh"
+default_skill = "thermo-nuclear-code-quality-review"
+required_skills = ["thermo-nuclear-code-quality-review"]
+
+[model_routing.roles.supervisor]
+runtime = "codex"
+fallback_runtimes = ["claude"]
+model = "gpt-5.5"
+reasoning_effort = "xhigh"
+
+[model_routing.roles.verifier]
+runtime = "codex"
+fallback_runtimes = ["claude"]
+model = "gpt-5.5"
+reasoning_effort = "xhigh"
+
+[[model_routing.label_rules]]
+role = "implementer"
+label = "frontend"
+runtime = "claude"
+fallback_runtimes = ["codex"]
+model = "sonnet"
+reasoning_effort = "xhigh"
+priority = 100
+
+[[labels.catalog]]
+name = "frontend"
+title = "Frontend work"
+description = "User-facing UI, renderer, browser, or desktop shell changes."
+use_when = ["React views, routes, modals, forms, layout, visual QA"]
+avoid_when = ["backend-only or storage-only changes"]
+aliases = ["ui", "renderer"]
+examples = ["Settings screen", "Mission filter bar"]
+
+[[labels.catalog]]
+name = "research"
+title = "Research or discovery"
+description = "Investigation, comparison, or planning work that should not edit production files."
+use_when = ["spikes, tradeoff analysis, feasibility research"]
+avoid_when = ["implementation tasks with code changes"]
+examples = ["Compare model routing options"]
+
+[task_workflows.defaults]
+requires_worktree = true
+requires_review = true
+requires_merge = true
+auto_close_on_success = true
+
+[[task_workflows.label_rules]]
+label = "research"
+requires_worktree = false
+requires_review = false
+requires_merge = false
+auto_close_on_success = true
+priority = 100
+
+[verification]
+# Approved reviews below this confidence are recorded and surfaced for operator attention.
+low_confidence_threshold = 0.6
+# Default is observe/notify only. Set true to hold low-confidence approvals in review_pending.
+gate_on_low_confidence = false
+
+[lint.product_wiring]
+enabled = true
+labels = ["frontend", "ui", "ux", "renderer", "electron"]
+
+[hooks]
+enabled = true
+install_codex = true
+install_claude = true
+policy_mode = "enforce"
+
+[hooks.events]
+session_start = true
+user_prompt_submit = true
+pre_tool_use = true
+permission_request = true
+post_tool_use = true
+stop = true
+notification = true
+
+[updates]
+policy = "auto"
+channel = "stable"

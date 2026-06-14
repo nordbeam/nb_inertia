@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=7ae80393f77142c4381a36fd367f11c8f7e5f2cfcd85587c4b7388b33bdbe334 CAS_HOOK_PROVIDER=claude cas hook Notification --provider claude",
+            "timeout": 1000,
+            "type": "command"
+          }
+        ],
+        "matcher": "permission_prompt|idle_prompt|auth_success"
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=42b02d63b4773ce65e7c76c32b59d844222312e1389833f1041491e63fe4b071 CAS_HOOK_PROVIDER=claude cas hook PermissionRequest --provider claude",
+            "timeout": 2000,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=2436689ec00e7bda086ea2fb83c8db087c0ac92c30b1557f622a98b5df126948 CAS_HOOK_PROVIDER=claude cas hook PostToolUse --provider claude",
+            "timeout": 3000,
+            "type": "command"
+          }
+        ],
+        "matcher": "Read|Write|Edit|MultiEdit|Bash|Task"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=60ec502474b74f980e5ed0b20f5a0426928aff2eeafbbed18b6a408bb60fe561 CAS_HOOK_PROVIDER=claude cas hook PreToolUse --provider claude",
+            "timeout": 2000,
+            "type": "command"
+          }
+        ],
+        "matcher": "Read|Glob|Grep|Write|Edit|MultiEdit|Bash|Task"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=01dba79a0711ac4219fabb89427a8f915ad44ef23952e44c1609349740e0a8fb CAS_HOOK_PROVIDER=claude cas hook SessionStart --provider claude",
+            "timeout": 5000,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=c24a96fab38650e415e4a18b620cda0c15b1b07bce346e7fc14ba814f9aa59d3 CAS_HOOK_PROVIDER=claude cas hook Stop --provider claude",
+            "timeout": 10000,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "CAS_HOOK_SPEC=1 CAS_HOOK_HASH=ce64cf688fa9cb04a780e7cf64d18de3ce27a4d2656fb8cc3af0401107eca130 CAS_HOOK_PROVIDER=claude cas hook UserPromptSubmit --provider claude",
+            "timeout": 3000,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(cas :*)",
+      "Bash(cas hook:*)",
+      "Bash(cas policy:*)"
+    ]
+  }
+}
