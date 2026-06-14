@@ -2764,16 +2764,16 @@ if Code.ensure_loaded?(Igniter) do
             To enable modals, set up the modal stack in your app:
 
               import { createApp, h } from 'vue';
-              import { createInertiaApp } from '@inertiajs/vue3';
-              import { createModalStack } from '@/lib/inertia';
+              import { createInertiaApp, createModalStack, MODAL_STACK_KEY } from '@/lib/inertia';
 
               createInertiaApp({
                 setup({ el, App, props, plugin }) {
                   const modalStack = createModalStack();
-                  createApp({ render: () => h(App, props) })
-                    .use(plugin)
-                    .use(modalStack)
-                    .mount(el);
+                  const app = createApp({ render: () => h(App, props) });
+
+                  app.use(plugin);
+                  app.provide(MODAL_STACK_KEY, modalStack);
+                  app.mount(el);
                 },
               });
             """

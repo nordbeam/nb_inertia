@@ -575,6 +575,9 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert source =~ "Modal components are delivered via @nordbeam/nb-inertia/vue/modals"
       assert source =~ "No local file copy required"
       assert source =~ "createModalStack"
+      assert source =~ "MODAL_STACK_KEY"
+      assert source =~ "app.provide(MODAL_STACK_KEY, modalStack)"
+      refute source =~ ".use(modalStack)"
     end
 
     test "React next-steps mention copying modal UI components" do
