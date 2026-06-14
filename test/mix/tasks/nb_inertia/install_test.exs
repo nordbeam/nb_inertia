@@ -37,6 +37,16 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
              ]
     end
 
+    test "installer contract exposes controller and React/Vue options without Page-module mode" do
+      info = Install.info(["--client-framework", "vue"], nil)
+      options = Install.installer_options(["--client-framework", "vue"])
+
+      assert info.schema[:client_framework] == :string
+      assert options[:client_framework] == "vue"
+      refute Keyword.has_key?(info.schema, :pages)
+      refute Keyword.has_key?(options, :pages)
+    end
+
     test "skips companion deps that are already installed" do
       options = Install.installer_options(["--typescript", "--with-flop"])
 

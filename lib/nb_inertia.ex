@@ -7,7 +7,7 @@ defmodule NbInertia do
 
   ## Features
 
-  - **Declarative Page DSL**: Define pages and validate literal `render_inertia_page/4` calls in dev/test
+  - **Declarative Controller Page Contracts**: Define controller pages and validate literal `render_inertia_page/4` calls in dev/test
   - **Component Name Inference**: Automatic conversion from `:users_index` to `"Users/Index"`
   - **Shared Props**: Define props shared across all pages inline or via `include_shared_props/2`
   - **Type Safety**: Default-backed and assign-backed props are materialized at runtime

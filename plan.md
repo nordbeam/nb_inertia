@@ -36,7 +36,7 @@ The current DSL is split across several cooperating layers:
 
 4. **Useful architecture nudges**
    - `prop_from_assigns` encourages declarative data flow
-   - `declare_inertia_page`, `missing_mount`, `undeclared_prop_in_mount`, and `modal_without_base_url` all push users toward the happy path
+   - `declare_inertia_page`, `missing_inertia_page_props`, and `modal_requires_base_url` all push users toward the happy path
 
 ## Main problems to solve
 
@@ -59,7 +59,7 @@ This makes the API feel uneven. The user has to know which behaviors belong in t
 
 ### 2. The same prop-processing rules are implemented in multiple places
 
-The controller path and Page path both apply:
+The controller render paths all apply:
 
 - shared props
 - `from:`/`default:`
@@ -67,11 +67,11 @@ The controller path and Page path both apply:
 - DSL option wrapping
 - shared prop metadata
 
-The duplication is most visible between `controller.ex` and `page_controller.ex`. The behavior is similar enough that it should come from one internal pipeline.
+The duplication is most visible inside the controller rendering and prop-resolution paths. The behavior is similar enough that it should come from one internal pipeline.
 
 ### 3. Shared props are conceptually inconsistent
 
-`SharedProps` modules are real runtime providers, but Page-level `shared do ... end` is currently type-only; `page_controller.ex` explicitly documents that inline shared props are not runtime-applied.
+`SharedProps` modules are real runtime providers, while inline controller shared declarations need clear runtime behavior and documentation.
 
 That is a surprising semantic split for two features with the same name.
 
@@ -80,7 +80,7 @@ That is a surprising semantic split for two features with the same name.
 There are currently multiple validation systems:
 
 - compile-time macro validation in `controller.ex`
-- compile-time checks in `page.ex`
+- compile-time checks in controller macros
 - runtime validation helpers in `validation.ex`
 - Credo checks for design/readability/warnings
 
@@ -91,8 +91,8 @@ This is valuable, but the rules are distributed and partially overlapping. Some 
 Modal behavior is split across:
 
 - controller macros
-- Page DSL
-- `page_controller.ex`
+- controller page declarations
+- controller rendering helpers
 - modal renderer infrastructure
 
 Likewise, advanced prop behavior is split between prop declarations and protocol helpers. The end result is powerful, but the mental model is expensive.
@@ -126,7 +126,7 @@ Outcome:
 
 ## Phase 2 — unify prop behavior behind one internal pipeline
 
-Extract a single internal prop-resolution pipeline used by both controller-based pages and Page modules.
+Extract a single internal prop-resolution pipeline used by controller-based pages.
 
 That pipeline should own:
 
@@ -138,8 +138,8 @@ That pipeline should own:
 
 Outcome:
 
-- less duplication between `controller.ex` and `page_controller.ex`
-- fewer behavior drifts between controller pages and Page modules
+- less duplication inside `controller.ex`
+- fewer behavior drifts between controller render paths
 - simpler future feature work
 
 ## Phase 3 — make prop modifiers symmetrical
@@ -166,17 +166,17 @@ Choose one of these and commit to it:
 
 ### Preferred option
 
-Make Page-level `shared do ... end` a real runtime feature, not just a type declaration.
+Make inline controller `shared do ... end` declarations a real runtime feature, not just a type declaration.
 
 That means:
 
 - support `from:` and possibly other declarative sources there
-- apply those values in `page_controller.ex`
+- apply those values in the controller render pipeline
 - validate collisions the same way as other shared props
 
 ### Fallback option
 
-If Page inline shared props are intentionally type-only, rename or reposition the feature so it does not read like runtime shared props.
+If inline shared props are intentionally type-only, rename or reposition the feature so it does not read like runtime shared props.
 
 Outcome:
 
@@ -188,7 +188,7 @@ Outcome:
 Create one internal contract/introspection module that becomes the source of truth for:
 
 - controller macro validation
-- Page module validation
+- controller page validation
 - runtime validation
 - nb_ts/extractor integration
 - Credo checks where possible
@@ -198,7 +198,7 @@ Then add missing validations for:
 - shared module collisions
 - conflicting prop modifier combinations
 - unsupported modal/channel/shared combinations
-- controller/Page parity gaps
+- controller render-path parity gaps
 
 Outcome:
 
@@ -232,7 +232,7 @@ Do not break the current strengths:
 
 - string component names should continue to work
 - low-level runtime helpers should continue to exist
-- existing controller pages and Page modules should both remain valid
+- existing controller pages should remain valid
 
 Use additive changes first, then warnings/deprecations, then removal only when the replacement is clearly better.
 
@@ -246,14 +246,14 @@ Outcome:
 1. extract shared prop + prop resolution internals
 2. introduce a single contract/introspection layer
 3. make advanced prop behaviors symmetrical on `prop`
-4. resolve Page inline shared-prop semantics
+4. resolve inline controller shared-prop semantics
 5. tighten validations and error messages
 6. only then consider public deprecations
 
 ## Specific recommendations
 
-1. **Unify controller and Page execution paths**
-   - reduce duplicated behavior in `controller.ex` and `page_controller.ex`
+1. **Unify controller execution paths**
+   - reduce duplicated behavior in `controller.ex`
 
 2. **Make `prop` the canonical place for common behavior**
    - declaration-first for merge/prepend/match/scroll where possible
@@ -273,15 +273,9 @@ Outcome:
 ## Referenced files
 
 - `lib/nb_inertia/controller.ex`
-- `lib/nb_inertia/page.ex`
-- `lib/nb_inertia/page_controller.ex`
-- `lib/nb_inertia/router.ex`
 - `lib/nb_inertia/core_controller.ex`
 - `lib/nb_inertia/scroll_metadata.ex`
 - `lib/nb_inertia/shared_props.ex`
 - `lib/nb_inertia/validation.ex`
 - `lib/nb_inertia/credo/check/design/declare_inertia_page.ex`
 - `lib/nb_inertia/credo/check/readability/prop_from_assigns.ex`
-- `lib/nb_inertia/credo/check/warning/missing_mount.ex`
-- `lib/nb_inertia/credo/check/warning/undeclared_prop_in_mount.ex`
-- `lib/nb_inertia/credo/check/warning/modal_without_base_url.ex`

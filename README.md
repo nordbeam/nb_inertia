@@ -4,7 +4,7 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 
 ## Features
 
-- **Declarative Page DSL**: Define pages and validate literal `render_inertia_page/4` calls in dev/test
+- **Declarative Controller Page Contracts**: Define controller pages and validate literal `render_inertia_page/4` calls in dev/test
 - **Component Name Inference**: Automatic conversion from `:users_index` to `"Users/Index"`
 - **Shared Props**: Define props shared across all pages (inline or as dedicated modules)
 - **Flash Data**: One-time data that doesn't persist in browser history (Inertia v2.3.3+ compatible)

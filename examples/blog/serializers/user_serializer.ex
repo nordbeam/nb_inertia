@@ -3,9 +3,11 @@
 # Serializers define the shape of data sent to the frontend.
 # nb_ts generates TypeScript interfaces from these declarations.
 #
-# Usage in Page modules:
-#   prop :user, ref(Blog.UserSerializer)                # single user
-#   prop :users, list_of(ref(Blog.UserSerializer))      # list of users
+# Usage in controller page declarations:
+#   inertia_page :users_show do
+#     prop :user, ref(Blog.UserSerializer)              # single user
+#     prop :users, list_of(ref(Blog.UserSerializer))    # list of users
+#   end
 
 defmodule Blog.UserSerializer do
   use NbSerializer.Serializer

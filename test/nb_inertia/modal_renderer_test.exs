@@ -16,46 +16,46 @@ defmodule NbInertia.ModalRendererTest do
     end
   end
 
-  defmodule UsersIndexPage do
-    use NbInertia.Page, component: "Users/Index"
+  defmodule UsersController do
+    use Phoenix.Controller, formats: [:html]
+    use NbInertia.Controller
 
-    prop(:users, :list)
-    prop(:current_user_id, :string)
-    prop(:base_request, :boolean)
+    inertia_page :users_index, component: "Users/Index" do
+      prop(:users, :list)
+      prop(:current_user_id, :string)
+      prop(:base_request, :boolean)
+    end
 
-    def mount(conn, _params) do
-      %{
+    inertia_page :users_new, component: "Users/New" do
+      prop(:form, :map)
+      prop(:viewer_id, :string)
+    end
+
+    def index(conn, _params) do
+      render_inertia_page(conn, :users_index,
         users: [%{id: 1, name: "Ada"}],
         current_user_id: conn.assigns.current_user_id,
         base_request: NbInertia.Modal.Renderer.base_request?(conn)
-      }
+      )
     end
-  end
 
-  defmodule UsersNewPage do
-    use NbInertia.Page, component: "Users/New"
-
-    prop(:form, :map)
-    prop(:viewer_id, :string)
-
-    modal(
-      base_url: "/users",
-      size: :lg,
-      position: :center
-    )
-
-    def mount(conn, _params) do
-      %{
-        form: %{name: ""},
-        viewer_id: conn.assigns.current_user_id
-      }
+    def new(conn, _params) do
+      render_inertia_modal(
+        conn,
+        :users_new,
+        [
+          form: %{name: ""},
+          viewer_id: conn.assigns.current_user_id
+        ],
+        base_url: "/users",
+        size: :lg,
+        position: :center
+      )
     end
   end
 
   defmodule Router do
     use Phoenix.Router
-
-    import NbInertia.Router
 
     pipeline :browser do
       plug(:accepts, ["html"])
@@ -75,8 +75,8 @@ defmodule NbInertia.ModalRendererTest do
       pipe_through(:browser)
 
       get("/login/:id", NbInertia.ModalRendererTest.SessionController, :login)
-      inertia("/users", NbInertia.ModalRendererTest.UsersIndexPage)
-      inertia("/users/new", NbInertia.ModalRendererTest.UsersNewPage)
+      get("/users", NbInertia.ModalRendererTest.UsersController, :index)
+      get("/users/new", NbInertia.ModalRendererTest.UsersController, :new)
     end
 
     defp load_current_user(conn, _opts) do
