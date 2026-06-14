@@ -138,7 +138,7 @@ export function useOnFlash<T extends FlashData = FlashData>(
 
   onMounted(() => {
     removeListener.value = router.on('flash', (event) => {
-      const detail = (event as { detail: FlashEventDetail<T> }).detail;
+      const detail = (event as unknown as { detail: FlashEventDetail<T> }).detail;
       callback(detail.flash);
     });
   });

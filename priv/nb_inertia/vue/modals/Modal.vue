@@ -11,14 +11,14 @@
       <DialogRoot :open="open" @update:open="(val) => !val && close()">
         <DialogPortal>
           <!-- Backdrop/Overlay -->
-          <DialogOverlay :class="backdropClasses" :style="{ zIndex: getZIndex(modal.index) }" />
+          <DialogOverlay :class="backdropClasses" :style="{ zIndex: getZIndex(modal?.index ?? 0) }" />
 
           <!-- Modal or Slideover Content -->
           <SlideoverContent
             v-if="isSlideover"
             :config="config"
             :class="className"
-            :z-index="getZIndex(modal.index) + 1"
+            :z-index="getZIndex(modal?.index ?? 0) + 1"
           >
             <!-- Close Button -->
             <CloseButton v-if="showCloseButton" @close="close" />
@@ -33,7 +33,7 @@
             v-else
             :config="config"
             :class="className"
-            :z-index="getZIndex(modal.index) + 1"
+            :z-index="getZIndex(modal?.index ?? 0) + 1"
           >
             <!-- Close Button -->
             <CloseButton v-if="showCloseButton" @close="close" />
