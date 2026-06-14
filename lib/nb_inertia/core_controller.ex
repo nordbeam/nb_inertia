@@ -1118,7 +1118,7 @@ defmodule NbInertia.CoreController do
   defp do_resolve_props(map, opts) when is_map(map) and not is_struct(map) do
     map
     |> Enum.reduce([], fn {key, value}, acc ->
-      [{key, do_resolve_props(value, opts)} | acc]
+      [{normalize_preserved_key(key), do_resolve_props(value, opts)} | acc]
     end)
     |> Map.new()
   end
@@ -1197,6 +1197,9 @@ defmodule NbInertia.CoreController do
 
   # Applies any specified transformations to the key (such as conversion to
   # camel case), unless the key has been marked as "preserved".
+  defp normalize_preserved_key({:preserve, key}), do: key
+  defp normalize_preserved_key(key), do: key
+
   defp transform_key({:preserve, key}, _opts), do: key
 
   defp transform_key(key, opts) do

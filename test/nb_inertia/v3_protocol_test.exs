@@ -101,6 +101,37 @@ defmodule NbInertia.V3ProtocolTest do
            ]
   end
 
+  test "unwraps preserved prop keys when camelization is disabled" do
+    conn =
+      inertia_conn()
+      |> camelize_props(false)
+      |> render_inertia("Users/Index", %{
+        preserve_case(:api_token) => "secret",
+        user_profile: %{
+          preserve_case(:account_id) => 42,
+          :first_name => "Ada",
+          :organizations => [
+            %{preserve_case(:billing_plan) => "team", display_name: "Acme"}
+          ]
+        }
+      })
+
+    page = Jason.decode!(conn.resp_body)
+    props = page["props"]
+    profile = props["user_profile"]
+
+    assert props["api_token"] == "secret"
+    refute Map.has_key?(props, "apiToken")
+
+    assert profile["first_name"] == "Ada"
+    assert profile["account_id"] == 42
+    refute Map.has_key?(profile, "accountId")
+
+    assert profile["organizations"] == [
+             %{"display_name" => "Acme", "billing_plan" => "team"}
+           ]
+  end
+
   test "serializes scroll props with append merge behavior by default" do
     conn =
       inertia_conn()
