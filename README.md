@@ -18,6 +18,10 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 - **Modal System**: Render pages as modals/slideovers without full page navigation
 - **Credo Checks**: Shortcut task to enable nb-specific custom checks from installed `nb_*` packages
 
+## Development Tools
+
+Performance benchmarks and smoke budgets are documented in [docs/performance.md](docs/performance.md).
+
 ## Installation
 
 ### Quick Start (Recommended)

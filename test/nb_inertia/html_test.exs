@@ -4,7 +4,8 @@ defmodule NbInertia.HTMLTest do
   import Phoenix.LiveViewTest
 
   test "inertia_ssr renders the SSR body without wrapping it again" do
-    body = ~s(<script data-page="app" type="application/json">{}</script><div id="app" data-server-rendered="true"><h1>Hello</h1></div>)
+    body =
+      ~s(<script data-page="app" type="application/json">{}</script><div id="app" data-server-rendered="true"><h1>Hello</h1></div>)
 
     html = render_component(&NbInertia.HTML.inertia_ssr/1, body: body)
 
