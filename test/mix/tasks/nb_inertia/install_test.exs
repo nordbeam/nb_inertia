@@ -608,6 +608,30 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
                "without allowArbitraryExtensions; got: #{vue_modals["types"]}"
     end
 
+    test "package.json ./vue/modals import entry points to a .js file so vue-tsc uses types condition" do
+      package_json =
+        Path.expand("../../../../package.json", __DIR__)
+        |> File.read!()
+        |> Jason.decode!()
+
+      vue_modals = get_in(package_json, ["exports", "./vue/modals"])
+
+      assert vue_modals != nil, "expected ./vue/modals export to be defined"
+
+      assert String.ends_with?(vue_modals["import"], ".js"),
+             "expected ./vue/modals import to be a .js file — a .ts import entry causes " <>
+               "vue-tsc to process the source and fail on .vue SFC re-exports with TS2305; " <>
+               "got: #{vue_modals["import"]}"
+    end
+
+    test "dist/vue/modals/index.js exists as the bundler-facing runtime entry" do
+      index_js = Path.expand("../../../../dist/vue/modals/index.js", __DIR__)
+
+      assert File.exists?(index_js),
+             "expected dist/vue/modals/index.js to exist as the bundler-facing runtime entry " <>
+               "for consumers using Vite + @vitejs/plugin-vue"
+    end
+
     test "vue/modals index.d.ts exists and declares components without .vue file imports" do
       index_dts_path = Path.expand("../../../../priv/nb_inertia/vue/modals/index.d.ts", __DIR__)
 
