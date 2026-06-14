@@ -57,6 +57,7 @@ export default defineConfig({
       external: [
         'react',
         'react/jsx-runtime',
+        'react/jsx-dev-runtime',
         'react-dom',
         '@inertiajs/react',
         '@inertiajs/vue3',

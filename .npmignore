@@ -6,6 +6,14 @@
 **/package-lock.json
 priv/nb_inertia/IMPLEMENTATION_COMPARISON.md
 
+# Vue sub-package dev files (not needed by consumers)
+priv/nb_inertia/vue/__tests__/
+priv/nb_inertia/vue/vitest.config.ts
+priv/nb_inertia/vue/vitest.setup.ts
+priv/nb_inertia/vue/tsconfig.json
+priv/nb_inertia/vue/package-lock.json
+priv/nb_inertia/vue/package.json
+
 # Development files
 .git/
 .gitignore

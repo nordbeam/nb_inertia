@@ -1,82 +1,77 @@
-import { jsx as b } from "react/jsx-runtime";
-import { useMemo as j, useCallback as s, useEffect as H, useRef as O } from "react";
-import { isRouteResult as k } from "../../shared/types.js";
-import { routerPrefetch as U } from "../../shared/routerCompat.js";
-import { useModalStack as q } from "./modalStack.js";
-const z = () => null, N = ({
-  href: t,
-  method: M,
-  data: v,
-  modalConfig: w,
-  loadingComponent: y,
-  onClick: c,
-  prefetch: n,
-  cacheFor: l,
-  cacheTags: m,
-  children: x,
-  className: D,
-  ...o
-}) => {
-  const { modals: L, prefetchModal: a, visitModal: g } = q(), r = k(t) ? t.url : t, f = (k(t) && !M ? t.method : M) || "get", u = j(() => n ? n === !0 ? ["hover"] : typeof n == "string" ? [n] : n : [], [n]), i = s(() => {
-    if (f === "get")
-      if (a)
-        a(r, { cacheFor: l });
-      else {
-        const e = {};
-        l !== void 0 && (e.cacheFor = l), m !== void 0 && (e.cacheTags = m), U(r, { preserveState: !0 }, e);
-      }
-  }, [r, f, l, m, a]);
-  H(() => {
-    if (u.includes("mount")) {
-      const e = setTimeout(i, 0);
-      return () => clearTimeout(e);
-    }
-  }, [u, i]);
-  const d = O(null), E = s(
-    (e) => {
-      o.onMouseEnter?.(e), u.includes("hover") && (d.current = setTimeout(i, 75));
-    },
-    [u, i, o]
-  ), R = s(
-    (e) => {
-      o.onMouseLeave?.(e), d.current && (clearTimeout(d.current), d.current = null);
-    },
-    [o]
-  ), T = s(
-    (e) => {
-      o.onMouseDown?.(e), u.includes("click") && i();
-    },
-    [u, i, o]
-  ), p = s(
-    (e) => {
-      if (e.ctrlKey || e.metaKey || e.shiftKey || (e.preventDefault(), c && c(e), L.find((S) => S.url === r)))
-        return;
-      const K = typeof window < "u" ? window.location.href : "";
-      g(t, {
-        method: f,
-        data: v ?? {},
-        modalConfig: w,
-        loadingComponent: y || z,
-        returnUrl: K
-      });
-    },
-    [v, f, t, y, w, L, c, g]
-  );
-  return /* @__PURE__ */ b(
-    "a",
-    {
-      href: r,
-      className: D,
-      onClick: p,
-      onMouseEnter: E,
-      onMouseLeave: R,
-      onMouseDown: T,
-      ...o,
-      children: x
-    }
-  );
+import { routerPrefetch as e } from "../../shared/routerCompat.js";
+import { isRouteResult as t } from "../../shared/types.js";
+import { useModalStack as n } from "./modalStack.js";
+import { useCallback as r, useEffect as i, useMemo as a, useRef as o } from "react";
+import { jsxDEV as s } from "react/jsx-dev-runtime";
+//#region priv/nb_inertia/react/modals/ModalLink.tsx
+var c = "/Users/assim/Projects/nb/nb_inertia/.cas/worktrees/task_c2aa559a3477a2d9/priv/nb_inertia/react/modals/ModalLink.tsx", l = () => null, u = ({ href: u, method: d, data: f, modalConfig: p, loadingComponent: m, onClick: h, prefetch: g, cacheFor: _, cacheTags: v, children: y, className: b, ...x }) => {
+	let { modals: S, prefetchModal: C, visitModal: w } = n(), T = t(u) ? u.url : u, E = (t(u) && !d ? u.method : d) || "get", D = a(() => g ? g === !0 ? ["hover"] : typeof g == "string" ? [g] : g : [], [g]), O = r(() => {
+		if (E === "get") if (C) C(T, { cacheFor: _ });
+		else {
+			let t = {};
+			_ !== void 0 && (t.cacheFor = _), v !== void 0 && (t.cacheTags = v), e(T, { preserveState: !0 }, t);
+		}
+	}, [
+		T,
+		E,
+		_,
+		v,
+		C
+	]);
+	i(() => {
+		if (D.includes("mount")) {
+			let e = setTimeout(O, 0);
+			return () => clearTimeout(e);
+		}
+	}, [D, O]);
+	let k = o(null), A = r((e) => {
+		x.onMouseEnter?.(e), D.includes("hover") && (k.current = setTimeout(O, 75));
+	}, [
+		D,
+		O,
+		x
+	]), j = r((e) => {
+		x.onMouseLeave?.(e), k.current &&= (clearTimeout(k.current), null);
+	}, [x]), M = r((e) => {
+		x.onMouseDown?.(e), D.includes("click") && O();
+	}, [
+		D,
+		O,
+		x
+	]);
+	return /* @__PURE__ */ s("a", {
+		href: T,
+		className: b,
+		onClick: r((e) => {
+			if (e.ctrlKey || e.metaKey || e.shiftKey || (e.preventDefault(), h && h(e), S.find((e) => e.url === T))) return;
+			let t = typeof window < "u" ? window.location.href : "";
+			w(u, {
+				method: E,
+				data: f ?? {},
+				modalConfig: p,
+				loadingComponent: m || l,
+				returnUrl: t
+			});
+		}, [
+			f,
+			E,
+			u,
+			m,
+			p,
+			S,
+			h,
+			w
+		]),
+		onMouseEnter: A,
+		onMouseLeave: j,
+		onMouseDown: M,
+		...x,
+		children: y
+	}, void 0, !1, {
+		fileName: c,
+		lineNumber: 296,
+		columnNumber: 5
+	}, void 0);
 };
-export {
-  N as ModalLink,
-  N as default
-};
+//#endregion
+export { u as ModalLink, u as default };

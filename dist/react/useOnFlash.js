@@ -1,13 +1,12 @@
+import { useEffect as e, useRef as t } from "react";
 import { router as n } from "@inertiajs/react";
-import { useRef as s, useEffect as f } from "react";
-function i(e) {
-  const r = s(e);
-  r.current = e, f(() => n.on("flash", (t) => {
-    const o = t.detail;
-    r.current(o.flash);
-  }), []);
+//#region priv/nb_inertia/react/useOnFlash.tsx
+function r(r) {
+	let i = t(r);
+	i.current = r, e(() => n.on("flash", (e) => {
+		let t = e.detail;
+		i.current(t.flash);
+	}), []);
 }
-export {
-  i as default,
-  i as useOnFlash
-};
+//#endregion
+export { r as default, r as useOnFlash };

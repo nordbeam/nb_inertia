@@ -1,21 +1,20 @@
-import { usePage as r } from "@inertiajs/react";
-import { useModalPageContext as o } from "./modals/modalStack.js";
+import { useModalPageContext as e } from "./modals/modalStack.js";
+import { usePage as t } from "@inertiajs/react";
+//#region priv/nb_inertia/react/usePage.tsx
 function n() {
-  const e = o();
-  return e ? {
-    component: e.component,
-    props: e.props,
-    url: e.url,
-    version: e.version || null,
-    flash: e.flash || {},
-    scrollRegions: e.scrollRegions || [],
-    rememberedState: e.rememberedState || {},
-    clearHistory: e.clearHistory,
-    encryptHistory: e.encryptHistory,
-    preserveFragment: e.preserveFragment
-  } : r();
+	let n = e();
+	return n ? {
+		component: n.component,
+		props: n.props,
+		url: n.url,
+		version: n.version || null,
+		flash: n.flash || {},
+		scrollRegions: n.scrollRegions || [],
+		rememberedState: n.rememberedState || {},
+		clearHistory: n.clearHistory,
+		encryptHistory: n.encryptHistory,
+		preserveFragment: n.preserveFragment
+	} : t();
 }
-export {
-  n as default,
-  n as usePage
-};
+//#endregion
+export { n as default, n as usePage };

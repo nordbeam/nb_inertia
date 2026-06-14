@@ -1,16 +1,13 @@
-import { useMemo as o, useCallback as r } from "react";
-import { usePage as u } from "./usePage.js";
-function c() {
-  const e = u(), s = o(() => e.flash ?? {}, [e.flash]), n = r(
-    (t) => s != null && t in s && !!s[t],
-    [s]
-  ), a = r(
-    (t) => s?.[t],
-    [s]
-  );
-  return { flash: s, has: n, get: a };
+import e from "./usePage.js";
+import { useCallback as t, useMemo as n } from "react";
+//#region priv/nb_inertia/react/useFlash.tsx
+function r() {
+	let r = e(), i = n(() => r.flash ?? {}, [r.flash]);
+	return {
+		flash: i,
+		has: t((e) => i != null && e in i && !!i[e], [i]),
+		get: t((e) => i?.[e], [i])
+	};
 }
-export {
-  c as default,
-  c as useFlash
-};
+//#endregion
+export { r as default, r as useFlash };

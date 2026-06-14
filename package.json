@@ -112,7 +112,15 @@
   },
   "files": [
     "dist",
-    "priv/nb_inertia/vue",
+    "priv/nb_inertia/vue/modals",
+    "priv/nb_inertia/vue/Head.ts",
+    "priv/nb_inertia/vue/Link.ts",
+    "priv/nb_inertia/vue/modalPageContext.ts",
+    "priv/nb_inertia/vue/router.ts",
+    "priv/nb_inertia/vue/useFlash.ts",
+    "priv/nb_inertia/vue/useForm.ts",
+    "priv/nb_inertia/vue/useHttp.ts",
+    "priv/nb_inertia/vue/usePage.ts",
     "priv/nb_inertia/shared",
     "README.md",
     "LICENSE"
@@ -120,7 +128,6 @@
   "peerDependencies": {
     "@inertiajs/react": "^3.0.3",
     "@inertiajs/vue3": "^3.0.3",
-    "@radix-ui/react-dialog": "",
     "radix-vue": "^1.9.0",
     "react": "^19.0.0",
     "vue": "^3.0.0"
@@ -130,9 +137,6 @@
       "optional": true
     },
     "@inertiajs/vue3": {
-      "optional": true
-    },
-    "@radix-ui/react-dialog": {
       "optional": true
     },
     "radix-vue": {
