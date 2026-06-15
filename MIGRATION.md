@@ -1,18 +1,55 @@
 # Migrating to NbInertia
 
-Guide for migrating from plain Inertia.ex to NbInertia.
+Guide for migrating from plain Phoenix/Inertia.js code or pre-1.0 NbInertia to
+the supported controller-based NbInertia surface.
 
 ## Overview
 
-NbInertia is a **drop-in enhancement** for Inertia.ex that adds:
+NbInertia is a Phoenix Inertia adapter that adds:
 - ✅ Declarative page DSL with compile-time validation
 - ✅ Type-safe props with NbSerializer integration
 - ✅ Automatic TypeScript type generation
 - ✅ Advanced shared props with conditional loading
 - ✅ Better testing helpers
 - ✅ Improved error messages
+- ✅ Optional modal, realtime, SSR, and frontend package helpers
 
 **Migration is incremental** - you can adopt features gradually without breaking existing code.
+
+## Migrating From Pre-1.0 Page APIs
+
+NbInertia 1.0 removes the experimental Page module abstraction. These APIs are
+no longer public or generated:
+
+- `use NbInertia.Page`
+- `NbInertia.PageController`
+- Page callbacks such as `mount/2`, `action/3`, and colocated `render/0`
+- `mix nb_inertia.install --pages`
+- `mix nb_inertia.migrate_to_pages`
+
+Move that code into Phoenix controllers that `use NbInertia.Controller`. Declare
+the typed contract with `inertia_page`, then render it with
+`render_inertia_page/4`:
+
+```elixir
+defmodule MyAppWeb.UserController do
+  use MyAppWeb, :controller
+  use NbInertia.Controller
+
+  inertia_page :users_show do
+    prop :user, :map
+  end
+
+  def show(conn, %{"id" => id}) do
+    render_inertia_page(conn, :users_show,
+      user: Accounts.get_user!(id)
+    )
+  end
+end
+```
+
+Use normal Phoenix plugs, controller assigns, `include_shared_props/2`, and
+explicit helper calls instead of Page callbacks.
 
 ---
 
@@ -25,9 +62,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:nb_inertia, "~> 0.2"},
-    # Keep existing inertia dependency - nb_inertia enhances it
-    {:inertia, "~> 2.5"},
+    {:nb_inertia, "~> 1.0"},
     # ... other deps
   ]
 end
@@ -57,7 +92,9 @@ config :nb_inertia,
   history: [encrypt: true]
 ```
 
-**Note:** NbInertia automatically forwards config to Inertia - no need to configure both.
+**Note:** Configure `:nb_inertia` for the supported adapter. Keep separate
+`:inertia` configuration only for legacy code paths that still use another
+adapter directly.
 
 ### Step 3: Update Controllers (10-30 minutes)
 
@@ -390,7 +427,7 @@ end
 ## Migration Checklist
 
 ### Phase 1: Setup (30 minutes)
-- [ ] Add `{:nb_inertia, "~> 0.2"}` to deps
+- [ ] Add `{:nb_inertia, "~> 1.0"}` to deps
 - [ ] Update config from `:inertia` to `:nb_inertia`
 - [ ] Run `mix deps.get`
 - [ ] Update test support to import `NbInertia.TestHelpers`

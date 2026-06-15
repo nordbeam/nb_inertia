@@ -81,12 +81,29 @@ mix nb_inertia.install --typescript   # With TypeScript support
 # mix.exs
 def deps do
   [
-    {:nb_inertia, "~> 0.1"},
+    {:nb_inertia, "~> 1.0"},
     {:nb_serializer, "~> 0.1", optional: true},  # Optional
     {:nb_ts, "~> 0.1", optional: true}           # Optional
   ]
 end
 ```
+
+## Performance Verification
+
+Use the lightweight smoke gate in CI and before release work:
+
+```bash
+mix nb_inertia.perf_gate
+```
+
+Run the full benchmark suite when changing render/protocol hot paths:
+
+```bash
+mix nb_inertia.bench
+```
+
+Budgets live in `bench/perf_budgets.exs`; command details and update guidance
+are documented in [docs/performance.md](docs/performance.md).
 
 ## Configuration
 

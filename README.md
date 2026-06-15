@@ -20,7 +20,13 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 
 ## Development Tools
 
-Performance benchmarks and smoke budgets are documented in [docs/performance.md](docs/performance.md).
+Performance benchmarks and smoke budgets are documented in
+[docs/performance.md](docs/performance.md).
+
+```bash
+mix nb_inertia.perf_gate   # lightweight smoke budget check
+mix nb_inertia.bench       # full benchmark suite
+```
 
 ## Installation
 
@@ -64,7 +70,7 @@ mix igniter.install nb_inertia@github:nordbeam/nb_inertia --typescript
 
 This installs and configures:
 - NbInertia controller helpers
-- Inertia configuration
+- NbInertia configuration
 - Optional TypeScript type generation (with `--typescript`)
 - Mix aliases
 - Example files
@@ -1524,7 +1530,11 @@ form.submit(options);  // Method and URL from route
 
 ### Vue Support
 
-> **Bundler required:** Vue subpaths (`@nordbeam/nb-inertia/vue/*`) ship TypeScript source files and must be processed by a bundler such as Vite. They are not pre-compiled to JavaScript. Install `radix-vue` if you use the Vue modal components.
+> **Bundler required:** Vue package subpaths such as
+> `@nordbeam/nb-inertia/vue/useForm` and `@nordbeam/nb-inertia/vue/modals`
+> ship TypeScript or Vue source files and must be processed by a bundler such
+> as Vite. They are not pre-compiled to JavaScript. Install `radix-vue` if you
+> use the Vue modal components.
 
 Vue 3 has full support for both official Inertia routing and nb_inertia's enhanced useForm:
 

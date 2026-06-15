@@ -7,7 +7,6 @@ export declare const router: {
     patch(url: Parameters<typeof inertiaRouter.patch>[0], data?: Parameters<typeof inertiaRouter.patch>[1], options?: Parameters<typeof inertiaRouter.patch>[2]): void;
     delete(url: Parameters<typeof inertiaRouter.delete>[0], options?: Parameters<typeof inertiaRouter.delete>[1]): void;
     reload(options?: Parameters<typeof inertiaRouter.reload>[0]): void;
-    form: typeof import('@inertiajs/vue3').useForm;
 };
 export default router;
 //# sourceMappingURL=router.d.ts.map

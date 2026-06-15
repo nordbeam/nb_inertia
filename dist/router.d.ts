@@ -1,5 +1,4 @@
 import { router as router_2 } from '@inertiajs/react';
-import { useForm } from '@inertiajs/vue3';
 
 declare const router: {
     visit(url: Parameters<typeof router_2.visit>[0], options?: Parameters<typeof router_2.visit>[1]): void;
@@ -9,7 +8,6 @@ declare const router: {
     patch(url: Parameters<typeof router_2.patch>[0], data?: Parameters<typeof router_2.patch>[1], options?: Parameters<typeof router_2.patch>[2]): void;
     delete(url: Parameters<typeof router_2.delete>[0], options?: Parameters<typeof router_2.delete>[1]): void;
     reload(options?: Parameters<typeof router_2.reload>[0]): void;
-    form: useForm;
 };
 export default router;
 export { router }

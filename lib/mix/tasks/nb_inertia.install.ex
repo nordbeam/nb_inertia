@@ -2694,7 +2694,7 @@ if Code.ensure_loaded?(Igniter) do
 
           Enhanced Inertia Components (React):
           - Created assets/js/lib/inertia.#{extension} with enhanced components
-          - Re-exports router, Link, and useForm from @nordbeam/nb-inertia
+          - Re-exports router, Link, Head, useForm, useHttp, useRoutes, usePage, flash hooks, and modal helpers from @nordbeam/nb-inertia
           - Provides automatic integration with nb_routes rich mode
           - Also re-exports all standard Inertia.js exports for convenience
 
@@ -2739,7 +2739,7 @@ if Code.ensure_loaded?(Igniter) do
 
             Enhanced Inertia Components (Vue):
             - Created assets/js/lib/inertia.#{extension} with enhanced components
-            - Re-exports useForm, useFlash, and modal components from @nordbeam/nb-inertia
+            - Re-exports router, Link, Head, useForm, useHttp, usePage, useFlash, and modal components from @nordbeam/nb-inertia
             - Provides automatic integration with nb_routes rich mode
             - Also re-exports all standard Inertia.js exports for convenience
 

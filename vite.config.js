@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
-import { readdirSync, statSync } from 'fs';
+import { mkdirSync, readdirSync, statSync, writeFileSync } from 'fs';
 
 // Recursively find all .tsx and .ts files to use as entry points
 function getEntryPoints(dir, baseDir = null) {
@@ -38,6 +38,27 @@ function getEntryPoints(dir, baseDir = null) {
   return entries;
 }
 
+function emitVueModalRuntimeEntry() {
+  return {
+    name: 'emit-vue-modal-runtime-entry',
+    writeBundle() {
+      const outputDir = resolve('dist/vue/modals');
+      mkdirSync(outputDir, { recursive: true });
+      writeFileSync(
+        resolve(outputDir, 'index.js'),
+        [
+          '// Runtime entry for Vue modal components.',
+          '// Consumers use this via their bundler (Vite + @vitejs/plugin-vue),',
+          '// which handles the downstream .vue SFC imports natively.',
+          '// TypeScript consumers use the "types" condition -> index.d.ts instead.',
+          "export * from '../../../priv/nb_inertia/vue/modals/index.ts';",
+          '',
+        ].join('\n')
+      );
+    },
+  };
+}
+
 export default defineConfig({
   // Force production JSX transform: use jsx-runtime (not jsx-dev-runtime), no fileName/lineNumber metadata
   oxc: {
@@ -47,6 +68,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    emitVueModalRuntimeEntry(),
     dts({
       include: ['priv/nb_inertia/**/*.{ts,tsx}'],
       exclude: ['**/*.test.ts', '**/*.test.tsx', '**/vitest.*', '**/vue/**', '**/node_modules/**'],

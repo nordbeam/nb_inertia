@@ -1,4 +1,4 @@
-import { JSX } from 'react';
+import { JSX } from 'react/jsx-runtime';
 
 /**
  * SSR-safe modal link component
