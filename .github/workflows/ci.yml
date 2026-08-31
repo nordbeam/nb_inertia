@@ -36,6 +36,7 @@ jobs:
         node --input-type=module <<'NODE'
           import { execFileSync } from "node:child_process";
           import fs from "node:fs";
+          import os from "node:os";
 
           const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
           const requiredFiles = [
@@ -51,11 +52,32 @@ jobs:
             throw new Error("package.json must be private; install the package from GitHub");
           }
 
-          const packInfo = JSON.parse(
-            execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
-              encoding: "utf8",
-            }),
-          )[0];
+          const packResult = JSON.parse(
+            execFileSync(
+              "npx",
+              [
+                "--yes",
+                "npm@12.0.2",
+                "pack",
+                process.cwd(),
+                "--dry-run",
+                "--ignore-scripts",
+                "--json",
+              ],
+              {
+                // Run npm 12 outside the package root so the runner's npm
+                // version cannot fail this repository's devEngines check.
+                cwd: os.tmpdir(),
+                encoding: "utf8",
+              },
+            ),
+          );
+          const packInfo = packResult[packageJson.name];
+
+          if (!packInfo || !Array.isArray(packInfo.files)) {
+            throw new Error(`npm 12 pack output is missing ${packageJson.name}`);
+          }
+
           const packedFiles = new Set(packInfo.files.map(({ path }) => path));
 
           for (const [exportName, exportSpec] of Object.entries(packageJson.exports)) {
