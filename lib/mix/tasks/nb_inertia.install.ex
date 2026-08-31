@@ -929,7 +929,7 @@ if Code.ensure_loaded?(Igniter) do
       if find_executable.("vp") do
         "vp"
       else
-        "npx --yes npm@#{@npm_version} exec --yes --package=vite-plus@#{@vite_plus_version} -- vp"
+        "corepack npm@#{@npm_version} exec --yes --package=vite-plus@#{@vite_plus_version} -- vp"
       end
     end
 
@@ -1244,7 +1244,7 @@ if Code.ensure_loaded?(Igniter) do
           "yarn --cwd #{shell_escape(assets_dir)} add#{dev_flag} #{package_args}"
 
         _ ->
-          "npx --yes npm@#{@npm_version} install --prefix #{shell_escape(assets_dir)}#{dev_flag} #{package_args}"
+          "corepack npm@#{@npm_version} install --prefix #{shell_escape(assets_dir)}#{dev_flag} #{package_args}"
       end
     end
 

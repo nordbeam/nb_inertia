@@ -383,7 +383,7 @@ if Code.ensure_loaded?(Igniter) do
           "bun" -> "bun add --cwd #{assets_dir} phoenix"
           "pnpm" -> "pnpm add --dir #{assets_dir} phoenix"
           "yarn" -> "yarn --cwd #{assets_dir} add phoenix"
-          _ -> "npx --yes npm@#{@npm_version} install --prefix #{assets_dir} phoenix"
+          _ -> "corepack npm@#{@npm_version} install --prefix #{assets_dir} phoenix"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])

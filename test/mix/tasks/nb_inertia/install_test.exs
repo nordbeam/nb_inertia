@@ -38,7 +38,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   end
 
   defp npm12!(args, opts) do
-    run_command!("npx", ["--yes", "npm@#{@npm_version}" | args], opts)
+    run_command!("corepack", ["npm@#{@npm_version}" | args], opts)
   end
 
   defp npm_pack!(tmp_dir) do
@@ -301,9 +301,19 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert Install.vite_plus_command_prefix(fn "vp" -> "/usr/local/bin/vp" end) == "vp"
     end
 
-    test "bootstraps the project-local Vite+ CLI through npm when vp is absent" do
+    test "bootstraps the project-local Vite+ CLI through Corepack npm 12 when vp is absent" do
       assert Install.vite_plus_command_prefix(fn _command -> nil end) ==
-               "npx --yes npm@12.0.2 exec --yes --package=vite-plus@0.3.0 -- vp"
+               "corepack npm@12.0.2 exec --yes --package=vite-plus@0.3.0 -- vp"
+    end
+
+    test "uses Corepack npm 12 for installer and realtime fallbacks" do
+      installer_source = File.read!("lib/mix/tasks/nb_inertia.install.ex")
+      realtime_source = File.read!("lib/mix/tasks/nb_inertia.gen.realtime.ex")
+
+      for source <- [installer_source, realtime_source] do
+        assert source =~ ~S(corepack npm@#{@npm_version})
+        refute source =~ ~S(npx --yes npm@#{@npm_version})
+      end
     end
 
     test "prefers Vite+ in staged package.json over a staged Bun lockfile" do
@@ -1096,9 +1106,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
       {output, status} =
         System.cmd(
-          "npx",
+          "corepack",
           [
-            "--yes",
             "npm@#{@npm_version}",
             "pack",
             package_root,
@@ -1169,8 +1178,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   describe "packed TypeScript installer smoke tests" do
     @tag timeout: 180_000
     test "generated React and Vue lib/inertia barrels compile against packed package exports" do
-      assert System.find_executable("npx") != nil,
-             "npx is required to run npm 12.0.2 for packed installer smoke tests"
+      assert System.find_executable("corepack") != nil,
+             "Corepack is required to run npm 12.0.2 for packed installer smoke tests"
 
       tmp_dir =
         Path.join(

@@ -44,7 +44,7 @@ Install from the VS Code marketplace (coming soon), or build and install locally
 
 ```bash
 cd editor/vscode
-npx @vscode/vsce package
+corepack npm@12.0.2 exec --yes --package=@vscode/vsce -- vsce package
 code --install-extension nb-inertia-tsx-0.1.0.vsix
 ```
 
