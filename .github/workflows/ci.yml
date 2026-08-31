@@ -116,6 +116,16 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
+    - name: Set up Node.js for npm 12 smoke tests
+      uses: actions/setup-node@v7
+      with:
+        node-version: '24.20.0'
+
+    - name: Enable and verify Corepack npm 12
+      run: |
+        corepack enable
+        test "$(corepack npm@12.0.2 --version)" = "12.0.2"
+
     - name: Set up Elixir
       uses: erlef/setup-beam@v1
       with:
@@ -159,6 +169,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+
+    - name: Set up Node.js for npm 12 smoke tests
+      uses: actions/setup-node@v7
+      with:
+        node-version: '24.20.0'
+
+    - name: Enable and verify Corepack npm 12
+      run: |
+        corepack enable
+        test "$(corepack npm@12.0.2 --version)" = "12.0.2"
 
     - name: Set up Elixir
       uses: erlef/setup-beam@v1

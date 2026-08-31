@@ -57,7 +57,12 @@ defmodule NbInertia.MixProject do
       {:nb_serializer, github: "nordbeam/nb_serializer", optional: true},
 
       # Development and test dependencies
-      {:wallaby, "~> 0.30", optional: true},
+      # Wallaby is only used by the optional browser-test helpers. Pin the
+      # last 0.30 release because 0.31 switched to HTTPoison 3/Hackney 4,
+      # which pulls HTTP/3 dependencies that require OTP 26 or newer.
+      # Keep it out of the package runtime; browser-test applications should
+      # start Wallaby explicitly when they configure those tests.
+      {:wallaby, "~> 0.30.12", only: :test, runtime: false, optional: true},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
       {:credo, "~> 1.7", optional: true, runtime: false},

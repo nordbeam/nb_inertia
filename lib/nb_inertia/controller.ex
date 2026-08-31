@@ -88,6 +88,7 @@ defmodule NbInertia.Controller do
         import NbInertia.Flash, only: [inertia_flash: 2, inertia_flash: 3]
 
         Module.register_attribute(__MODULE__, :inertia_pages, accumulate: false)
+        Module.register_attribute(__MODULE__, :inertia_page_order, accumulate: true)
         Module.register_attribute(__MODULE__, :inertia_shared, accumulate: false)
         Module.register_attribute(__MODULE__, :inertia_shared_modules, accumulate: true)
         Module.register_attribute(__MODULE__, :current_page, accumulate: false)
@@ -214,6 +215,11 @@ defmodule NbInertia.Controller do
         :inertia_pages,
         Map.put(pages, unquote(page_name), page_config)
       )
+
+      # Keep declaration order separately from the page map. Map iteration
+      # order is not stable across Elixir versions, but form introspection
+      # promises that the last declaration wins.
+      Module.put_attribute(__MODULE__, :inertia_page_order, unquote(page_name))
 
       Module.delete_attribute(__MODULE__, :current_page)
       Module.delete_attribute(__MODULE__, :current_props)
@@ -956,12 +962,13 @@ defmodule NbInertia.Controller do
     # Generate __inertia_forms__/0 function for introspection
     # Extract forms from all pages since forms are now stored per-page
     pages = Module.get_attribute(env.module, :inertia_pages) || %{}
+    page_order = Module.get_attribute(env.module, :inertia_page_order) |> Enum.reverse()
 
     all_forms =
-      Enum.reduce(pages, %{}, fn {_page_name, page_config}, acc ->
-        case Map.get(page_config, :forms) do
-          nil -> acc
+      Enum.reduce(page_order, %{}, fn page_name, acc ->
+        case get_in(pages, [page_name, :forms]) do
           forms when is_map(forms) -> Map.merge(acc, forms)
+          _ -> acc
         end
       end)
 
