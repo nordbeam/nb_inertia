@@ -9,6 +9,8 @@ Run the smoke gate:
 
 ```bash
 mix nb_inertia.perf_gate
+# Run only the smallest fixture when iterating locally.
+mix nb_inertia.perf_gate --sizes small
 ```
 
 Run the full benchmark suite:
@@ -60,9 +62,18 @@ same Elixir/OTP versions and comparable system load.
 
 ## Budgets
 
-Smoke budgets live in `bench/perf_budgets.exs`. The gate intentionally uses only
-small fixtures and broad thresholds so it catches pathological regressions without
-being sensitive to normal CI noise.
+Smoke budgets live in `bench/perf_budgets.exs`. The gate uses all three fixture
+sizes with 40 operations across 8 samples per scenario/size.
+That keeps the default check short while ensuring that scaling regressions in the
+medium and large fixtures are covered in CI. Use `--sizes small` for a faster
+local check.
+
+The p95 limits are per-operation microseconds. They are rounded up from repeated
+gate-shaped runs and leave roughly 3–10× headroom for scheduler and runner
+variance (with a larger floor for very small operations). The largest measured
+paths remain below 20 ms/op, so the largest ceiling is still tighter than the
+previous 75–150 ms thresholds. Memory limits remain separate smoke indicators;
+they are not allocation-count measurements.
 
 When updating a budget:
 

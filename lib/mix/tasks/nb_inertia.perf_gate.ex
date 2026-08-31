@@ -4,9 +4,11 @@ defmodule Mix.Tasks.NbInertia.PerfGate do
 
       mix nb_inertia.perf_gate
       mix nb_inertia.perf_gate --budget bench/perf_budgets.exs
+      mix nb_inertia.perf_gate --sizes small,medium,large
 
-  The gate is intentionally small-fixture based. Use `mix nb_inertia.bench` for
-  full local comparison runs.
+  The default gate exercises all fixture sizes with a small number of samples.
+  Use `--sizes small` for a faster local smoke check, or `mix nb_inertia.bench`
+  for full local comparison runs.
   """
 
   use Mix.Task
@@ -14,6 +16,7 @@ defmodule Mix.Tasks.NbInertia.PerfGate do
   @shortdoc "Checks nb_inertia performance smoke budgets"
 
   @default_budget_path "bench/perf_budgets.exs"
+  @default_sizes [:small, :medium, :large]
 
   @impl Mix.Task
   def run(args) do
@@ -26,7 +29,7 @@ defmodule Mix.Tasks.NbInertia.PerfGate do
     benchmark_opts =
       opts
       |> Keyword.drop([:budget])
-      |> Keyword.put_new(:sizes, [:small])
+      |> Keyword.put_new(:sizes, @default_sizes)
       |> Keyword.put_new(:iterations, 40)
       |> Keyword.put_new(:warmup, 8)
       |> Keyword.put_new(:samples, 8)
@@ -49,6 +52,7 @@ defmodule Mix.Tasks.NbInertia.PerfGate do
       OptionParser.parse(args,
         strict: [
           budget: :string,
+          sizes: :string,
           scenarios: :string,
           iterations: :integer,
           warmup: :integer,
@@ -62,6 +66,7 @@ defmodule Mix.Tasks.NbInertia.PerfGate do
 
     []
     |> put_option(parsed, :budget)
+    |> put_csv_option(parsed, :sizes)
     |> put_csv_option(parsed, :scenarios)
     |> put_option(parsed, :iterations)
     |> put_option(parsed, :warmup)
