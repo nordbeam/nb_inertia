@@ -146,7 +146,7 @@ cd /Users/assim/Projects/nb/nb_inertia/priv/nb_inertia/react
 vp install
 
 # Run all tests
-npm test
+vp test run
 
 # Watch mode (for development)
 vp run test:watch
@@ -222,11 +222,11 @@ This test suite is ready for CI/CD integration:
 ```yaml
 # Example GitHub Actions workflow
 - name: Install dependencies
-  run: npm ci
+  run: vp install --frozen-lockfile
   working-directory: priv/nb_inertia/react
 
 - name: Run tests
-  run: npm test
+  run: vp test run
   working-directory: priv/nb_inertia/react
 
 - name: Check coverage

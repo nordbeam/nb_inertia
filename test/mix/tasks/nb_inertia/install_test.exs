@@ -1,6 +1,8 @@
 defmodule Mix.Tasks.NbInertia.InstallTest do
   use ExUnit.Case, async: true
 
+  @npm_version "12.0.2"
+
   alias Mix.Tasks.NbInertia.Install
   import Igniter.Test, only: [apply_igniter!: 1, test_project: 1]
 
@@ -35,9 +37,15 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     output
   end
 
+  defp npm12!(args, opts) do
+    run_command!("npx", ["--yes", "npm@#{@npm_version}" | args], opts)
+  end
+
   defp npm_pack!(tmp_dir) do
     output =
-      run_command!("npm", ["pack", "--silent", "--pack-destination", tmp_dir], cd: project_root())
+      npm12!(["pack", project_root(), "--silent", "--pack-destination", tmp_dir],
+        cd: System.tmp_dir!()
+      )
 
     Path.join(tmp_dir, String.trim(output))
   end
@@ -76,10 +84,9 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       )
     end
 
-    run_command!("npm", ["init", "-y"], cd: assets_dir)
+    npm12!(["init", "-y"], cd: assets_dir)
 
-    run_command!(
-      "npm",
+    npm12!(
       [
         "install",
         "--silent",
@@ -284,7 +291,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
     test "bootstraps the project-local Vite+ CLI through npm when vp is absent" do
       assert Install.vite_plus_command_prefix(fn _command -> nil end) ==
-               "npm exec --yes --package=vite-plus@0.3.0 -- vp"
+               "npx --yes npm@12.0.2 exec --yes --package=vite-plus@0.3.0 -- vp"
     end
 
     test "prefers Vite+ in staged package.json over a staged Bun lockfile" do
@@ -956,6 +963,29 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert "priv/nb_inertia/vue/modals" in package_json["files"]
     end
 
+    test "all JavaScript package manifests require npm 12.0.2" do
+      for relative_path <- [
+            "package.json",
+            "priv/nb_inertia/react/package.json",
+            "priv/nb_inertia/vue/package.json"
+          ] do
+        package_json =
+          Path.join(project_root(), relative_path)
+          |> File.read!()
+          |> Jason.decode!()
+
+        assert package_json["packageManager"] == "npm@12.0.2",
+               "#{relative_path} must pin the supported npm release"
+
+        assert get_in(package_json, ["devEngines", "packageManager"]) == %{
+                 "name" => "npm",
+                 "version" => "12.0.2",
+                 "onFail" => "error"
+               },
+               "#{relative_path} must reject unsupported npm versions"
+      end
+    end
+
     test "package.json ./vue/modals lists the types condition before the runtime import" do
       package_json =
         Path.expand("../../../../package.json", __DIR__)
@@ -1002,14 +1032,29 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       package_json = package_json_path |> File.read!() |> Jason.decode!()
 
       {output, status} =
-        System.cmd("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"],
-          cd: package_root,
+        System.cmd(
+          "npx",
+          [
+            "--yes",
+            "npm@#{@npm_version}",
+            "pack",
+            package_root,
+            "--dry-run",
+            "--ignore-scripts",
+            "--json"
+          ],
+          cd: System.tmp_dir!(),
           stderr_to_stdout: true
         )
 
-      assert status == 0, "npm pack --dry-run failed:\n#{output}"
+      assert status == 0, "npm 12 pack --dry-run failed:\n#{output}"
 
-      [pack_info] = Jason.decode!(output)
+      pack_info =
+        case Jason.decode!(output) do
+          %{"@nordbeam/nb-inertia" => info} -> info
+          [info] -> info
+        end
+
       packed_paths = MapSet.new(pack_info["files"], & &1["path"])
 
       Enum.each(package_json["exports"], fn {export_name, export_spec} ->
@@ -1061,11 +1106,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   describe "packed TypeScript installer smoke tests" do
     @tag timeout: 180_000
     test "generated React and Vue lib/inertia barrels compile against packed package exports" do
-      assert System.find_executable("npm") != nil,
-             "npm is required for packed installer smoke tests"
-
       assert System.find_executable("npx") != nil,
-             "npx is required for packed installer smoke tests"
+             "npx is required to run npm 12.0.2 for packed installer smoke tests"
 
       tmp_dir =
         Path.join(

@@ -120,8 +120,9 @@ vp add github:nordbeam/nb_inertia
 
 The repository root is the JavaScript package root and includes the built `dist/`
 artifacts plus the Vue source entrypoints, so the GitHub shorthand works with
-Vite+, npm, pnpm, Yarn, and Bun. Third-party dependencies such as Inertia,
-React, Vue, and Radix remain registry packages.
+Vite+ and its supported package-manager integrations. When invoking npm
+directly, use the repository's pinned npm 12.0.2 toolchain. Third-party
+dependencies such as Inertia, React, Vue, and Radix remain registry packages.
 
 ## Quick Start Guide
 

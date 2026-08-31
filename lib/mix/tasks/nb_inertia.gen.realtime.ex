@@ -151,6 +151,8 @@ if Code.ensure_loaded?(Igniter) do
 
     use Igniter.Mix.Task
 
+    @npm_version "12.0.2"
+
     @impl Igniter.Mix.Task
     def info(_argv, _parent) do
       %Igniter.Mix.Task.Info{
@@ -381,7 +383,7 @@ if Code.ensure_loaded?(Igniter) do
           "bun" -> "bun add --cwd #{assets_dir} phoenix"
           "pnpm" -> "pnpm add --dir #{assets_dir} phoenix"
           "yarn" -> "yarn --cwd #{assets_dir} add phoenix"
-          _ -> "npm install --prefix #{assets_dir} phoenix"
+          _ -> "npx --yes npm@#{@npm_version} install --prefix #{assets_dir} phoenix"
         end
 
       Igniter.add_task(igniter, "cmd", [install_cmd])

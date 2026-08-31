@@ -42,7 +42,7 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     8. Updates root layout template (with nb_vite support if detected)
     9. Configures asset bundler (esbuild by default, or skips if nb_vite is present)
     10. Detects and uses Vite+ (`vp`) when `vite-plus` is present, bootstrapping
-        the project-local CLI through npm when no global `vp` is available
+        the project-local CLI through npm 12.0.2 when no global `vp` is available
     11. Installs the first-party JavaScript package from
         `github:nordbeam/nb_inertia` and third-party packages from npm
     12. Creates assets/js/lib/inertia.ts with enhanced router, Link, useForm, and the schema-aware createInertiaApp wrapper
@@ -104,7 +104,7 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     - Skip esbuild configuration (Vite handles bundling)
     - Generate a root layout that uses NbVite helper functions
     - Detect Vite+ in `assets/package.json` and use `vp` for package installation
-    - Fall back to Bun, pnpm, Yarn, or npm based on the assets lockfile
+    - Fall back to Bun, pnpm, Yarn, or npm 12.0.2 based on the assets lockfile
 
     To use nb_inertia with nb_vite and Vite+:
 
@@ -138,6 +138,7 @@ if Code.ensure_loaded?(Igniter) do
 
     @task_group :nb
     @vite_plus_version "0.3.0"
+    @npm_version "12.0.2"
     @forwarded_child_flags ~w(--yes)
     @schema [
       full: :boolean,
@@ -922,7 +923,7 @@ if Code.ensure_loaded?(Igniter) do
       if find_executable.("vp") do
         "vp"
       else
-        "npm exec --yes --package=vite-plus@#{@vite_plus_version} -- vp"
+        "npx --yes npm@#{@npm_version} exec --yes --package=vite-plus@#{@vite_plus_version} -- vp"
       end
     end
 
@@ -1192,7 +1193,7 @@ if Code.ensure_loaded?(Igniter) do
           "yarn --cwd #{shell_escape(assets_dir)} add#{dev_flag} #{package_args}"
 
         _ ->
-          "npm install --prefix #{shell_escape(assets_dir)}#{dev_flag} #{package_args}"
+          "npx --yes npm@#{@npm_version} install --prefix #{shell_escape(assets_dir)}#{dev_flag} #{package_args}"
       end
     end
 

@@ -57,9 +57,9 @@ cd /Users/assim/Projects/nb/nb_inertia/priv/nb_inertia/react
 vp install
 ```
 
-### Run All Tests
+### Run All Tests through Vite+
 ```bash
-npm test
+vp test run
 ```
 
 ### Watch Mode (for development)
@@ -141,8 +141,8 @@ These tests can be integrated into the CI/CD pipeline:
 
 ```bash
 # In CI environment
-npm ci
-npm test
+vp install --frozen-lockfile
+vp test run
 ```
 
 For coverage requirements, use:

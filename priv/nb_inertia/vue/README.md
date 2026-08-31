@@ -233,8 +233,8 @@ export interface BoundFormType<TForm> {
 The components are fully tested using Vitest and Vue Test Utils:
 
 ```bash
-# Run tests
-npm test
+# Run tests through Vite+
+vp test run
 
 # Run tests in watch mode
 vp run test:watch
