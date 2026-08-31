@@ -134,6 +134,39 @@ If `nb_inertia` is already present in your `mix.exs`, you can also run the task 
 mix nb_inertia.install --typescript
 ```
 
+### Agent Skills with UsageRules
+
+NbInertia ships a prebuilt agent skill in its Hex package. To sync it into an
+application's local `.agents/skills` directory, install
+[`usage_rules`](https://hexdocs.pm/usage_rules) and configure the package skill
+source in `mix.exs`:
+
+```bash
+mix igniter.install usage_rules
+```
+
+```elixir
+def project do
+  [
+    # ... existing project configuration ...
+    usage_rules: [
+      skills: [
+        location: ".agents/skills",
+        package_skills: [~r/^nb_/]
+      ]
+    ]
+  ]
+end
+```
+
+After adding `nb_inertia` to the application's dependencies, sync the skill:
+
+```bash
+mix usage_rules.sync
+```
+
+Use `package_skills: [:nb_inertia]` to sync only the NbInertia skill.
+
 ### Manual Installation
 
 Add `nb_inertia` to your `mix.exs` dependencies:

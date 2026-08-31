@@ -1082,6 +1082,16 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     assert "priv" in Mix.Project.config()[:package][:files]
   end
 
+  test "hex package includes UsageRules documentation and prebuilt skill" do
+    package_files = Mix.Project.config()[:package][:files]
+
+    assert "usage-rules.md" in package_files
+    assert "usage-rules" in package_files
+
+    assert File.exists?(Path.join(project_root(), "usage-rules.md"))
+    assert File.exists?(Path.join(project_root(), "usage-rules/skills/nb-inertia/SKILL.md"))
+  end
+
   test "installer source uses Inertia HTTP hooks for CSRF instead of axios" do
     source =
       Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
