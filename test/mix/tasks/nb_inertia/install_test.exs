@@ -138,6 +138,22 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     run_command!("npx", ["--no-install", checker, "--noEmit", "--pretty", "false"],
       cd: assets_dir
     )
+
+    if client_framework == "react" do
+      File.write!(
+        Path.join(assets_dir, "runtime_exports_smoke.mjs"),
+        """
+        import { router } from '@nordbeam/nb-inertia/react/router';
+        import * as modals from '@nordbeam/nb-inertia/react/modals';
+
+        if (typeof router.poll !== 'function' || typeof modals.ModalLink !== 'function') {
+          throw new Error('Inertia 3.7 runtime exports are incomplete');
+        }
+        """
+      )
+
+      run_command!("node", ["runtime_exports_smoke.mjs"], cd: assets_dir)
+    end
   end
 
   describe "info/2" do

@@ -1,12 +1,12 @@
 import { routerPrefetch as e } from "../../shared/routerCompat.js";
 import { isRouteResult as t } from "../../shared/types.js";
 import { useModalStack as n } from "./modalStack.js";
-import { shouldIntercept as r } from "../node_modules/@inertiajs/core/dist/index.js";
-import { useCallback as i, useEffect as a, useMemo as o, useRef as s } from "react";
-import { jsx as c } from "react/jsx-runtime";
+import { useCallback as r, useEffect as i, useMemo as a, useRef as o } from "react";
+import { jsx as s } from "react/jsx-runtime";
+import { shouldIntercept as c } from "@inertiajs/core";
 //#region priv/nb_inertia/react/modals/ModalLink.tsx
 var l = () => null, u = ({ href: u, method: d, data: f, modalConfig: p, loadingComponent: m, onClick: h, prefetch: g, cacheFor: _, cacheTags: v, children: y, className: b, ...x }) => {
-	let { modals: S, prefetchModal: C, visitModal: w } = n(), T = t(u) ? u.url : u, E = (t(u) && !d ? u.method : d) || "get", D = o(() => g ? g === !0 ? ["hover"] : typeof g == "string" ? [g] : g : [], [g]), O = i(() => {
+	let { modals: S, prefetchModal: C, visitModal: w } = n(), T = t(u) ? u.url : u, E = (t(u) && !d ? u.method : d) || "get", D = a(() => g ? g === !0 ? ["hover"] : typeof g == "string" ? [g] : g : [], [g]), O = r(() => {
 		if (E === "get") {
 			if (C) C(T, { cacheFor: _ });
 			else {
@@ -21,28 +21,28 @@ var l = () => null, u = ({ href: u, method: d, data: f, modalConfig: p, loadingC
 		v,
 		C
 	]);
-	a(() => {
+	i(() => {
 		if (D.includes("mount")) {
 			let e = setTimeout(O, 0);
 			return () => clearTimeout(e);
 		}
 	}, [D, O]);
-	let k = s(null), A = i((e) => {
+	let k = o(null), A = r((e) => {
 		x.onMouseEnter?.(e), D.includes("hover") && (k.current = setTimeout(O, 75));
 	}, [
 		D,
 		O,
 		x
-	]), j = i((e) => {
+	]), j = r((e) => {
 		x.onMouseLeave?.(e), k.current &&= (clearTimeout(k.current), null);
-	}, [x]), M = i((e) => {
-		x.onMouseDown?.(e), D.includes("click") && r(e) && O();
+	}, [x]), M = r((e) => {
+		x.onMouseDown?.(e), D.includes("click") && c(e) && O();
 	}, [
 		D,
 		O,
 		x
-	]), N = i((e) => {
-		if (h?.(e), !r(e) || (e.preventDefault(), S.find((e) => e.url === T))) return;
+	]), N = r((e) => {
+		if (h?.(e), !c(e) || (e.preventDefault(), S.find((e) => e.url === T))) return;
 		let t = typeof window < "u" ? window.location.href : "";
 		w(u, {
 			method: E,
@@ -61,7 +61,7 @@ var l = () => null, u = ({ href: u, method: d, data: f, modalConfig: p, loadingC
 		h,
 		w
 	]);
-	return /* @__PURE__ */ c("a", {
+	return /* @__PURE__ */ s("a", {
 		href: T,
 		className: b,
 		onClick: N,
