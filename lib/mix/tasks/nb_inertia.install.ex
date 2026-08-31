@@ -44,11 +44,13 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     10. Detects and uses Vite+ (`vp`) when `vite-plus` is present, bootstrapping
         the project-local CLI through npm 12.0.2 when no global `vp` is available
     11. Installs the first-party JavaScript package from
-        `github:nordbeam/nb_inertia` and third-party packages from npm
-    12. Creates assets/js/lib/inertia.ts with enhanced router, Link, useForm, and the schema-aware createInertiaApp wrapper
-    13. Sets up TypeScript type generation (when --typescript is used)
-    14. Creates sample Inertia page component
-    15. Prints helpful next steps
+        `git+https://github.com/nordbeam/nb_inertia.git` and third-party packages from npm
+    12. Ensures `assets/.npmrc` allows root GitHub dependencies for npm 12 while
+        preserving existing npm configuration
+    13. Creates assets/js/lib/inertia.ts with enhanced router, Link, useForm, and the schema-aware createInertiaApp wrapper
+    14. Sets up TypeScript type generation (when --typescript is used)
+    15. Creates sample Inertia page component
+    16. Prints helpful next steps
 
     ## Usage
 
@@ -122,8 +124,9 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     The installer will detect the nb_vite/Vite+ setup and configure accordingly.
 
     The first-party JavaScript package is fetched from
-    `github:nordbeam/nb_inertia`; it retains `@nordbeam/nb-inertia` as the
-    import name for generated and handwritten client code.
+    `git+https://github.com/nordbeam/nb_inertia.git`; it retains
+    `@nordbeam/nb-inertia` as the import name for generated and handwritten
+    client code.
     """
   end
 end
@@ -139,6 +142,7 @@ if Code.ensure_loaded?(Igniter) do
     @task_group :nb
     @vite_plus_version "0.3.0"
     @npm_version "12.0.2"
+    @nb_inertia_client_source "git+https://github.com/nordbeam/nb_inertia.git"
     @forwarded_child_flags ~w(--yes)
     @schema [
       full: :boolean,
@@ -759,6 +763,7 @@ if Code.ensure_loaded?(Igniter) do
           extension = if typescript, do: "tsx", else: "jsx"
 
           igniter
+          |> update_npmrc()
           |> install_client_package()
           |> maybe_create_typescript_config()
           |> maybe_update_vite_config_for_react()
@@ -768,6 +773,7 @@ if Code.ensure_loaded?(Igniter) do
 
         "vue" ->
           igniter
+          |> update_npmrc()
           |> install_client_package()
           |> maybe_create_typescript_config()
 
@@ -979,6 +985,32 @@ if Code.ensure_loaded?(Igniter) do
 
     defp vite_plus_package_json?(_), do: false
 
+    @doc "Allows npm 12 to install the first-party GitHub package declared at the project root."
+    def update_npmrc(igniter) do
+      path = "assets/.npmrc"
+
+      if Igniter.exists?(igniter, path) do
+        Igniter.update_file(igniter, path, fn source ->
+          content = Rewrite.Source.get(source, :content)
+          Rewrite.Source.update(source, :content, merge_npmrc(content))
+        end)
+      else
+        Igniter.create_new_file(igniter, path, "allow-git=root\n", on_exists: :skip)
+      end
+    end
+
+    @doc false
+    def merge_npmrc(content) when is_binary(content) do
+      allow_git_pattern = ~r/^(?!\s*[#;])\s*allow-git\s*=.*$/m
+
+      if Regex.match?(allow_git_pattern, content) do
+        Regex.replace(allow_git_pattern, content, "allow-git=root")
+      else
+        separator = if content == "" or String.ends_with?(content, "\n"), do: "", else: "\n"
+        content <> separator <> "allow-git=root\n"
+      end
+    end
+
     defp maybe_create_typescript_config(igniter) do
       if igniter.args.options[:typescript] do
         Igniter.create_new_file(igniter, "assets/tsconfig.json", react_tsconfig_json(),
@@ -1095,11 +1127,11 @@ if Code.ensure_loaded?(Igniter) do
         {:ok, dep_declaration} when is_binary(dep_declaration) ->
           client_package_source_from_dep_declaration(
             dep_declaration,
-            "github:nordbeam/nb_inertia"
+            @nb_inertia_client_source
           )
 
         _ ->
-          "github:nordbeam/nb_inertia"
+          @nb_inertia_client_source
       end
     end
 
@@ -1143,10 +1175,13 @@ if Code.ensure_loaded?(Igniter) do
           "file:#{Path.expand(opts[:path])}"
 
         github = opts[:github] ->
-          "github:#{github}#{dependency_ref_suffix(opts)}"
+          github_client_source(github, default_source, opts)
 
         git = opts[:git] ->
           "#{to_string(git)}#{dependency_ref_suffix(opts)}"
+
+        workspace = opts[:workspace] ->
+          "#{to_string(workspace)}#{dependency_ref_suffix(opts)}"
 
         true ->
           default_source
@@ -1158,6 +1193,14 @@ if Code.ensure_loaded?(Igniter) do
         nil -> ""
         ref -> "##{ref}"
       end
+    end
+
+    defp github_client_source("nordbeam/nb_inertia", _default_source, opts) do
+      @nb_inertia_client_source <> dependency_ref_suffix(opts)
+    end
+
+    defp github_client_source(github, _default_source, opts) do
+      "github:#{github}#{dependency_ref_suffix(opts)}"
     end
 
     defp package_manager_install_command(pkg_manager, assets_dir, packages, opts \\ []) do

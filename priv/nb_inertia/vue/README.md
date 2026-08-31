@@ -119,11 +119,13 @@ For a manual JavaScript setup, install the first-party package from GitHub:
 
 ```bash
 cd assets
-vp add github:nordbeam/nb_inertia
+vp add git+https://github.com/nordbeam/nb_inertia.git
 ```
 
 The package is named `@nordbeam/nb-inertia` for imports, but is intentionally
-resolved from `github:nordbeam/nb_inertia` rather than the npm registry.
+resolved from `git+https://github.com/nordbeam/nb_inertia.git` rather than the
+npm registry. The explicit HTTPS URL keeps npm 12 from rewriting the dependency
+to an SSH checkout.
 
 The installer creates `assets/js/lib/inertia.ts` that re-exports these enhanced components:
 
@@ -265,7 +267,8 @@ All components maintain full backward compatibility with standard Inertia.js usa
 - **nb_inertia**: Declarative page DSL and type-safe props for Inertia.js
 - **nb_ts**: TypeScript type generation from Elixir serializers
 - **@nordbeam/nb-inertia**: GitHub-installable package containing these enhanced components
-  (`github:nordbeam/nb_inertia`; the `@nordbeam/nb-inertia` name remains the import name)
+  (`git+https://github.com/nordbeam/nb_inertia.git`; the `@nordbeam/nb-inertia`
+  name remains the import name)
 
 ## License
 

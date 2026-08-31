@@ -115,14 +115,17 @@ repository (the package keeps `@nordbeam/nb-inertia` as its import name):
 
 ```bash
 cd assets
-vp add github:nordbeam/nb_inertia
+vp add git+https://github.com/nordbeam/nb_inertia.git
 ```
 
 The repository root is the JavaScript package root and includes the built `dist/`
-artifacts plus the Vue source entrypoints, so the GitHub shorthand works with
-Vite+ and its supported package-manager integrations. When invoking npm
-directly, use the repository's pinned npm 12.0.2 toolchain. Third-party
-dependencies such as Inertia, React, Vue, and Radix remain registry packages.
+artifacts plus the Vue source entrypoints. Use the explicit HTTPS Git URL so npm
+does not rewrite the dependency to an SSH checkout. When invoking npm directly,
+use the repository's pinned npm 12.0.2 toolchain. Third-party dependencies such
+as Inertia, React, Vue, and Radix remain registry packages.
+The installer creates or updates `assets/.npmrc` with `allow-git=root`, which
+allows npm 12 to fetch the root GitHub dependency without replacing any existing
+project npm configuration.
 
 ## Quick Start Guide
 

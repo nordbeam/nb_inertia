@@ -205,15 +205,15 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
         |> File.read!()
 
-      assert source =~ "github:nordbeam/nb_inertia"
+      assert source =~ "git+https://github.com/nordbeam/nb_inertia.git"
       refute source =~ "@nordbeam/nb-inertia@^1.0.0"
     end
 
-    test "defaults the generated client install to the GitHub repository" do
+    test "defaults the generated client install to the HTTPS GitHub repository" do
       igniter = test_project(app_name: :sample)
 
       assert Install.nb_inertia_client_package_source(igniter) ==
-               "github:nordbeam/nb_inertia"
+               "git+https://github.com/nordbeam/nb_inertia.git"
     end
 
     test "preserves an explicit local Mix path as an absolute file source" do
@@ -222,7 +222,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       source =
         Install.client_package_source_from_dep_declaration(
           "{:nb_inertia, [path: \"#{path}\", override: true]}",
-          "github:nordbeam/nb_inertia"
+          "git+https://github.com/nordbeam/nb_inertia.git"
         )
 
       assert source == "file:#{path}"
@@ -253,34 +253,46 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       source =
         Install.client_package_source_from_dep_declaration(
           "{:nb_inertia, [path: \"../nb_inertia\", override: true]}",
-          "github:nordbeam/nb_inertia"
+          "git+https://github.com/nordbeam/nb_inertia.git"
         )
 
       assert source == "file:#{Path.expand("../nb_inertia")}"
     end
 
-    test "preserves a GitHub ref when nb_inertia is installed from github" do
+    test "uses the HTTPS GitHub source and preserves a ref for first-party installs" do
       source =
         Install.client_package_source_from_dep_declaration(
           "{:nb_inertia, [github: \"nordbeam/nb_inertia\", ref: \"abc123\"]}",
-          "github:nordbeam/nb_inertia"
+          "git+https://github.com/nordbeam/nb_inertia.git"
         )
 
-      assert source == "github:nordbeam/nb_inertia#abc123"
+      assert source == "git+https://github.com/nordbeam/nb_inertia.git#abc123"
     end
 
     test "falls back to the default source for version-only deps" do
       assert Install.client_package_source_from_dep_declaration(
                "{:nb_inertia, \"~> 1.0\"}",
-               "github:nordbeam/nb_inertia"
-             ) == "github:nordbeam/nb_inertia"
+               "git+https://github.com/nordbeam/nb_inertia.git"
+             ) == "git+https://github.com/nordbeam/nb_inertia.git"
     end
 
     test "keeps the old helper name as a compatibility alias" do
       assert Install.npm_source_from_dep_declaration(
                "{:nb_inertia, [github: \"nordbeam/nb_inertia\", tag: \"v1.0.0\"]}",
-               "github:nordbeam/nb_inertia"
-             ) == "github:nordbeam/nb_inertia#v1.0.0"
+               "git+https://github.com/nordbeam/nb_inertia.git"
+             ) == "git+https://github.com/nordbeam/nb_inertia.git#v1.0.0"
+    end
+
+    test "preserves explicit git and workspace sources" do
+      assert Install.client_package_source_from_dep_declaration(
+               "{:nb_inertia, [git: \"git@github.com:fork/nb_inertia.git\", ref: \"abc123\"]}",
+               "git+https://github.com/nordbeam/nb_inertia.git"
+             ) == "git@github.com:fork/nb_inertia.git#abc123"
+
+      assert Install.client_package_source_from_dep_declaration(
+               "{:nb_inertia, [workspace: \"workspace:../deps/nb_inertia\"]}",
+               "git+https://github.com/nordbeam/nb_inertia.git"
+             ) == "workspace:../deps/nb_inertia"
     end
   end
 
@@ -313,6 +325,53 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
       assert Install.using_bun?(igniter)
       assert Install.get_package_manager_command(igniter) == "bun"
+    end
+  end
+
+  describe "npm 12 GitHub dependency allowlist" do
+    test "creates assets/.npmrc with the root GitHub allowlist" do
+      igniter =
+        test_project(app_name: :sample)
+        |> Install.update_npmrc()
+        |> apply_igniter!()
+
+      assert igniter.assigns.test_files["assets/.npmrc"] == "allow-git=root\n"
+    end
+
+    test "preserves existing npm config when appending the root GitHub allowlist" do
+      existing = "registry=https://registry.npmjs.org\nstrict-peer-deps=true\n"
+
+      igniter =
+        test_project(app_name: :sample, files: %{"assets/.npmrc" => existing})
+        |> Install.update_npmrc()
+        |> apply_igniter!()
+
+      assert igniter.assigns.test_files["assets/.npmrc"] == existing <> "allow-git=root\n"
+    end
+
+    test "replaces incompatible active policies while preserving comments and unrelated config" do
+      existing = "# allow-git=none\nallow-git = none\nfund=false\n"
+
+      assert Install.merge_npmrc(existing) ==
+               "# allow-git=none\nallow-git=root\nfund=false\n"
+    end
+
+    test "is idempotent when the allowlist is already present" do
+      existing = "registry=https://registry.npmjs.org\nallow-git=root\n"
+
+      assert Install.merge_npmrc(existing) == existing
+    end
+
+    test "setup_client stages the allowlist before installing React packages" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "react", typescript: true)
+        |> Install.setup_client()
+
+      assert Rewrite.has_source?(igniter.rewrite, "assets/.npmrc")
+
+      assert Rewrite.Source.get(Rewrite.source!(igniter.rewrite, "assets/.npmrc"), :content) ==
+               "allow-git=root\n"
     end
   end
 
@@ -671,7 +730,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
              end)
 
       assert Enum.any?(cmd_tasks, fn {"cmd", [cmd | _]} ->
-               String.contains?(cmd, "github:nordbeam/nb_inertia")
+               String.contains?(cmd, "git+https://github.com/nordbeam/nb_inertia.git")
              end)
 
       refute Enum.any?(cmd_tasks, fn {"cmd", [cmd | _]} ->
