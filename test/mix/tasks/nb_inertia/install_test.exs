@@ -335,7 +335,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         |> Install.update_npmrc()
         |> apply_igniter!()
 
-      assert igniter.assigns.test_files["assets/.npmrc"] == "allow-git=root\n"
+      assert igniter.assigns.test_files["assets/.npmrc"] ==
+               "allow-git=root\nallow-remote=all\n"
     end
 
     test "preserves existing npm config when appending the root GitHub allowlist" do
@@ -346,18 +347,21 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         |> Install.update_npmrc()
         |> apply_igniter!()
 
-      assert igniter.assigns.test_files["assets/.npmrc"] == existing <> "allow-git=root\n"
+      assert igniter.assigns.test_files["assets/.npmrc"] ==
+               existing <> "allow-git=root\nallow-remote=all\n"
     end
 
     test "replaces incompatible active policies while preserving comments and unrelated config" do
-      existing = "# allow-git=none\nallow-git = none\nfund=false\n"
+      existing =
+        "# allow-git=none\nallow-git = none\nallow-remote = none\nfund=false\n"
 
       assert Install.merge_npmrc(existing) ==
-               "# allow-git=none\nallow-git=root\nfund=false\n"
+               "# allow-git=none\nallow-git=root\nallow-remote=all\nfund=false\n"
     end
 
     test "is idempotent when the allowlist is already present" do
-      existing = "registry=https://registry.npmjs.org\nallow-git=root\n"
+      existing =
+        "registry=https://registry.npmjs.org\nallow-git=root\nallow-remote=all\n"
 
       assert Install.merge_npmrc(existing) == existing
     end
@@ -371,7 +375,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert Rewrite.has_source?(igniter.rewrite, "assets/.npmrc")
 
       assert Rewrite.Source.get(Rewrite.source!(igniter.rewrite, "assets/.npmrc"), :content) ==
-               "allow-git=root\n"
+               "allow-git=root\nallow-remote=all\n"
     end
   end
 

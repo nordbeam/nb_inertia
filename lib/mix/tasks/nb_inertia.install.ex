@@ -995,19 +995,27 @@ if Code.ensure_loaded?(Igniter) do
           Rewrite.Source.update(source, :content, merge_npmrc(content))
         end)
       else
-        Igniter.create_new_file(igniter, path, "allow-git=root\n", on_exists: :skip)
+        Igniter.create_new_file(igniter, path, npmrc_defaults(), on_exists: :skip)
       end
     end
 
     @doc false
     def merge_npmrc(content) when is_binary(content) do
-      allow_git_pattern = ~r/^(?!\s*[#;])\s*allow-git\s*=.*$/m
+      content
+      |> put_npmrc_config("allow-git", "root")
+      |> put_npmrc_config("allow-remote", "all")
+    end
 
-      if Regex.match?(allow_git_pattern, content) do
-        Regex.replace(allow_git_pattern, content, "allow-git=root")
+    defp npmrc_defaults, do: "allow-git=root\nallow-remote=all\n"
+
+    defp put_npmrc_config(content, key, value) do
+      pattern = Regex.compile!("^(?!\\s*[#;])\\s*#{Regex.escape(key)}\\s*=.*$", "m")
+
+      if Regex.match?(pattern, content) do
+        Regex.replace(pattern, content, "#{key}=#{value}")
       else
         separator = if content == "" or String.ends_with?(content, "\n"), do: "", else: "\n"
-        content <> separator <> "allow-git=root\n"
+        content <> separator <> "#{key}=#{value}\n"
       end
     end
 

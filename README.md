@@ -123,9 +123,10 @@ artifacts plus the Vue source entrypoints. Use the explicit HTTPS Git URL so npm
 does not rewrite the dependency to an SSH checkout. When invoking npm directly,
 use the repository's pinned npm 12.0.2 toolchain. Third-party dependencies such
 as Inertia, React, Vue, and Radix remain registry packages.
-The installer creates or updates `assets/.npmrc` with `allow-git=root`, which
-allows npm 12 to fetch the root GitHub dependency without replacing any existing
-project npm configuration.
+The installer creates or updates `assets/.npmrc` with `allow-git=root` and
+`allow-remote=all`, allowing npm 12 to fetch the root GitHub dependency and
+registry packages that resolve platform artifacts through remote tarballs
+without replacing other project npm configuration.
 
 ## Quick Start Guide
 
