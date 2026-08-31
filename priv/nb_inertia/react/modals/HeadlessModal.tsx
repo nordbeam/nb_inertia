@@ -20,14 +20,15 @@ import React, {
   useMemo,
   useRef,
 } from 'react';
+import type { VisitOptions } from '@inertiajs/core';
 import { router as inertiaRouter } from '@inertiajs/react';
 import type { ModalConfig, ModalInstance } from './types';
 import { mergeModalConfig } from './types';
 import { mergeModalHeaders } from './requestContext';
 import { useModalStack } from './modalStack';
 
-type VisitOptions = NonNullable<Parameters<typeof inertiaRouter.visit>[1]>;
-type ModalReloadOptions = Omit<VisitOptions, 'method' | 'data' | 'async'>;
+/** Modal reloads accept every Inertia visit option except method and payload. */
+export type ModalReloadOptions = Omit<VisitOptions, 'method' | 'data'>;
 
 export interface ModalHandle {
   modal: ModalInstance;
@@ -97,7 +98,7 @@ export interface HeadlessModalProps {
  */
 export const HeadlessModal = forwardRef<ModalHandle, HeadlessModalProps>(function HeadlessModal(
   { modal, onClose, isOpen = true, children },
-  ref
+  ref,
 ) {
   const isClosingRef = useRef(false);
   const config = mergeModalConfig(modal.config);
@@ -126,8 +127,8 @@ export const HeadlessModal = forwardRef<ModalHandle, HeadlessModalProps>(functio
           url: target.url,
           baseUrl: target.returnUrl || target.baseUrl,
           returnUrl: target.returnUrl,
-        }
-      )
+        },
+      ),
     );
   }, []);
 
@@ -163,7 +164,7 @@ export const HeadlessModal = forwardRef<ModalHandle, HeadlessModalProps>(functio
         },
       };
     },
-    [isOpen, modal.id, modals, popModal, reloadModal]
+    [isOpen, modal.id, modals, popModal, reloadModal],
   );
 
   const contextValue = useMemo(() => buildHandle(modal), [buildHandle, modal]);

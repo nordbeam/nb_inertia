@@ -10,6 +10,14 @@
  */
 
 import type { Component, DefineComponent, InjectionKey } from 'vue';
+import type {
+  CacheForOption,
+  LinkPrefetchOption,
+  Method,
+  PrefetchOptions,
+  RequestPayload,
+  VisitOptions,
+} from '@inertiajs/core';
 import type { RouteResult } from '../../shared/types';
 import type { ModalPageObject } from '../modalPageContext';
 
@@ -44,6 +52,15 @@ export interface ModalConfig {
   panelClasses?: string;
   backdropClasses?: string;
 }
+
+export type ModalVisitOptions = Omit<VisitOptions, 'method' | 'data'> & {
+  method?: Method;
+  data?: RequestPayload;
+};
+
+export type ModalPrefetchOptions = Omit<ModalVisitOptions, 'prefetch'> & Partial<PrefetchOptions>;
+
+export type ModalLinkPrefetch = boolean | LinkPrefetchOption | LinkPrefetchOption[];
 
 export type ModalEventType = 'close' | 'success' | 'blur' | 'focus' | 'beforeClose';
 
@@ -129,12 +146,47 @@ export declare const ModalLink: DefineComponent<
     href: string | RouteResult;
     modalConfig?: ModalConfig;
     baseUrl?: string;
-    method?: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
-    data?: Record<string, unknown>;
+    method?: Method;
+    data?: RequestPayload;
+    component?: VisitOptions['component'];
+    replace?: VisitOptions['replace'];
+    preserveScroll?: VisitOptions['preserveScroll'];
+    preserveState?: VisitOptions['preserveState'];
+    preserveUrl?: VisitOptions['preserveUrl'];
+    only?: VisitOptions['only'];
+    except?: VisitOptions['except'];
+    headers?: VisitOptions['headers'];
+    errorBag?: VisitOptions['errorBag'];
+    forceFormData?: VisitOptions['forceFormData'];
+    queryStringArrayFormat?: VisitOptions['queryStringArrayFormat'];
+    async?: VisitOptions['async'];
+    showProgress?: VisitOptions['showProgress'];
+    fresh?: VisitOptions['fresh'];
+    reset?: VisitOptions['reset'];
+    preserveErrors?: VisitOptions['preserveErrors'];
+    invalidateCacheTags?: VisitOptions['invalidateCacheTags'];
+    viewTransition?: VisitOptions['viewTransition'];
+    optimistic?: VisitOptions['optimistic'];
+    pageProps?: VisitOptions['pageProps'];
+    onCancelToken?: VisitOptions['onCancelToken'];
+    onBefore?: VisitOptions['onBefore'];
+    onBeforeUpdate?: VisitOptions['onBeforeUpdate'];
+    onStart?: VisitOptions['onStart'];
+    onProgress?: VisitOptions['onProgress'];
+    onFinish?: VisitOptions['onFinish'];
+    onCancel?: VisitOptions['onCancel'];
+    onSuccess?: VisitOptions['onSuccess'];
+    onError?: VisitOptions['onError'];
+    onHttpException?: VisitOptions['onHttpException'];
+    onNetworkError?: VisitOptions['onNetworkError'];
+    onFlash?: VisitOptions['onFlash'];
+    onPrefetched?: VisitOptions['onPrefetched'];
+    onPrefetching?: VisitOptions['onPrefetching'];
     class?: string;
-    prefetch?: boolean | _PrefetchMode | _PrefetchMode[];
-    cacheFor?: number;
-    cacheTags?: string[];
+    prefetch?: ModalLinkPrefetch;
+    cacheFor?: CacheForOption | CacheForOption[];
+    cacheTags?: string | string[];
+    returnUrl?: string;
     target?: string;
     rel?: string;
     download?: string | boolean;

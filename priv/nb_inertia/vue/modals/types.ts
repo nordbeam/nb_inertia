@@ -6,6 +6,14 @@
  */
 
 import type { Component } from 'vue';
+import type {
+  CacheForOption,
+  LinkPrefetchOption,
+  Method,
+  PrefetchOptions,
+  RequestPayload,
+  VisitOptions,
+} from '@inertiajs/core';
 import type { ModalPageObject } from '../modalPageContext';
 
 /**
@@ -42,6 +50,26 @@ export interface ModalConfig {
   panelClasses?: string;
   backdropClasses?: string;
 }
+
+/**
+ * Visit options accepted by a Vue modal navigation.
+ *
+ * This is intentionally derived from Inertia's official type so protocol
+ * options added in v3 (such as async, fresh, reset, preserveErrors,
+ * invalidateCacheTags, and viewTransition) remain available to consumers.
+ */
+export type ModalVisitOptions = Omit<VisitOptions, 'method' | 'data'> & {
+  method?: Method;
+  data?: RequestPayload;
+};
+
+/** Combined visit and prefetch options for a modal link. */
+export type ModalPrefetchOptions = Omit<ModalVisitOptions, 'prefetch'> & Partial<PrefetchOptions>;
+
+/** Link prefetch modes supported by Inertia's official adapters. */
+export type ModalLinkPrefetch = boolean | LinkPrefetchOption | LinkPrefetchOption[];
+
+export type ModalCacheFor = CacheForOption | CacheForOption[];
 
 /**
  * Modal event types

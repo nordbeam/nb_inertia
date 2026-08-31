@@ -15,7 +15,7 @@ vi.mock("@inertiajs/vue3", () => ({
   },
 }));
 
-function mountLink(props: Record<string, unknown>) {
+function mountLink(props: Record<string, unknown>, stack = createModalStack()) {
   return mount(ModalLink, {
     props: {
       href: "/modal",
@@ -23,7 +23,7 @@ function mountLink(props: Record<string, unknown>) {
     },
     global: {
       provide: {
-        [MODAL_STACK_KEY as symbol]: createModalStack(),
+        [MODAL_STACK_KEY as symbol]: stack,
       },
     },
   });
@@ -55,7 +55,10 @@ describe("ModalLink (Vue)", () => {
 
     await wrapper.get("a").trigger("click");
 
-    expect(mockVisit).toHaveBeenCalledWith("/posts/1", expect.objectContaining({ method: "post" }));
+    expect(mockVisit).toHaveBeenCalledWith(
+      "/posts/1",
+      expect.objectContaining({ method: "post" }),
+    );
   });
 
   it.each([
@@ -74,7 +77,11 @@ describe("ModalLink (Vue)", () => {
   });
 
   it("preserves standard anchor attributes", () => {
-    const wrapper = mountLink({ target: "_blank", rel: "noopener", download: true });
+    const wrapper = mountLink({
+      target: "_blank",
+      rel: "noopener",
+      download: true,
+    });
 
     expect(wrapper.get("a").attributes()).toMatchObject({
       target: "_blank",
@@ -91,5 +98,139 @@ describe("ModalLink (Vue)", () => {
     wrapper.get("a").element.dispatchEvent(event);
 
     expect(mockVisit).not.toHaveBeenCalled();
+  });
+
+  it("forwards the complete Inertia 3.7 visit option surface", async () => {
+    const callbacks = {
+      onBefore: vi.fn(),
+      onBeforeUpdate: vi.fn(),
+      onStart: vi.fn(),
+      onProgress: vi.fn(),
+      onFinish: vi.fn(),
+      onCancel: vi.fn(),
+      onSuccess: vi.fn(),
+      onError: vi.fn(),
+      onHttpException: vi.fn(),
+      onNetworkError: vi.fn(),
+      onFlash: vi.fn(),
+      onPrefetched: vi.fn(),
+      onPrefetching: vi.fn(),
+    };
+    const wrapper = mountLink({
+      async: true,
+      viewTransition: true,
+      preserveErrors: true,
+      only: ["user"],
+      except: ["audit"],
+      reset: ["users"],
+      invalidateCacheTags: ["users"],
+      fresh: true,
+      preserveUrl: true,
+      ...callbacks,
+    });
+
+    await wrapper.get("a").trigger("click");
+
+    expect(mockVisit).toHaveBeenCalledWith(
+      "/modal",
+      expect.objectContaining({
+        async: true,
+        viewTransition: true,
+        preserveErrors: true,
+        only: ["user"],
+        except: ["audit"],
+        reset: ["users"],
+        invalidateCacheTags: ["users"],
+        fresh: true,
+        preserveUrl: true,
+        onBefore: callbacks.onBefore,
+        onBeforeUpdate: callbacks.onBeforeUpdate,
+        onStart: callbacks.onStart,
+        onProgress: callbacks.onProgress,
+        onFinish: expect.any(Function),
+        onCancel: callbacks.onCancel,
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+        onHttpException: callbacks.onHttpException,
+        onNetworkError: callbacks.onNetworkError,
+        onFlash: callbacks.onFlash,
+        onPrefetched: callbacks.onPrefetched,
+        onPrefetching: callbacks.onPrefetching,
+      }),
+    );
+  });
+
+  it("forwards duration-form cache options and visit options to prefetch", async () => {
+    const onPrefetched = vi.fn();
+    const onPrefetching = vi.fn();
+    const wrapper = mountLink({
+      prefetch: "hover",
+      cacheFor: ["250ms", "5s"],
+      cacheTags: "users",
+      async: true,
+      viewTransition: true,
+      preserveErrors: true,
+      only: ["user"],
+      except: ["audit"],
+      reset: ["users"],
+      invalidateCacheTags: "users",
+      onPrefetched,
+      onPrefetching,
+    });
+
+    await wrapper.get("a").trigger("mouseenter");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(mockPrefetch).toHaveBeenCalledWith(
+      "/modal",
+      expect.objectContaining({
+        method: "get",
+        async: true,
+        viewTransition: true,
+        preserveErrors: true,
+        only: ["user"],
+        except: ["audit"],
+        reset: ["users"],
+        invalidateCacheTags: "users",
+        onPrefetched,
+        onPrefetching,
+      }),
+      { cacheFor: ["250ms", "5s"], cacheTags: "users" },
+    );
+  });
+
+  it("does not pass undefined cache options to Inertia prefetch", async () => {
+    const wrapper = mountLink({ prefetch: "hover" });
+
+    await wrapper.get("a").trigger("mouseenter");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(mockPrefetch).toHaveBeenCalledWith(
+      "/modal",
+      expect.objectContaining({ method: "get" }),
+      undefined,
+    );
+  });
+
+  it("restores the explicit return URL including query parameters", async () => {
+    const stack = createModalStack();
+    const wrapper = mountLink(
+      { returnUrl: "/users?filter=active&page=2" },
+      stack,
+    );
+
+    await wrapper.get("a").trigger("click");
+
+    const visitOptions = mockVisit.mock.calls[0]?.[1];
+    visitOptions.onSuccess({
+      component: "Users/Edit",
+      props: { id: 1 },
+      url: "/users/1/edit",
+      version: null,
+      clearHistory: false,
+      encryptHistory: false,
+    });
+
+    expect(stack.getModal("modal-0")?.baseUrl).toBe("/users?filter=active&page=2");
   });
 });

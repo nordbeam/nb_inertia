@@ -1,18 +1,18 @@
-import { useCallback as e, useEffect as t, useMemo as n, useState as r } from "react";
-import { router as i, usePage as a } from "@inertiajs/react";
+import { router as e, usePage as t } from "@inertiajs/react";
+import { useCallback as n, useEffect as r, useMemo as i, useState as a } from "react";
 //#region priv/nb_inertia/react/realtime/useRealtimeProps.ts
 function o(o = {}) {
-	let s = a().props, c = o.initialProps ?? s, [l, u] = r({}), d = n(() => JSON.stringify(c), [c]);
-	t(() => {
+	let s = t().props, c = o.initialProps ?? s, [l, u] = a({}), d = i(() => JSON.stringify(c), [c]);
+	r(() => {
 		u({});
 	}, [d]);
-	let f = n(() => ({
+	let f = i(() => ({
 		...c,
 		...l
-	}), [c, l]), p = n(() => Object.keys(l).length > 0, [l]);
+	}), [c, l]), p = i(() => Object.keys(l).length > 0, [l]);
 	return {
 		props: f,
-		setProp: e((e, t) => {
+		setProp: n((e, t) => {
 			u((n) => {
 				let r = {
 					...c,
@@ -24,7 +24,7 @@ function o(o = {}) {
 				};
 			});
 		}, [c]),
-		setProps: e((e) => {
+		setProps: n((e) => {
 			u((t) => {
 				let n = {
 					...c,
@@ -36,16 +36,16 @@ function o(o = {}) {
 				};
 			});
 		}, [c]),
-		reload: e((e = {}) => {
-			let { onSuccess: t, ...n } = e;
-			i.reload({
-				...n,
+		reload: n((t = {}) => {
+			let { onSuccess: n, ...r } = t;
+			e.reload({
+				...r,
 				onSuccess: (e) => {
-					u({}), t?.(e);
+					u({}), n?.(e);
 				}
 			});
 		}, []),
-		resetOptimistic: e(() => {
+		resetOptimistic: n(() => {
 			u({});
 		}, []),
 		hasOptimisticUpdates: p

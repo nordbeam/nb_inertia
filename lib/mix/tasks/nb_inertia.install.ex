@@ -1303,6 +1303,30 @@ if Code.ensure_loaded?(Igniter) do
       extension = if typescript, do: "tsx", else: "jsx"
       app_name = igniter |> Igniter.Project.Application.app_name() |> to_string()
 
+      type_definitions =
+        if typescript do
+          """
+          import type { Page } from "@inertiajs/core";
+          import type { ComponentType } from "react";
+
+          type PageModule = {
+            default: ComponentType<Record<string, unknown>>;
+          };
+          """
+        else
+          ""
+        end
+
+      glob_call =
+        if typescript do
+          ~s|import.meta.glob<PageModule>("./pages/**/*.tsx")|
+        else
+          ~s|import.meta.glob("./pages/**/*.jsx")|
+        end
+
+      resolver_signature =
+        if typescript, do: "name: string, page?: Page", else: "name, page"
+
       """
       import "phoenix-colocated/#{app_name}/colocated.css";
       import {
@@ -1312,19 +1336,16 @@ if Code.ensure_loaded?(Igniter) do
         ModalStackProvider,
       } from "@/lib/inertia";
       import { ModalStackRenderer } from "@/components/modals";
-      import type { ComponentType } from "react";
+      #{type_definitions}
 
-      type PageModule = {
-        default: ComponentType<Record<string, unknown>>;
-      };
+      const pages = #{glob_call};
 
-      const pages = import.meta.glob<PageModule>("./pages/**/*.#{extension}");
-
-      const resolvePageComponent = async (name#{if typescript, do: ": string", else: ""}) => {
+      const resolvePageComponent = async (#{resolver_signature}) => {
         const path = `./pages/${name}.#{extension}`;
         const resolver = pages[path];
         if (!resolver) {
-          throw new Error(`Page not found: ${name}`);
+          const pageUrl = page?.url ? ` at ${page.url}` : "";
+          throw new Error(`Page not found: ${name}${pageUrl}`);
         }
         return (await resolver()).default;
       };
@@ -1687,7 +1708,7 @@ if Code.ensure_loaded?(Igniter) do
       type_definitions = ssr_type_definitions(extension)
       glob_call = ssr_glob_call(extension, eager?: false)
       render_signature = ssr_render_signature(extension)
-      name_argument = if extension == "tsx", do: "name: string", else: "name"
+      name_argument = if extension == "tsx", do: "name: string, page?: Page", else: "name, page"
 
       """
       import ReactDOMServer from "react-dom/server.browser";
@@ -1715,8 +1736,10 @@ if Code.ensure_loaded?(Igniter) do
             .map(p => p.replace('./pages/', '').replace('.#{extension}', ''))
             .sort();
 
+          const pageUrl = page?.url ? ` at ${page.url}` : "";
+
           throw new Error(
-            `SSR page not found: ${name}\\n` +
+            `SSR page not found: ${name}${pageUrl}\\n` +
             `Expected: assets/js/pages/${name}.#{extension}\\n` +
             `Available pages (${availablePages.length}):\\n` +
             availablePages.map(p => `  - ${p}`).join('\\n')
@@ -1757,7 +1780,7 @@ if Code.ensure_loaded?(Igniter) do
       type_definitions = ssr_type_definitions(extension)
       glob_call = ssr_glob_call(extension, eager?: true)
       render_signature = ssr_render_signature(extension)
-      name_argument = if extension == "tsx", do: "name: string", else: "name"
+      name_argument = if extension == "tsx", do: "name: string, page?: Page", else: "name, page"
 
       """
       import ReactDOMServer from "react-dom/server.browser";
@@ -1785,8 +1808,10 @@ if Code.ensure_loaded?(Igniter) do
             .map(p => p.replace('./pages/', '').replace('.#{extension}', ''))
             .sort();
 
+          const pageUrl = page?.url ? ` at ${page.url}` : "";
+
           throw new Error(
-            `SSR page not found: ${name}\\n` +
+            `SSR page not found: ${name}${pageUrl}\\n` +
             `Expected: assets/js/pages/${name}.#{extension}\\n` +
             `Available pages (${availablePages.length}):\\n` +
             availablePages.map(p => `  - ${p}`).join('\\n')
@@ -1824,6 +1849,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp ssr_type_definitions("tsx") do
       """
+      import type { Page } from "@inertiajs/core";
       import type { ComponentType } from "react";
 
       type PageModule = {

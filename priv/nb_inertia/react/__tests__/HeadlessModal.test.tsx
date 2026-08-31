@@ -1,7 +1,13 @@
 import React, { useEffect } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vite-plus/test';
-import { Modal, ModalStackProvider, useModalStack, useCurrentModal, HeadlessModal } from '../modals';
+import {
+  Modal,
+  ModalStackProvider,
+  useModalStack,
+  useCurrentModal,
+  HeadlessModal,
+} from '../modals';
 
 const { mockVisit, mockOn } = vi.hoisted(() => ({
   mockVisit: vi.fn(),
@@ -25,6 +31,9 @@ function ModalControls() {
       <span data-testid="modal-index">{modal.index}</span>
       <span data-testid="modal-top">{String(modal.onTopOfStack)}</span>
       <button onClick={() => modal.reload({ only: ['permissions'] })}>Reload</button>
+      <button onClick={() => modal.reload({ async: true, preserveErrors: true })}>
+        Async reload
+      </button>
       <button onClick={modal.close}>Close</button>
     </div>
   );
@@ -127,7 +136,7 @@ describe('HeadlessModal (React)', () => {
     render(
       <ModalStackProvider>
         <Harness />
-      </ModalStackProvider>
+      </ModalStackProvider>,
     );
 
     await waitFor(() => {
@@ -149,7 +158,19 @@ describe('HeadlessModal (React)', () => {
           'x-inertia-modal': 'true',
           'x-inertia-modal-base-url': '/users?page=2',
         },
-      })
+      }),
+    );
+
+    fireEvent.click(screen.getByText('Async reload'));
+
+    expect(mockVisit).toHaveBeenCalledWith(
+      '/users/1/edit',
+      expect.objectContaining({
+        async: true,
+        preserveErrors: true,
+        preserveState: true,
+        preserveScroll: true,
+      }),
     );
 
     fireEvent.click(screen.getByText('Close'));
@@ -163,7 +184,7 @@ describe('HeadlessModal (React)', () => {
     render(
       <ModalStackProvider>
         <RelationshipHarness />
-      </ModalStackProvider>
+      </ModalStackProvider>,
     );
 
     await waitFor(() => {

@@ -19,24 +19,50 @@ function getEntryPoints(dir, baseDir = null) {
         continue;
       }
       Object.assign(entries, getEntryPoints(fullPath, baseDir));
-    } else if ((file.endsWith('.tsx') || file.endsWith('.ts')) &&
-               !file.endsWith('.test.ts') &&
-               !file.endsWith('.test.tsx') &&
-               !file.includes('vitest') &&
-               !file.includes('vite.config') &&
-               !file.endsWith('.d.ts') &&
-               !fullPath.includes('/node_modules/') &&
-               !fullPath.includes('/vue/')) {
+    } else if (
+      (file.endsWith('.tsx') || file.endsWith('.ts')) &&
+      !file.endsWith('.test.ts') &&
+      !file.endsWith('.test.tsx') &&
+      !file.endsWith('.typecheck.ts') &&
+      !file.includes('vitest') &&
+      !file.includes('vite.config') &&
+      !file.endsWith('.d.ts') &&
+      !fullPath.includes('/node_modules/') &&
+      !fullPath.includes('/vue/')
+    ) {
       // Create relative path from baseDir
       const baseResolved = resolve(baseDir);
-      const relativePath = fullPath
-        .replace(baseResolved + '/', '')
-        .replace(/\.tsx?$/, '');
+      const relativePath = fullPath.replace(baseResolved + '/', '').replace(/\.tsx?$/, '');
       entries[relativePath] = fullPath;
     }
   }
 
   return entries;
+}
+
+// Vue source files are intentionally excluded from the recursive scan because
+// the modal entrypoint imports .vue SFCs. These thin adapter re-exports only
+// import official JavaScript packages, so add them explicitly as build
+// entries while keeping the SFC source out of the package build.
+function getOfficialVueEntryPoints() {
+  const entryNames = [
+    'index',
+    'server',
+    'Deferred',
+    'Form',
+    'InfiniteScroll',
+    'WhenVisible',
+    'usePoll',
+    'usePrefetch',
+    'useRemember',
+  ];
+
+  return Object.fromEntries(
+    entryNames.map((entryName) => [
+      `vue/${entryName}`,
+      resolve(`./priv/nb_inertia/vue/${entryName}.ts`),
+    ]),
+  );
 }
 
 function emitVueModalRuntimeEntry() {
@@ -54,7 +80,7 @@ function emitVueModalRuntimeEntry() {
           '// TypeScript consumers use the "types" condition -> index.d.ts instead.',
           "export * from '../../../priv/nb_inertia/vue/modals/index.ts';",
           '',
-        ].join('\n')
+        ].join('\n'),
       );
     },
   };
@@ -74,7 +100,14 @@ export default defineConfig({
     emitVueModalRuntimeEntry(),
     dts({
       include: ['priv/nb_inertia/**/*.{ts,tsx}'],
-      exclude: ['**/*.test.ts', '**/*.test.tsx', '**/vitest.*', '**/vue/**', '**/node_modules/**'],
+      exclude: [
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        '**/*.typecheck.ts',
+        '**/vitest.*',
+        '**/vue/**',
+        '**/node_modules/**',
+      ],
       outDir: 'dist',
       rollupTypes: true,
     }),
@@ -85,12 +118,7 @@ export default defineConfig({
     semi: true,
   },
   lint: {
-    ignorePatterns: [
-      'dist/**',
-      'priv/components/**',
-      '**/node_modules/**',
-      '**/coverage/**',
-    ],
+    ignorePatterns: ['dist/**', 'priv/components/**', '**/node_modules/**', '**/coverage/**'],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -122,7 +150,10 @@ export default defineConfig({
   },
   build: {
     lib: {
-      entry: getEntryPoints('./priv/nb_inertia'),
+      entry: {
+        ...getEntryPoints('./priv/nb_inertia'),
+        ...getOfficialVueEntryPoints(),
+      },
       formats: ['es'],
     },
     rollupOptions: {
@@ -133,7 +164,9 @@ export default defineConfig({
         'react-dom',
         '@inertiajs/core',
         '@inertiajs/react',
+        '@inertiajs/react/server',
         '@inertiajs/vue3',
+        '@inertiajs/vue3/server',
         'laravel-precognition',
         '@radix-ui/react-dialog',
         'radix-vue',

@@ -1,8 +1,8 @@
 import { default as React } from 'react';
-import { router as inertiaRouter } from '@inertiajs/react';
+import { VisitOptions } from '@inertiajs/core';
 import { ModalConfig, ModalInstance } from './types';
-type VisitOptions = NonNullable<Parameters<typeof inertiaRouter.visit>[1]>;
-type ModalReloadOptions = Omit<VisitOptions, 'method' | 'data' | 'async'>;
+/** Modal reloads accept every Inertia visit option except method and payload. */
+export type ModalReloadOptions = Omit<VisitOptions, 'method' | 'data'>;
 export interface ModalHandle {
     modal: ModalInstance;
     id: string;

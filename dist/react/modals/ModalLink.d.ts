@@ -1,11 +1,11 @@
 import { default as React } from 'react';
-import { Method } from '@inertiajs/core';
+import { CacheForOption, VisitOptions, Method } from '@inertiajs/core';
 import { RouteResult } from '../../shared/types';
-import { ModalConfig } from './types';
+import { ModalConfig, ModalLinkPrefetch, ModalLinkVisitOptions } from './types';
 /**
  * Props for the ModalLink component
  */
-export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
+export type ModalLinkProps = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | keyof ModalLinkVisitOptions> & ModalLinkVisitOptions & {
     /**
      * The URL or RouteResult to navigate to
      *
@@ -29,7 +29,7 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
     /**
      * Data to send with the request (for POST/PUT/PATCH/DELETE)
      */
-    data?: Record<string, any>;
+    data?: VisitOptions["data"];
     /**
      * Custom loading component to display while modal content is loading
      *
@@ -72,24 +72,26 @@ export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnch
      * <ModalLink href={user_path(1)} prefetch={['hover', 'mount']}>View User</ModalLink>
      * ```
      */
-    prefetch?: boolean | 'hover' | 'mount' | 'click' | ('hover' | 'mount' | 'click')[];
+    prefetch?: ModalLinkPrefetch;
     /**
      * Duration in milliseconds to cache prefetched data
      *
      * @default 30000 (30 seconds)
      */
-    cacheFor?: number;
+    cacheFor?: CacheForOption | CacheForOption[];
     /**
      * Tags for organizing cached prefetch data
      *
      * Can be used to invalidate specific cached prefetch data.
      */
-    cacheTags?: string[];
+    cacheTags?: string | string[];
+    /** Exact URL to restore when this modal closes. */
+    returnUrl?: string;
     /**
      * Children to render
      */
     children?: React.ReactNode;
-}
+};
 export declare const ModalLink: React.FC<ModalLinkProps>;
 export default ModalLink;
 //# sourceMappingURL=ModalLink.d.ts.map

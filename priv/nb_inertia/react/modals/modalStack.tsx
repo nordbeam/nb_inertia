@@ -38,23 +38,36 @@
  * ```
  */
 
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import type { Method } from '@inertiajs/core';
-import { router } from '@inertiajs/react';
-import { routerPrefetch } from '../../shared/routerCompat';
-import { isRouteResult, type RouteResult } from '../../shared/types';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
+import type {
+  CacheForOption,
+  PrefetchOptions,
+  VisitOptions,
+} from "@inertiajs/core";
+import type { Method } from "@inertiajs/core";
+import { router } from "@inertiajs/react";
+import { routerPrefetch } from "../../shared/routerCompat";
+import { isRouteResult, type RouteResult } from "../../shared/types";
 import type {
   ModalInstance,
   ModalPageMetadata,
   ModalVisitOptions,
+  ModalPrefetchOptions,
   ModalStackContextValue,
   PrefetchedModal,
-} from './types';
+} from "./types";
 import {
   mergeModalHeaders,
   registerModalRequestContext,
   unregisterModalRequestContext,
-} from './requestContext';
+} from "./requestContext";
 
 /**
  * Inertia Page object structure for modal context
@@ -72,17 +85,17 @@ export interface ModalPageObject {
   clearHistory?: boolean;
   encryptHistory?: boolean;
   preserveFragment?: boolean;
-  deferredProps?: ModalPageMetadata['deferredProps'];
-  initialDeferredProps?: ModalPageMetadata['initialDeferredProps'];
+  deferredProps?: ModalPageMetadata["deferredProps"];
+  initialDeferredProps?: ModalPageMetadata["initialDeferredProps"];
   rescuedProps: string[];
   mergeProps?: string[];
   prependProps?: string[];
   deepMergeProps?: string[];
   matchPropsOn?: string[];
   sharedProps?: string[];
-  scrollProps?: ModalPageMetadata['scrollProps'];
-  onceProps?: ModalPageMetadata['onceProps'];
-  optimisticUpdatedAt?: ModalPageMetadata['optimisticUpdatedAt'];
+  scrollProps?: ModalPageMetadata["scrollProps"];
+  onceProps?: ModalPageMetadata["onceProps"];
+  optimisticUpdatedAt?: ModalPageMetadata["optimisticUpdatedAt"];
 }
 
 /**
@@ -90,7 +103,7 @@ export interface ModalPageObject {
  * This allows usePage() to work correctly inside modals
  */
 const ModalPageContext = createContext<ModalPageObject | null>(null);
-ModalPageContext.displayName = 'NbInertiaModalPageContext';
+ModalPageContext.displayName = "NbInertiaModalPageContext";
 
 /**
  * Hook to check if we're inside a modal context
@@ -131,7 +144,7 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
   pageMetadata,
   children,
 }) => {
-  const contextIdRef = React.useRef(Symbol('nb-inertia-modal-request-context'));
+  const contextIdRef = React.useRef(Symbol("nb-inertia-modal-request-context"));
   const page: ModalPageObject = React.useMemo(
     () => ({
       component,
@@ -139,7 +152,8 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
       url,
       baseUrl,
       returnUrl,
-      version: pageMetadata?.version === undefined ? '1.0' : pageMetadata.version,
+      version:
+        pageMetadata?.version === undefined ? "1.0" : pageMetadata.version,
       flash: pageMetadata?.flash ?? {},
       scrollRegions: pageMetadata?.scrollRegions ?? [],
       rememberedState: pageMetadata?.rememberedState ?? {},
@@ -173,11 +187,19 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
     };
   }, [url, baseUrl, returnUrl]);
 
-  return <ModalPageContext.Provider value={page}>{children}</ModalPageContext.Provider>;
+  return (
+    <ModalPageContext.Provider value={page}>
+      {children}
+    </ModalPageContext.Provider>
+  );
 };
 
 // Re-export types for convenience
-export type { ModalConfig, ModalInstance, ModalStackContextValue } from './types';
+export type {
+  ModalConfig,
+  ModalInstance,
+  ModalStackContextValue,
+} from "./types";
 
 /**
  * Modal stack context
@@ -218,7 +240,7 @@ const ModalStackContext = createContext<ModalStackContextValue | null>(null);
 export const useModalStack = (): ModalStackContextValue => {
   const context = useContext(ModalStackContext);
   if (!context) {
-    throw new Error('useModalStack must be used within a ModalStackProvider');
+    throw new Error("useModalStack must be used within a ModalStackProvider");
   }
   return context;
 };
@@ -258,13 +280,48 @@ export const useModal = (): ModalInstance | null => {
 /**
  * Function type for resolving component names to React components
  */
-export type ResolveComponentFn = (name: string) => Promise<React.ComponentType<any>>;
+export type ResolveComponentFn = (
+  name: string,
+) => Promise<React.ComponentType<any>>;
 
 function getVisitTarget(href: string | RouteResult, method?: Method) {
   const url = isRouteResult(href) ? href.url : href;
-  const requestMethod = (isRouteResult(href) && !method ? href.method : method) || 'get';
+  const requestMethod =
+    (isRouteResult(href) && !method ? href.method : method) || "get";
 
   return { url, method: requestMethod };
+}
+
+const DEFAULT_PREFETCH_CACHE_FOR = 30_000;
+
+/** Match Inertia's cache duration forms for the local component/data cache. */
+function cacheForToMilliseconds(
+  cacheFor?: CacheForOption | CacheForOption[],
+): number {
+  if (Array.isArray(cacheFor) && cacheFor.length === 0) return 0;
+
+  const value = Array.isArray(cacheFor)
+    ? cacheFor[cacheFor.length - 1]
+    : cacheFor;
+
+  if (value === undefined) return DEFAULT_PREFETCH_CACHE_FOR;
+  if (typeof value === "number") return value;
+
+  const match = String(value)
+    .trim()
+    .match(/^(-?\d+(?:\.\d+)?)(ms|s|m|h|d)$/i);
+  if (!match)
+    return Number.parseInt(String(value), 10) || DEFAULT_PREFETCH_CACHE_FOR;
+
+  const multipliers: Record<string, number> = {
+    ms: 1,
+    s: 1_000,
+    m: 60_000,
+    h: 3_600_000,
+    d: 86_400_000,
+  };
+
+  return Number(match[1]) * (multipliers[match[2].toLowerCase()] ?? 1);
 }
 
 /**
@@ -349,9 +406,24 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
   // Cache for prefetched modal data (keyed by URL)
   const prefetchCacheRef = useRef<Map<string, PrefetchedModal>>(new Map());
   // Cache for preloaded components (keyed by component name)
-  const componentCacheRef = useRef<Map<string, React.ComponentType<any>>>(new Map());
+  const componentCacheRef = useRef<Map<string, React.ComponentType<any>>>(
+    new Map(),
+  );
   // Track in-progress prefetches to avoid duplicates
   const prefetchingRef = useRef<Set<string>>(new Set());
+  // Keep the exact request options alongside assembled modal data. Inertia's
+  // cache is keyed by visit options, so checking it here also makes
+  // flush/flushByCacheTags invalidate the component/data cache.
+  const prefetchRequestOptionsRef = useRef<
+    Map<
+      string,
+      {
+        visitOptions: VisitOptions;
+        cacheFor?: CacheForOption | CacheForOption[];
+        cacheTags?: string | string[];
+      }
+    >
+  >(new Map());
 
   /**
    * Push a new modal onto the stack.
@@ -363,7 +435,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
    * represents the modal's identity in the browser history.
    */
   const pushModal = useCallback(
-    (modalData: Omit<ModalInstance, 'id'>) => {
+    (modalData: Omit<ModalInstance, "id">) => {
       const id = `modal-${nextIdRef.current++}`;
 
       const modal: ModalInstance = {
@@ -387,7 +459,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
         return newModals;
       });
 
-      return didPush ? id : '';
+      return didPush ? id : "";
     },
     [onStackChange],
   );
@@ -423,7 +495,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
           try {
             callbackRef.current();
           } catch (error) {
-            console.error('Error in modal onClose callback:', error);
+            console.error("Error in modal onClose callback:", error);
           }
         }
       }, 0);
@@ -447,7 +519,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
           // Collect callbacks before clearing
           const callbacks = prev
             .map((m) => m.onClose)
-            .filter((cb): cb is () => void => typeof cb === 'function');
+            .filter((cb): cb is () => void => typeof cb === "function");
 
           if (onStackChange) {
             onStackChange([]);
@@ -459,7 +531,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
               try {
                 cb();
               } catch (error) {
-                console.error('Error in modal onClose callback:', error);
+                console.error("Error in modal onClose callback:", error);
               }
             });
           }, 0);
@@ -491,9 +563,11 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
    * Used to replace a loading modal with actual content
    */
   const updateModal = useCallback(
-    (id: string, updates: Partial<Omit<ModalInstance, 'id'>>) => {
+    (id: string, updates: Partial<Omit<ModalInstance, "id">>) => {
       setModals((prev) => {
-        const newModals = prev.map((modal) => (modal.id === id ? { ...modal, ...updates } : modal));
+        const newModals = prev.map((modal) =>
+          modal.id === id ? { ...modal, ...updates } : modal,
+        );
         if (onStackChange) {
           onStackChange(newModals);
         }
@@ -506,23 +580,47 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
   /**
    * Get prefetched modal data from cache by URL
    */
-  const getPrefetchedModal = useCallback((url: string): PrefetchedModal | undefined => {
-    const cached = prefetchCacheRef.current.get(url);
-    if (!cached) return undefined;
+  const getPrefetchedModal = useCallback(
+    (url: string): PrefetchedModal | undefined => {
+      const cached = prefetchCacheRef.current.get(url);
+      if (!cached) return undefined;
 
-    // Check if cache is still valid (default 30 seconds)
-    const maxAge = 30000;
-    if (Date.now() - cached.timestamp > maxAge) {
-      prefetchCacheRef.current.delete(url);
-      return undefined;
-    }
+      const maxAge =
+        cached.cacheFor === undefined
+          ? DEFAULT_PREFETCH_CACHE_FOR
+          : cacheForToMilliseconds(cached.cacheFor);
+      if (maxAge <= 0 || Date.now() - cached.timestamp > maxAge) {
+        prefetchCacheRef.current.delete(url);
+        prefetchRequestOptionsRef.current.delete(url);
+        return undefined;
+      }
 
-    return cached;
-  }, []);
+      // Keep the local assembled cache in lockstep with Inertia's cache. This
+      // handles router.flush(), router.flushAll(), and router.flushByCacheTags()
+      // without requiring a second invalidation API in the modal layer.
+      if (
+        cached.visitOptions &&
+        router.getCached(url, cached.visitOptions) === null
+      ) {
+        prefetchCacheRef.current.delete(url);
+        prefetchRequestOptionsRef.current.delete(url);
+        return undefined;
+      }
+
+      return cached;
+    },
+    [],
+  );
 
   const visitModal = useCallback(
     (href: string | RouteResult, options: ModalVisitOptions = {}) => {
       const { url, method } = getVisitTarget(href, options.method);
+      const {
+        modalConfig,
+        loadingComponent,
+        returnUrl: requestedReturnUrl,
+        ...inertiaOptions
+      } = options;
 
       const existingModal = modals.find((modal) => modal.url === url);
       if (existingModal) {
@@ -530,9 +628,10 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
       }
 
       const returnUrl =
-        options.returnUrl || (typeof window !== 'undefined' ? window.location.href : '');
+        requestedReturnUrl ||
+        (typeof window !== "undefined" ? window.location.href : "");
 
-      const prefetched = method === 'get' ? getPrefetchedModal(url) : undefined;
+      const prefetched = method === "get" ? getPrefetchedModal(url) : undefined;
 
       if (prefetched) {
         pushModal({
@@ -540,19 +639,19 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
           componentName: prefetched.data.component,
           props: prefetched.data.props,
           url: prefetched.data.url,
-          config: prefetched.data.config || options.modalConfig || {},
+          config: prefetched.data.config || modalConfig || {},
           baseUrl: prefetched.data.baseUrl,
           returnUrl,
           pageMetadata: prefetched.data.pageMetadata,
           onClose: () => {
-            if (returnUrl && typeof window !== 'undefined') {
-              window.history.replaceState({}, '', returnUrl);
+            if (returnUrl && typeof window !== "undefined") {
+              window.history.replaceState({}, "", returnUrl);
             }
           },
         });
 
-        if (typeof window !== 'undefined') {
-          window.history.pushState({}, '', prefetched.data.url);
+        if (typeof window !== "undefined") {
+          window.history.pushState({}, "", prefetched.data.url);
         }
 
         return;
@@ -560,28 +659,29 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
 
       pushModal({
         component: () => null,
-        componentName: '',
+        componentName: "",
         props: {},
         url,
-        config: options.modalConfig || {},
-        baseUrl: '',
+        config: modalConfig || {},
+        baseUrl: "",
         returnUrl,
         loading: true,
-        loadingComponent: options.loadingComponent,
+        loadingComponent,
       });
 
-      router.visit(url, {
+      const visitOptions: VisitOptions = {
+        ...inertiaOptions,
         method,
         data: options.data ?? {},
         preserveState: options.preserveState ?? true,
         preserveScroll: options.preserveScroll ?? true,
-        ...mergeModalHeaders(
-          {
-            headers: options.headers,
-          },
-          { url, baseUrl: returnUrl, returnUrl },
-        ),
-      });
+        headers: options.headers,
+      };
+
+      router.visit(
+        url,
+        mergeModalHeaders(visitOptions, { url, baseUrl: returnUrl, returnUrl }),
+      );
     },
     [getPrefetchedModal, modals, pushModal],
   );
@@ -590,20 +690,78 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
    * Prefetch modal data and component for a URL
    * This triggers Inertia's prefetch and then resolves the component
    */
-  const prefetchModal = useCallback((url: string, options?: { cacheFor?: number }) => {
-    // Skip if already prefetching or cached
-    if (prefetchingRef.current.has(url)) return;
-    if (prefetchCacheRef.current.has(url)) return;
+  const prefetchModal = useCallback(
+    (url: string, options: ModalPrefetchOptions = {}) => {
+      // Skip if already prefetching or cached
+      if (prefetchingRef.current.has(url)) return;
+      if (prefetchCacheRef.current.has(url)) return;
 
-    prefetchingRef.current.add(url);
+      prefetchingRef.current.add(url);
 
-    // Trigger Inertia's prefetch
-    const prefetchOptions: { cacheFor?: number } = {};
-    if (options?.cacheFor !== undefined) prefetchOptions.cacheFor = options.cacheFor;
+    const { cacheFor, cacheTags, preserveState, ...visitOptions } = options;
+    const requestOptions: VisitOptions = {
+      ...visitOptions,
+      preserveState: preserveState ?? true,
+    };
+    const clearInFlight = () => prefetchingRef.current.delete(url);
+    const discardRequest = () => {
+      clearInFlight();
+      prefetchRequestOptionsRef.current.delete(url);
+    };
+    const userOnFinish = requestOptions.onFinish;
+    const userOnCancel = requestOptions.onCancel;
+    const userOnError = requestOptions.onError;
+    const userOnHttpException = requestOptions.onHttpException;
+    const userOnNetworkError = requestOptions.onNetworkError;
 
-    routerPrefetch(url, { preserveState: true }, prefetchOptions);
-    prefetchingRef.current.delete(url);
-  }, []);
+    requestOptions.onFinish = (visit) => {
+      clearInFlight();
+      userOnFinish?.(visit);
+    };
+    requestOptions.onCancel = () => {
+      discardRequest();
+      userOnCancel?.();
+    };
+    requestOptions.onError = (errors, metadata) => {
+      discardRequest();
+      userOnError?.(errors, metadata);
+    };
+    requestOptions.onHttpException = (response) => {
+      discardRequest();
+      return userOnHttpException?.(response);
+    };
+    requestOptions.onNetworkError = (error) => {
+      discardRequest();
+      return userOnNetworkError?.(error);
+    };
+
+      // Keep the request identity so a later Inertia cache flush also removes
+      // the assembled modal cache.
+      prefetchRequestOptionsRef.current.set(url, {
+        visitOptions: requestOptions,
+        cacheFor,
+        cacheTags,
+      });
+
+      // Trigger Inertia's prefetch. Do not overwrite Inertia's defaults with
+      // explicit `undefined` values: its cache duration parser expects a value.
+      const prefetchOptions: Partial<PrefetchOptions> = {};
+      if (cacheFor !== undefined) prefetchOptions.cacheFor = cacheFor;
+      if (cacheTags !== undefined) prefetchOptions.cacheTags = cacheTags;
+
+    try {
+      routerPrefetch(
+        url,
+        requestOptions,
+        Object.keys(prefetchOptions).length > 0 ? prefetchOptions : undefined,
+      );
+    } catch (error) {
+      discardRequest();
+      throw error;
+    }
+    },
+    [],
+  );
 
   /**
    * Listen for Inertia prefetch events and preload component modules
@@ -616,18 +774,53 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
     if (!resolveComponent) return;
 
     // Listen for prefetch completions
-    const unsubscribe = router.on('prefetched', (event: CustomEvent) => {
-      // The response may be a JSON string or already parsed object
+    const unsubscribe = router.on("prefetched", (event: CustomEvent) => {
+      // Inertia emits an HttpResponse whose `data` member is the Page. Keep a
+      // compatibility fallback for adapters that emit the Page directly.
       const rawResponse = (event.detail as Record<string, unknown>)?.response;
-      const pageData = typeof rawResponse === 'string' ? JSON.parse(rawResponse) : rawResponse;
+      const rawPage =
+        rawResponse && typeof rawResponse === "object" && "data" in rawResponse
+          ? (rawResponse as { data?: unknown }).data
+          : rawResponse;
+      const pageData =
+        typeof rawPage === "string"
+          ? JSON.parse(rawPage)
+          : (rawPage as Record<string, any>);
 
+      const visitUrl = (event.detail as { visit?: { url?: URL } })?.visit?.url;
+      const responseUrl = pageData?.url || visitUrl;
+      const matchingRequestUrls = [...prefetchingRef.current].filter((candidate) => {
+        if (!responseUrl) return false;
+
+        try {
+          return new URL(candidate, window.location.href).href === new URL(responseUrl, window.location.href).href;
+        } catch {
+          return candidate === String(responseUrl);
+        }
+      });
       const modalData = pageData?.props?._nb_modal;
-      if (!modalData?.component) return;
+
+      if (!modalData?.component) {
+        matchingRequestUrls.forEach((requestUrl) => {
+          prefetchingRef.current.delete(requestUrl);
+          prefetchRequestOptionsRef.current.delete(requestUrl);
+        });
+        return;
+      }
 
       const componentName = modalData.component;
       const modalUrl = modalData.url || pageData?.url;
 
       if (!modalUrl) return;
+
+      const request =
+        prefetchRequestOptionsRef.current.get(modalUrl) ||
+        prefetchRequestOptionsRef.current.get(pageData?.url);
+      prefetchingRef.current.delete(modalUrl);
+      if (pageData?.url && pageData.url !== modalUrl) {
+        prefetchingRef.current.delete(pageData.url);
+      }
+      matchingRequestUrls.forEach((requestUrl) => prefetchingRef.current.delete(requestUrl));
 
       // Skip if already fully cached
       if (prefetchCacheRef.current.has(modalUrl)) return;
@@ -642,12 +835,15 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
             component: componentName,
             props: modalData.props || {},
             url: modalUrl,
-            baseUrl: modalData.baseUrl || '',
+            baseUrl: modalData.baseUrl || "",
             config: modalData.config,
             pageMetadata: modalData.pageMetadata || pageData,
           },
           component: cachedComponent,
           timestamp: Date.now(),
+          cacheFor: request?.cacheFor,
+          cacheTags: request?.cacheTags,
+          visitOptions: request?.visitOptions,
         });
       } else {
         // Preload the component module (triggers dynamic import)
@@ -662,16 +858,24 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
                 component: componentName,
                 props: modalData.props || {},
                 url: modalUrl,
-                baseUrl: modalData.baseUrl || '',
+                baseUrl: modalData.baseUrl || "",
                 config: modalData.config,
                 pageMetadata: modalData.pageMetadata || pageData,
               },
               component: Component,
               timestamp: Date.now(),
+              cacheFor: request?.cacheFor,
+              cacheTags: request?.cacheTags,
+              visitOptions: request?.visitOptions,
             });
           })
           .catch((error) => {
-            console.warn('[ModalStack] Component preload failed:', componentName, error);
+            prefetchRequestOptionsRef.current.delete(modalUrl);
+            console.warn(
+              "[ModalStack] Component preload failed:",
+              componentName,
+              error,
+            );
           });
       }
     });
@@ -692,7 +896,11 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
     getPrefetchedModal,
   };
 
-  return <ModalStackContext.Provider value={value}>{children}</ModalStackContext.Provider>;
+  return (
+    <ModalStackContext.Provider value={value}>
+      {children}
+    </ModalStackContext.Provider>
+  );
 };
 
 export default ModalStackProvider;

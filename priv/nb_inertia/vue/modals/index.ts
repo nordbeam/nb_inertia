@@ -53,12 +53,7 @@
  */
 
 // Core modal stack management
-export {
-  createModalStack,
-  useModalStack,
-  useModal,
-  MODAL_STACK_KEY,
-} from './modalStack';
+export { createModalStack, useModalStack, useModal, MODAL_STACK_KEY } from './modalStack';
 
 // Modal components
 export { default as Modal } from './Modal.vue';
@@ -75,13 +70,13 @@ export type {
   ModalConfig,
   ModalSize,
   ModalPosition,
+  ModalVisitOptions,
+  ModalPrefetchOptions,
+  ModalLinkPrefetch,
   ModalEventType,
   ModalEventHandler,
   ModalInstance,
   ModalStackState,
 } from './types';
 
-export {
-  DEFAULT_MODAL_CONFIG,
-  mergeModalConfig,
-} from './types';
+export { DEFAULT_MODAL_CONFIG, mergeModalConfig } from './types';

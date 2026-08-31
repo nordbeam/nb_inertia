@@ -1,4 +1,4 @@
-import { Method, Page as InertiaPage } from '@inertiajs/core';
+import { CacheForOption, LinkPrefetchOption, Method, PrefetchOptions, RequestPayload, VisitOptions, Page as InertiaPage } from '@inertiajs/core';
 import { default as React } from 'react';
 import { RouteResult } from '../../shared/types';
 /**
@@ -145,16 +145,30 @@ export interface ModalInstance {
     /** Official Inertia page metadata associated with this modal response. */
     pageMetadata?: ModalPageMetadata;
 }
-export interface ModalVisitOptions {
+/**
+ * Visit options accepted by a modal navigation.
+ *
+ * Keep this derived from the official Inertia type so new protocol options
+ * (for example `async`, `fresh`, `preserveErrors`, `reset`, and
+ * `invalidateCacheTags`) are not silently dropped by the modal layer.
+ */
+export type ModalVisitOptions = Omit<VisitOptions, 'method' | 'data'> & {
     method?: Method;
-    data?: Record<string, any>;
+    data?: RequestPayload;
     modalConfig?: ModalConfig;
     loadingComponent?: React.ComponentType;
     returnUrl?: string;
-    preserveState?: boolean;
-    preserveScroll?: boolean;
-    headers?: Record<string, string>;
-}
+};
+/**
+ * Combined visit and prefetch options used when the stack prefetches a modal.
+ * `cacheFor` accepts Inertia's duration forms (`number`, `"5s"`, `"1m"`,
+ * etc.) and arrays for stale/expiry windows.
+ */
+export type ModalPrefetchOptions = Omit<ModalVisitOptions, 'modalConfig' | 'loadingComponent' | 'returnUrl' | 'prefetch'> & Partial<PrefetchOptions>;
+/** Link prefetch modes supported by the official adapters. */
+export type ModalLinkPrefetch = boolean | LinkPrefetchOption | LinkPrefetchOption[];
+/** Options that can be forwarded to an Inertia modal link's visit. */
+export type ModalLinkVisitOptions = Omit<ModalVisitOptions, 'modalConfig' | 'loadingComponent' | 'returnUrl' | 'prefetch'>;
 /**
  * Modal stack manager context value
  *
@@ -269,9 +283,7 @@ export interface ModalStackContextValue {
      * @param url - The URL to prefetch
      * @param options - Prefetch options
      */
-    prefetchModal?: (url: string, options?: {
-        cacheFor?: number;
-    }) => void;
+    prefetchModal?: (url: string, options?: ModalPrefetchOptions) => void;
     /**
      * Cache of prefetched modal data
      * Maps URL to { data, component, timestamp }
@@ -295,6 +307,12 @@ export interface PrefetchedModal {
     component: React.ComponentType<any>;
     /** When this was prefetched */
     timestamp: number;
+    /** Inertia cache duration used for the request, when supplied. */
+    cacheFor?: CacheForOption | CacheForOption[];
+    /** Inertia cache tags used for this request, when supplied. */
+    cacheTags?: string | string[];
+    /** Visit options used to identify the corresponding Inertia cache entry. */
+    visitOptions?: VisitOptions;
 }
 /**
  * Default behavioral modal configuration

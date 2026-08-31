@@ -917,6 +917,32 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert source =~ "<ModalStackRenderer />"
       refute source =~ ~s(import { createRoot } from "react-dom/client";)
     end
+
+    test "React client resolver accepts the Inertia v3 page argument without changing glob lookup" do
+      files = generated_installer_assets!("react")
+      source = files["assets/js/app.tsx"]
+
+      assert source =~ "import type { Page } from \"@inertiajs/core\";"
+      assert source =~ "const resolvePageComponent = async (name: string, page?: Page) => {"
+      assert source =~ "const path = `./pages/${name}.tsx`;"
+      assert source =~ "const pageUrl = page?.url ? ` at ${page.url}` : \"\";"
+    end
+
+    test "JavaScript client resolver keeps the page argument without emitting TypeScript syntax" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "react", typescript: false)
+        |> Install.setup_client()
+        |> apply_igniter!()
+
+      source = igniter.assigns.test_files["assets/js/app.jsx"]
+
+      assert source =~ "const pages = import.meta.glob(\"./pages/**/*.jsx\");"
+      assert source =~ "const resolvePageComponent = async (name, page) => {"
+      assert source =~ "const pageUrl = page?.url ? ` at ${page.url}` : \"\";"
+      refute source =~ "import type"
+      refute source =~ "type PageModule"
+    end
   end
 
   describe "SSR entry templates" do
@@ -955,6 +981,21 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
                3
 
       assert length(Regex.scan(~r/initialPage=\{props\.initialPage\}/, source)) >= 2
+    end
+
+    test "SSR resolvers accept page context while preserving lazy and eager glob lookups" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~
+               ~s(name_argument = if extension == "tsx", do: "name: string, page?: Page", else: "name, page")
+
+      assert source =~ "const pageUrl = page?.url ? ` at ${page.url}` : \"\";"
+      assert source =~ ~S|import.meta.glob<PageModule>("./pages/**/*.tsx")|
+
+      assert source =~
+               ~S|import.meta.glob<PageModule>("./pages/**/*.tsx", { eager: true })|
     end
 
     test "SSR healthcheck guard is present in both dev and prod templates" do

@@ -1,32 +1,32 @@
 import { useModalStack as e } from "./modalStack.js";
-import { useCallback as t, useEffect as n, useRef as r } from "react";
-import { router as i, usePage as a } from "@inertiajs/react";
+import { router as t, usePage as n } from "@inertiajs/react";
+import { useCallback as r, useEffect as i, useRef as a } from "react";
 import { jsx as o } from "react/jsx-runtime";
 //#region priv/nb_inertia/react/modals/InitialModalHandler.tsx
-function s({ resolveComponent: a, initialPage: o }) {
-	let { pushModal: s, updateModal: c, clearModals: l, modals: u } = e(), d = r(!1), f = r(!1), p = r(null), m = r(/* @__PURE__ */ new Set()), h = t((e, t) => () => {
+function s({ resolveComponent: n, initialPage: o }) {
+	let { pushModal: s, updateModal: c, clearModals: l, modals: u } = e(), d = a(!1), f = a(!1), p = a(null), m = a(/* @__PURE__ */ new Set()), h = r((e, t) => () => {
 		if (p.current = null, m.current.delete(e.url), !d.current && typeof window < "u") {
 			let n = t || e.baseUrl;
 			n && window.location.href !== n && window.history.replaceState({}, "", n);
 		}
-	}, []), g = t((e, t) => {
-		let n = t || e.pageMetadata, r = e.url, i = u.find((e) => e.loading && e.url === r), o = u.find((e) => !e.loading && e.url === r);
-		m.current.has(r) && !i && !o || (m.current.add(r), a(e.component).then((t) => {
-			if (i) {
-				if (!u.find((e) => e.id === i.id && e.loading)) {
-					m.current.delete(r);
+	}, []), g = r((e, t) => {
+		let r = t || e.pageMetadata, i = e.url, a = u.find((e) => e.loading && e.url === i), o = u.find((e) => !e.loading && e.url === i);
+		m.current.has(i) && !a && !o || (m.current.add(i), n(e.component).then((t) => {
+			if (a) {
+				if (!u.find((e) => e.id === a.id && e.loading)) {
+					m.current.delete(i);
 					return;
 				}
-				let a = i.returnUrl;
-				c(i.id, {
+				let n = a.returnUrl;
+				c(a.id, {
 					component: t,
 					componentName: e.component,
 					props: e.props,
 					config: e.config || {},
 					baseUrl: e.baseUrl,
-					returnUrl: a,
-					pageMetadata: n,
-					onClose: h(e, a),
+					returnUrl: n,
+					pageMetadata: r,
+					onClose: h(e, n),
 					loading: !1
 				}), p.current = e;
 			} else o ? (c(o.id, {
@@ -35,7 +35,7 @@ function s({ resolveComponent: a, initialPage: o }) {
 				props: e.props,
 				config: e.config || {},
 				baseUrl: e.baseUrl,
-				pageMetadata: n,
+				pageMetadata: r,
 				onClose: o.onClose || h(e, o.returnUrl)
 			}), p.current = e) : (p.current = e, s({
 				component: t,
@@ -44,28 +44,28 @@ function s({ resolveComponent: a, initialPage: o }) {
 				url: e.url,
 				config: e.config || {},
 				baseUrl: e.baseUrl,
-				pageMetadata: n,
+				pageMetadata: r,
 				onClose: h(e)
 			}));
 		}).catch((t) => {
-			m.current.delete(r), console.error("[InitialModalHandler] Failed to resolve modal component:", e.component, t);
+			m.current.delete(i), console.error("[InitialModalHandler] Failed to resolve modal component:", e.component, t);
 		}));
 	}, [
-		a,
+		n,
 		s,
 		c,
 		u,
 		h
 	]);
-	return n(() => {
+	return i(() => {
 		let e = o?.props?._nb_modal;
 		e && !f.current && (f.current = !0, g(e, o));
-	}, []), n(() => {
-		let e = i.on("start", () => {
+	}, []), i(() => {
+		let e = t.on("start", () => {
 			d.current = !0;
-		}), t = i.on("finish", () => {
+		}), n = t.on("finish", () => {
 			d.current = !1;
-		}), n = i.on("navigate", (e) => {
+		}), r = t.on("navigate", (e) => {
 			let t = e.detail.page.props?._nb_modal;
 			if (!t) {
 				l(), p.current = null, m.current.clear();
@@ -74,12 +74,12 @@ function s({ resolveComponent: a, initialPage: o }) {
 			g(t, e.detail.page);
 		});
 		return () => {
-			e(), t(), n();
+			e(), n(), r();
 		};
 	}, [g, l]), null;
 }
 function c({ resolveComponent: e }) {
-	let t = a();
+	let t = n();
 	return /* @__PURE__ */ o(s, {
 		resolveComponent: e,
 		initialPage: t

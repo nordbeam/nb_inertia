@@ -29,6 +29,12 @@ updates, once-only events, cached visits, background async visits, and form
 cancellation remain available alongside NbInertia's route, modal, flash, and
 schema integrations.
 
+Direct package entrypoints are also available for the native adapters and the
+main v3 components/hooks, including `@nordbeam/nb-inertia/react`, `/vue`,
+`/react/Form`, `/react/usePoll`, `/vue/InfiniteScroll`, and each adapter's
+`/server` runner. These are thin re-exports; the existing `react/useForm`,
+`react/router`, modal, and schema entrypoints remain NbInertia's enhanced APIs.
+
 Inertia 3.1 deferred-prop rescue is supported on the server and is reflected in
 the page's `rescuedProps` metadata:
 
@@ -46,6 +52,13 @@ on_error: :ignore)`. Deferred and once props may also be nested; their protocol
 metadata uses Inertia's dot-path representation. Generated React and SSR clients
 enable `serverHead`, allowing the server-provided `head` page property to be
 reconciled by Inertia 3.5+.
+
+The generated React resolver (and both SSR entries) accepts Inertia 3's optional
+full page context as its second argument: `resolvePageComponent(name, page)`.
+The default implementation still resolves `./pages/${name}.tsx` (or `.jsx`)
+through the Vite glob, while `page.props`, `page.url`, and other page metadata
+remain available for applications that need page-aware resolution. Vue apps use
+the same resolver contract when their adapter or Vite entry defines a resolver.
 
 See the [official Inertia releases](https://github.com/inertiajs/inertia/releases)
 for the upstream feature history.

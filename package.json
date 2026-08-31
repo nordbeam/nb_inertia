@@ -3,51 +3,127 @@
   "version": "1.0.0",
   "private": true,
   "description": "Modal system, route-bound forms, and SSR-safe components for Phoenix + Inertia.js",
-  "type": "module",
-  "author": "Nordbeam",
+  "keywords": [
+    "elixir",
+    "inertia",
+    "inertiajs",
+    "modal",
+    "nb_routes",
+    "phoenix",
+    "react",
+    "vue"
+  ],
+  "homepage": "https://github.com/nordbeam/nb_inertia#readme",
+  "bugs": {
+    "url": "https://github.com/nordbeam/nb_inertia/issues"
+  },
   "license": "MIT",
+  "author": "Nordbeam",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nordbeam/nb_inertia.git"
   },
-  "bugs": {
-    "url": "https://github.com/nordbeam/nb_inertia/issues"
-  },
-  "homepage": "https://github.com/nordbeam/nb_inertia#readme",
-  "keywords": [
-    "inertia",
-    "inertiajs",
-    "phoenix",
-    "elixir",
-    "react",
-    "vue",
-    "modal",
-    "nb_routes"
+  "files": [
+    "dist",
+    "priv/nb_inertia/vue/modals",
+    "priv/nb_inertia/vue/index.ts",
+    "priv/nb_inertia/vue/server.ts",
+    "priv/nb_inertia/vue/Deferred.ts",
+    "priv/nb_inertia/vue/Form.ts",
+    "priv/nb_inertia/vue/InfiniteScroll.ts",
+    "priv/nb_inertia/vue/WhenVisible.ts",
+    "priv/nb_inertia/vue/usePoll.ts",
+    "priv/nb_inertia/vue/usePrefetch.ts",
+    "priv/nb_inertia/vue/useRemember.ts",
+    "priv/nb_inertia/vue/Head.ts",
+    "priv/nb_inertia/vue/Link.ts",
+    "priv/nb_inertia/vue/modalPageContext.ts",
+    "priv/nb_inertia/vue/router.ts",
+    "priv/nb_inertia/vue/useFlash.ts",
+    "priv/nb_inertia/vue/useForm.ts",
+    "priv/nb_inertia/vue/useHttp.ts",
+    "priv/nb_inertia/vue/usePage.ts",
+    "priv/nb_inertia/vue/schemaRuntime.ts",
+    "priv/nb_inertia/vue/createInertiaApp.ts",
+    "priv/nb_inertia/vue/usePageProps.ts",
+    "priv/nb_inertia/shared",
+    "README.md",
+    "LICENSE"
   ],
-  "scripts": {
-    "build": "vp build --mode production",
-    "dev": "vp build --watch",
-    "test": "cd priv/nb_inertia/react && ./node_modules/.bin/vp test run && cd ../vue && ./node_modules/.bin/vp test run",
-    "typecheck": "tsc --noEmit",
-    "check": "vp check"
-  },
-  "packageManager": "npm@12.0.2",
-  "engines": {
-    "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
-  },
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": "^20.19.0 || ^22.18.0 || >=24.11.0",
-      "onFail": "error"
-    },
-    "packageManager": {
-      "name": "npm",
-      "version": "12.0.2",
-      "onFail": "error"
-    }
-  },
+  "type": "module",
   "exports": {
+    "./react": {
+      "import": "./dist/react/index.js",
+      "types": "./dist/react/index.d.ts"
+    },
+    "./react/server": {
+      "import": "./dist/react/server.js",
+      "types": "./dist/react/server.d.ts"
+    },
+    "./react/Deferred": {
+      "import": "./dist/react/Deferred.js",
+      "types": "./dist/react/Deferred.d.ts"
+    },
+    "./react/Form": {
+      "import": "./dist/react/Form.js",
+      "types": "./dist/react/Form.d.ts"
+    },
+    "./react/InfiniteScroll": {
+      "import": "./dist/react/InfiniteScroll.js",
+      "types": "./dist/react/InfiniteScroll.d.ts"
+    },
+    "./react/WhenVisible": {
+      "import": "./dist/react/WhenVisible.js",
+      "types": "./dist/react/WhenVisible.d.ts"
+    },
+    "./react/usePoll": {
+      "import": "./dist/react/usePoll.js",
+      "types": "./dist/react/usePoll.d.ts"
+    },
+    "./react/usePrefetch": {
+      "import": "./dist/react/usePrefetch.js",
+      "types": "./dist/react/usePrefetch.d.ts"
+    },
+    "./react/useRemember": {
+      "import": "./dist/react/useRemember.js",
+      "types": "./dist/react/useRemember.d.ts"
+    },
+    "./vue": {
+      "import": "./dist/vue/index.js",
+      "types": "./priv/nb_inertia/vue/index.ts"
+    },
+    "./vue/server": {
+      "import": "./dist/vue/server.js",
+      "types": "./priv/nb_inertia/vue/server.ts"
+    },
+    "./vue/Deferred": {
+      "import": "./dist/vue/Deferred.js",
+      "types": "./priv/nb_inertia/vue/Deferred.ts"
+    },
+    "./vue/Form": {
+      "import": "./dist/vue/Form.js",
+      "types": "./priv/nb_inertia/vue/Form.ts"
+    },
+    "./vue/InfiniteScroll": {
+      "import": "./dist/vue/InfiniteScroll.js",
+      "types": "./priv/nb_inertia/vue/InfiniteScroll.ts"
+    },
+    "./vue/WhenVisible": {
+      "import": "./dist/vue/WhenVisible.js",
+      "types": "./priv/nb_inertia/vue/WhenVisible.ts"
+    },
+    "./vue/usePoll": {
+      "import": "./dist/vue/usePoll.js",
+      "types": "./priv/nb_inertia/vue/usePoll.ts"
+    },
+    "./vue/usePrefetch": {
+      "import": "./dist/vue/usePrefetch.js",
+      "types": "./priv/nb_inertia/vue/usePrefetch.ts"
+    },
+    "./vue/useRemember": {
+      "import": "./dist/vue/useRemember.js",
+      "types": "./priv/nb_inertia/vue/useRemember.ts"
+    },
     "./shared/types": {
       "import": "./dist/shared/types.js",
       "types": "./dist/shared/types.d.ts"
@@ -161,24 +237,33 @@
       "import": "./dist/vue/modals/index.js"
     }
   },
-  "files": [
-    "dist",
-    "priv/nb_inertia/vue/modals",
-    "priv/nb_inertia/vue/Head.ts",
-    "priv/nb_inertia/vue/Link.ts",
-    "priv/nb_inertia/vue/modalPageContext.ts",
-    "priv/nb_inertia/vue/router.ts",
-    "priv/nb_inertia/vue/useFlash.ts",
-    "priv/nb_inertia/vue/useForm.ts",
-    "priv/nb_inertia/vue/useHttp.ts",
-    "priv/nb_inertia/vue/usePage.ts",
-    "priv/nb_inertia/vue/schemaRuntime.ts",
-    "priv/nb_inertia/vue/createInertiaApp.ts",
-    "priv/nb_inertia/vue/usePageProps.ts",
-    "priv/nb_inertia/shared",
-    "README.md",
-    "LICENSE"
-  ],
+  "scripts": {
+    "build": "vp build --mode production",
+    "dev": "vp build --watch",
+    "test": "cd priv/nb_inertia/react && ./node_modules/.bin/vp test run && cd ../vue && ./node_modules/.bin/vp test run",
+    "typecheck": "tsc --noEmit",
+    "check": "vp check"
+  },
+  "devDependencies": {
+    "@inertiajs/core": "^3.7.0",
+    "@inertiajs/react": "^3.7.0",
+    "@inertiajs/vue3": "^3.7.0",
+    "@types/node": "^26.4.0",
+    "@types/phoenix": "^1.6.7",
+    "@types/react": "^19.2.18",
+    "@vitejs/plugin-react": "^6.1.1",
+    "laravel-precognition": "^2.0.0",
+    "phoenix": "^1.8.13",
+    "radix-vue": "^1.9.17",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.9.3",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
+    "vite-plugin-dts": "^5.0.3",
+    "vite-plus": "0.3.0",
+    "vue": "^3.5.42",
+    "zod": "^4.5.4"
+  },
   "peerDependencies": {
     "@inertiajs/core": "^3.7.0",
     "@inertiajs/react": "^3.7.0",
@@ -219,28 +304,24 @@
       "optional": true
     }
   },
-  "devDependencies": {
-    "@inertiajs/core": "^3.7.0",
-    "@inertiajs/react": "^3.7.0",
-    "@inertiajs/vue3": "^3.7.0",
-    "@types/node": "^26.4.0",
-    "@types/phoenix": "^1.6.7",
-    "@types/react": "^19.2.18",
-    "@vitejs/plugin-react": "^6.1.1",
-    "laravel-precognition": "^2.0.0",
-    "phoenix": "^1.8.13",
-    "radix-vue": "^1.9.17",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "typescript": "^5.9.3",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
-    "vite-plugin-dts": "^5.0.3",
-    "vite-plus": "0.3.0",
-    "vue": "^3.5.42",
-    "zod": "^4.5.4"
-  },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
     "vitest": "^4.1.11"
-  }
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "12.0.2",
+      "onFail": "error"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "^20.19.0 || ^22.18.0 || >=24.11.0",
+      "onFail": "error"
+    }
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
+  },
+  "packageManager": "npm@12.0.2"
 }

@@ -4,6 +4,7 @@
  * @see routerCompat.ts for the React version
  */
 
+import type { PrefetchOptions, UrlMethodPair, VisitOptions } from '@inertiajs/core';
 import { router } from '@inertiajs/vue3';
 
 /**
@@ -14,9 +15,9 @@ import { router } from '@inertiajs/vue3';
  * @param prefetchOptions - Prefetch-specific options (e.g. { cacheFor: 30000 })
  */
 export function routerPrefetch(
-  url: string,
-  visitOptions?: Record<string, unknown>,
-  prefetchOptions?: Record<string, unknown>
+  url: string | URL | UrlMethodPair,
+  visitOptions?: VisitOptions,
+  prefetchOptions?: Partial<PrefetchOptions>,
 ): void {
-  (router as any).prefetch(url, visitOptions, prefetchOptions);
+  router.prefetch(url, visitOptions, prefetchOptions);
 }

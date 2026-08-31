@@ -109,7 +109,7 @@ function appendFallbackHeadNodes(
           value === false ||
           value === null ||
           value === undefined ||
-          typeof value === 'function'
+          (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean')
         ) {
           return;
         }

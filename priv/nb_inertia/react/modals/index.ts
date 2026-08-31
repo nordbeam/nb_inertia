@@ -90,7 +90,12 @@ export type { ModalLinkProps } from './ModalLink';
 
 // Pre-built modal UI components
 export { HeadlessModal, Modal, useCurrentModal } from './HeadlessModal';
-export type { HeadlessModalProps, ModalHandle, ModalProps } from './HeadlessModal';
+export type {
+  HeadlessModalProps,
+  ModalHandle,
+  ModalProps,
+  ModalReloadOptions,
+} from './HeadlessModal';
 export { ModalRenderer } from './ModalRenderer';
 export type { ModalRendererProps, ModalRenderContext } from './ModalRenderer';
 export { CloseButton } from './CloseButton';
@@ -104,6 +109,9 @@ export type {
   ModalInstance,
   ModalPageMetadata,
   ModalVisitOptions,
+  ModalPrefetchOptions,
+  ModalLinkPrefetch,
+  ModalLinkVisitOptions,
   ModalStackContextValue,
   PrefetchedModal,
   TypedModalProps,

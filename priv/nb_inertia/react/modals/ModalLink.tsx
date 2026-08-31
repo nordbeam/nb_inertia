@@ -22,113 +22,126 @@
  * ```
  */
 
-import React, { useCallback, useMemo, useEffect, useRef } from 'react';
-import { shouldIntercept, type Method } from '@inertiajs/core';
-import { isRouteResult, type RouteResult } from '../../shared/types';
-import { routerPrefetch } from '../../shared/routerCompat';
-import type { ModalConfig } from './types';
-import { useModalStack } from './modalStack';
+import React, { useCallback, useMemo, useEffect, useRef } from "react";
+import type {
+  CacheForOption,
+  PrefetchOptions,
+  VisitOptions,
+} from "@inertiajs/core";
+import { shouldIntercept, type Method } from "@inertiajs/core";
+import { isRouteResult, type RouteResult } from "../../shared/types";
+import { routerPrefetch } from "../../shared/routerCompat";
+import type {
+  ModalConfig,
+  ModalLinkPrefetch,
+  ModalLinkVisitOptions,
+} from "./types";
+import { useModalStack } from "./modalStack";
 
 /**
  * Props for the ModalLink component
  */
-export interface ModalLinkProps extends Omit<
+export type ModalLinkProps = Omit<
   React.AnchorHTMLAttributes<HTMLAnchorElement>,
-  'href'
-> {
-  /**
-   * The URL or RouteResult to navigate to
-   *
-   * Can be a plain string URL or a RouteResult object from nb_routes rich mode.
-   */
-  href: string | RouteResult;
+  "href" | keyof ModalLinkVisitOptions
+> &
+  ModalLinkVisitOptions & {
+    /**
+     * The URL or RouteResult to navigate to
+     *
+     * Can be a plain string URL or a RouteResult object from nb_routes rich mode.
+     */
+    href: string | RouteResult;
 
-  /**
-   * Optional modal configuration
-   *
-   * Note: This is passed to the backend via query params if needed,
-   * but typically the backend controls modal configuration.
-   */
-  modalConfig?: ModalConfig;
+    /**
+     * Optional modal configuration
+     *
+     * Note: This is passed to the backend via query params if needed,
+     * but typically the backend controls modal configuration.
+     */
+    modalConfig?: ModalConfig;
 
-  /**
-   * HTTP method to use for the request
-   *
-   * Defaults to 'get'. Can be overridden if href is a string.
-   * When href is a RouteResult, the method from the route is used unless explicitly overridden.
-   */
-  method?: Method;
+    /**
+     * HTTP method to use for the request
+     *
+     * Defaults to 'get'. Can be overridden if href is a string.
+     * When href is a RouteResult, the method from the route is used unless explicitly overridden.
+     */
+    method?: Method;
 
-  /**
-   * Data to send with the request (for POST/PUT/PATCH/DELETE)
-   */
-  data?: Record<string, any>;
+    /**
+     * Data to send with the request (for POST/PUT/PATCH/DELETE)
+     */
+    data?: VisitOptions["data"];
 
-  /**
-   * Custom loading component to display while modal content is loading
-   *
-   * If provided, this component will be rendered in the modal shell
-   * while waiting for the server response. If not provided, a default
-   * loading spinner will be shown.
-   *
-   * @example
-   * ```tsx
-   * <ModalLink
-   *   href={edit_user_path(1)}
-   *   loadingComponent={UserFormSkeleton}
-   * >
-   *   Edit User
-   * </ModalLink>
-   * ```
-   */
-  loadingComponent?: React.ComponentType;
+    /**
+     * Custom loading component to display while modal content is loading
+     *
+     * If provided, this component will be rendered in the modal shell
+     * while waiting for the server response. If not provided, a default
+     * loading spinner will be shown.
+     *
+     * @example
+     * ```tsx
+     * <ModalLink
+     *   href={edit_user_path(1)}
+     *   loadingComponent={UserFormSkeleton}
+     * >
+     *   Edit User
+     * </ModalLink>
+     * ```
+     */
+    loadingComponent?: React.ComponentType;
 
-  /**
-   * Callback when the link is clicked
-   */
-  onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+    /**
+     * Callback when the link is clicked
+     */
+    onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
 
-  /**
-   * Enable prefetching. Can be:
-   * - boolean: true enables hover prefetch
-   * - 'hover' | 'mount' | 'click': single mode
-   * - ('hover' | 'mount' | 'click')[]: multiple modes
-   *
-   * Note: Prefetching only works for GET requests.
-   *
-   * @example
-   * ```tsx
-   * // Prefetch on hover
-   * <ModalLink href={user_path(1)} prefetch>View User</ModalLink>
-   *
-   * // Prefetch on mount
-   * <ModalLink href={user_path(1)} prefetch="mount">View User</ModalLink>
-   *
-   * // Multiple modes
-   * <ModalLink href={user_path(1)} prefetch={['hover', 'mount']}>View User</ModalLink>
-   * ```
-   */
-  prefetch?: boolean | 'hover' | 'mount' | 'click' | ('hover' | 'mount' | 'click')[];
+    /**
+     * Enable prefetching. Can be:
+     * - boolean: true enables hover prefetch
+     * - 'hover' | 'mount' | 'click': single mode
+     * - ('hover' | 'mount' | 'click')[]: multiple modes
+     *
+     * Note: Prefetching only works for GET requests.
+     *
+     * @example
+     * ```tsx
+     * // Prefetch on hover
+     * <ModalLink href={user_path(1)} prefetch>View User</ModalLink>
+     *
+     * // Prefetch on mount
+     * <ModalLink href={user_path(1)} prefetch="mount">View User</ModalLink>
+     *
+     * // Multiple modes
+     * <ModalLink href={user_path(1)} prefetch={['hover', 'mount']}>View User</ModalLink>
+     * ```
+     */
+    prefetch?: ModalLinkPrefetch;
 
-  /**
-   * Duration in milliseconds to cache prefetched data
-   *
-   * @default 30000 (30 seconds)
-   */
-  cacheFor?: number;
+    /**
+     * Duration in milliseconds to cache prefetched data
+     *
+     * @default 30000 (30 seconds)
+     */
+    cacheFor?: CacheForOption | CacheForOption[];
 
-  /**
-   * Tags for organizing cached prefetch data
-   *
-   * Can be used to invalidate specific cached prefetch data.
-   */
-  cacheTags?: string[];
+    /**
+     * Tags for organizing cached prefetch data
+     *
+     * Can be used to invalidate specific cached prefetch data.
+     */
+    cacheTags?: string | string[];
 
-  /**
-   * Children to render
-   */
-  children?: React.ReactNode;
-}
+    /** Exact URL to restore when this modal closes. */
+    returnUrl?: string;
+
+    /**
+     * Children to render
+     */
+    children?: React.ReactNode;
+  };
 
 /**
  * ModalLink - Link component that opens pages in modals
@@ -174,47 +187,190 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
   data,
   modalConfig,
   loadingComponent,
+  returnUrl: requestedReturnUrl,
   onClick,
   prefetch,
   cacheFor,
   cacheTags,
   children,
   className,
+  component,
+  replace,
+  preserveScroll,
+  preserveState,
+  preserveUrl,
+  only,
+  except,
+  headers,
+  errorBag,
+  forceFormData,
+  queryStringArrayFormat,
+  async,
+  showProgress,
+  fresh,
+  reset,
+  preserveErrors,
+  invalidateCacheTags,
+  viewTransition,
+  optimistic,
+  pageProps,
+  onCancelToken,
+  onBefore,
+  onBeforeUpdate,
+  onStart,
+  onProgress,
+  onFinish,
+  onCancel,
+  onSuccess,
+  onError,
+  onHttpException,
+  onNetworkError,
+  onFlash,
+  onPrefetched,
+  onPrefetching,
   ...anchorProps
 }) => {
   const { modals, prefetchModal, visitModal } = useModalStack();
 
   // Extract URL and method from RouteResult if provided
   const finalHref = isRouteResult(href) ? href.url : href;
-  const finalMethod = (isRouteResult(href) && !method ? href.method : method) || 'get';
+  const finalMethod =
+    (isRouteResult(href) && !method ? href.method : method) || "get";
+
+  // Keep one canonical set of visit options for both direct modal visits and
+  // prefetches. Modal-only options are added at the call site and never leak
+  // into Inertia's request payload.
+  const visitOptions = useMemo<ModalLinkVisitOptions>(
+    () => ({
+      method: finalMethod,
+      data,
+      component,
+      replace,
+      preserveScroll,
+      preserveState,
+      preserveUrl,
+      only,
+      except,
+      headers,
+      errorBag,
+      forceFormData,
+      queryStringArrayFormat,
+      async,
+      showProgress,
+      fresh,
+      reset,
+      preserveErrors,
+      invalidateCacheTags,
+      viewTransition,
+      optimistic,
+      pageProps,
+      onCancelToken,
+      onBefore,
+      onBeforeUpdate,
+      onStart,
+      onProgress,
+      onFinish,
+      onCancel,
+      onSuccess,
+      onError,
+      onHttpException,
+      onNetworkError,
+      onFlash,
+      onPrefetched,
+      onPrefetching,
+    }),
+    [
+      finalMethod,
+      data,
+      component,
+      replace,
+      preserveScroll,
+      preserveState,
+      preserveUrl,
+      only,
+      except,
+      headers,
+      errorBag,
+      forceFormData,
+      queryStringArrayFormat,
+      async,
+      showProgress,
+      fresh,
+      reset,
+      preserveErrors,
+      invalidateCacheTags,
+      viewTransition,
+      optimistic,
+      pageProps,
+      onCancelToken,
+      onBefore,
+      onBeforeUpdate,
+      onStart,
+      onProgress,
+      onFinish,
+      onCancel,
+      onSuccess,
+      onError,
+      onHttpException,
+      onNetworkError,
+      onFlash,
+      onPrefetched,
+      onPrefetching,
+    ],
+  );
 
   // Normalize prefetch prop to array of modes
   const prefetchModes = useMemo(() => {
     if (!prefetch) return [];
-    if (prefetch === true) return ['hover'] as const;
-    if (typeof prefetch === 'string') return [prefetch] as const;
+    if (prefetch === true) return ["hover"] as const;
+    if (typeof prefetch === "string") return [prefetch] as const;
     return prefetch;
   }, [prefetch]);
 
   // Prefetch function - uses our custom prefetch that loads both data AND component
   const doPrefetch = useCallback(() => {
-    if (finalMethod !== 'get') return;
+    if (finalMethod !== "get") return;
+
+    const prefetchOptions = {
+      ...visitOptions,
+      // A link's prefetch mode controls when the request runs; the request
+      // itself is always a GET for Inertia prefetching.
+      method: "get" as const,
+    };
 
     // Use our custom prefetchModal if available (loads data + component)
     if (prefetchModal) {
-      prefetchModal(finalHref, { cacheFor });
+      prefetchModal(finalHref, { ...prefetchOptions, cacheFor, cacheTags });
     } else {
+      const nativePrefetchOptions: Partial<PrefetchOptions> = {};
+      if (cacheFor !== undefined) nativePrefetchOptions.cacheFor = cacheFor;
+      if (cacheTags !== undefined) nativePrefetchOptions.cacheTags = cacheTags;
+
       // Fallback to Inertia's prefetch (data only)
-      const prefetchOptions: { cacheFor?: number; cacheTags?: string[] } = {};
-      if (cacheFor !== undefined) prefetchOptions.cacheFor = cacheFor;
-      if (cacheTags !== undefined) prefetchOptions.cacheTags = cacheTags;
-      routerPrefetch(finalHref, { preserveState: true }, prefetchOptions);
+      routerPrefetch(
+        finalHref,
+        {
+          ...prefetchOptions,
+          preserveState: preserveState ?? true,
+        },
+        Object.keys(nativePrefetchOptions).length > 0
+          ? nativePrefetchOptions
+          : undefined,
+      );
     }
-  }, [finalHref, finalMethod, cacheFor, cacheTags, prefetchModal]);
+  }, [
+    finalHref,
+    finalMethod,
+    cacheFor,
+    cacheTags,
+    prefetchModal,
+    preserveState,
+    visitOptions,
+  ]);
 
   // Mount prefetch
   useEffect(() => {
-    if (prefetchModes.includes('mount')) {
+    if (prefetchModes.includes("mount")) {
       const timer = setTimeout(doPrefetch, 0);
       return () => clearTimeout(timer);
     }
@@ -228,7 +384,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
       // Call any existing onMouseEnter from anchorProps
       anchorProps.onMouseEnter?.(e);
 
-      if (prefetchModes.includes('hover')) {
+      if (prefetchModes.includes("hover")) {
         hoverTimeoutRef.current = setTimeout(doPrefetch, 75);
       }
     },
@@ -254,7 +410,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
       // Call any existing onMouseDown from anchorProps
       anchorProps.onMouseDown?.(e);
 
-      if (prefetchModes.includes('click') && shouldIntercept(e)) {
+      if (prefetchModes.includes("click") && shouldIntercept(e)) {
         doPrefetch();
       }
     },
@@ -282,16 +438,26 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
 
       // Capture the current full URL (with query params) before opening the modal
       // This will be used to restore the URL when the modal closes
-      const returnUrl = typeof window !== 'undefined' ? window.location.href : '';
+      const returnUrl =
+        requestedReturnUrl ||
+        (typeof window !== "undefined" ? window.location.href : "");
       visitModal(href, {
-        method: finalMethod,
-        data: data ?? {},
+        ...visitOptions,
         modalConfig,
         loadingComponent: loadingComponent || LoadingPlaceholder,
         returnUrl,
       });
     },
-    [data, finalMethod, href, loadingComponent, modalConfig, modals, onClick, visitModal],
+    [
+      href,
+      loadingComponent,
+      modalConfig,
+      modals,
+      onClick,
+      requestedReturnUrl,
+      visitModal,
+      visitOptions,
+    ],
   );
 
   return (

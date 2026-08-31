@@ -15,15 +15,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { shouldIntercept } from '@inertiajs/core';
-import { router } from '@inertiajs/vue3';
-import { useModalStack } from './modalStack';
-import { routerPrefetch } from '../../shared/routerCompat.vue';
-import type { ModalConfig } from './types';
-import type { ModalPageObject } from '../modalPageContext';
-import type { RouteResult } from '../../shared/types';
-import { isRouteResult } from '../../shared/types';
+import { ref, computed, onMounted, onUnmounted } from "vue";
+import type {
+  CacheForOption,
+  Method,
+  PrefetchOptions,
+  VisitOptions,
+} from "@inertiajs/core";
+import { shouldIntercept } from "@inertiajs/core";
+import { router } from "@inertiajs/vue3";
+import { useModalStack } from "./modalStack";
+import type { ModalConfig, ModalLinkPrefetch } from "./types";
+import type { ModalPageObject } from "../modalPageContext";
+import type { RouteResult } from "../../shared/types";
+import { isRouteResult } from "../../shared/types";
 
 /**
  * ModalLink - Link component that opens Inertia pages in modals (Vue)
@@ -46,7 +51,7 @@ import { isRouteResult } from '../../shared/types';
  * ```
  */
 
-type PrefetchMode = 'hover' | 'mount' | 'click';
+type PrefetchMode = "hover" | "mount" | "click";
 
 interface Props {
   /**
@@ -67,12 +72,49 @@ interface Props {
   /**
    * HTTP method to use for the request
    */
-  method?: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+  method?: Method;
 
   /**
    * Data to send with the request (for POST/PUT/PATCH/DELETE)
    */
-  data?: Record<string, any>;
+  data?: VisitOptions["data"];
+
+  /** All remaining Inertia visit options are forwarded unchanged. */
+  component?: VisitOptions["component"];
+  replace?: VisitOptions["replace"];
+  preserveScroll?: VisitOptions["preserveScroll"];
+  preserveState?: VisitOptions["preserveState"];
+  preserveUrl?: VisitOptions["preserveUrl"];
+  only?: VisitOptions["only"];
+  except?: VisitOptions["except"];
+  headers?: VisitOptions["headers"];
+  errorBag?: VisitOptions["errorBag"];
+  forceFormData?: VisitOptions["forceFormData"];
+  queryStringArrayFormat?: VisitOptions["queryStringArrayFormat"];
+  async?: VisitOptions["async"];
+  showProgress?: VisitOptions["showProgress"];
+  fresh?: VisitOptions["fresh"];
+  reset?: VisitOptions["reset"];
+  preserveErrors?: VisitOptions["preserveErrors"];
+  invalidateCacheTags?: VisitOptions["invalidateCacheTags"];
+  viewTransition?: VisitOptions["viewTransition"];
+  optimistic?: VisitOptions["optimistic"];
+  pageProps?: VisitOptions["pageProps"];
+
+  onCancelToken?: VisitOptions["onCancelToken"];
+  onBefore?: VisitOptions["onBefore"];
+  onBeforeUpdate?: VisitOptions["onBeforeUpdate"];
+  onStart?: VisitOptions["onStart"];
+  onProgress?: VisitOptions["onProgress"];
+  onFinish?: VisitOptions["onFinish"];
+  onCancel?: VisitOptions["onCancel"];
+  onSuccess?: VisitOptions["onSuccess"];
+  onError?: VisitOptions["onError"];
+  onHttpException?: VisitOptions["onHttpException"];
+  onNetworkError?: VisitOptions["onNetworkError"];
+  onFlash?: VisitOptions["onFlash"];
+  onPrefetched?: VisitOptions["onPrefetched"];
+  onPrefetching?: VisitOptions["onPrefetching"];
 
   /**
    * Additional CSS classes
@@ -87,19 +129,22 @@ interface Props {
    *
    * Note: Prefetching only works for GET requests.
    */
-  prefetch?: boolean | PrefetchMode | PrefetchMode[];
+  prefetch?: ModalLinkPrefetch;
 
   /**
    * Duration in milliseconds to cache prefetched data
    *
    * @default 30000 (30 seconds)
    */
-  cacheFor?: number;
+  cacheFor?: CacheForOption | CacheForOption[];
 
   /**
    * Tags for organizing cached prefetch data
    */
-  cacheTags?: string[];
+  cacheTags?: string | string[];
+
+  /** Exact URL to restore when this modal closes. */
+  returnUrl?: string;
 
   /** Standard anchor target. Non-self targets bypass modal interception. */
   target?: string;
@@ -125,37 +170,88 @@ const finalHref = computed(() => {
 });
 
 const finalMethod = computed(() => {
-  return isRouteResult(props.href) ? (props.method ?? props.href.method) : (props.method ?? 'get');
+  return isRouteResult(props.href)
+    ? (props.method ?? props.href.method)
+    : (props.method ?? "get");
 });
 
 const linkClassName = computed(() => {
   const classes = [props.class];
   if (isLoading.value) {
-    classes.push('opacity-50 cursor-wait');
+    classes.push("opacity-50 cursor-wait");
   } else {
-    classes.push('cursor-pointer');
+    classes.push("cursor-pointer");
   }
-  return classes.filter(Boolean).join(' ');
+  return classes.filter(Boolean).join(" ");
 });
 
 // Normalize prefetch prop to array of modes
 const prefetchModes = computed((): PrefetchMode[] => {
   if (!props.prefetch) return [];
-  if (props.prefetch === true) return ['hover'];
-  if (typeof props.prefetch === 'string') return [props.prefetch];
+  if (props.prefetch === true) return ["hover"];
+  if (typeof props.prefetch === "string") return [props.prefetch];
   return props.prefetch;
 });
 
+// Keep one canonical set of visit options for both modal visits and
+// prefetches. Modal-only options are handled by this component and are never
+// sent as DOM attributes or request options.
+const visitOptions = computed<VisitOptions>(() => ({
+  method: finalMethod.value,
+  data: props.data,
+  component: props.component,
+  replace: props.replace,
+  preserveScroll: props.preserveScroll,
+  preserveState: props.preserveState,
+  preserveUrl: props.preserveUrl,
+  only: props.only,
+  except: props.except,
+  headers: props.headers,
+  errorBag: props.errorBag,
+  forceFormData: props.forceFormData,
+  queryStringArrayFormat: props.queryStringArrayFormat,
+  async: props.async,
+  showProgress: props.showProgress,
+  fresh: props.fresh,
+  reset: props.reset,
+  preserveErrors: props.preserveErrors,
+  invalidateCacheTags: props.invalidateCacheTags,
+  viewTransition: props.viewTransition,
+  optimistic: props.optimistic,
+  pageProps: props.pageProps,
+  onCancelToken: props.onCancelToken,
+  onBefore: props.onBefore,
+  onBeforeUpdate: props.onBeforeUpdate,
+  onStart: props.onStart,
+  onProgress: props.onProgress,
+  onFinish: props.onFinish,
+  onCancel: props.onCancel,
+  onSuccess: props.onSuccess,
+  onError: props.onError,
+  onHttpException: props.onHttpException,
+  onNetworkError: props.onNetworkError,
+  onFlash: props.onFlash,
+  onPrefetched: props.onPrefetched,
+  onPrefetching: props.onPrefetching,
+}));
+
 // Prefetch function - only GET requests can be prefetched
 function doPrefetch() {
-  if (finalMethod.value !== 'get') return;
-  routerPrefetch(
+  if (finalMethod.value !== "get") return;
+
+  const prefetchOptions: Partial<PrefetchOptions> = {};
+  if (props.cacheFor !== undefined) prefetchOptions.cacheFor = props.cacheFor;
+  if (props.cacheTags !== undefined)
+    prefetchOptions.cacheTags = props.cacheTags;
+
+  router.prefetch(
     finalHref.value,
-    { preserveState: true },
     {
-      cacheFor: props.cacheFor,
-      cacheTags: props.cacheTags,
+      ...visitOptions.value,
+      method: "get",
+      preserveState: props.preserveState ?? true,
     },
+    Object.keys(prefetchOptions).length > 0 ? prefetchOptions : undefined,
   );
 }
 
@@ -163,7 +259,7 @@ function doPrefetch() {
 let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function handleMouseEnter() {
-  if (prefetchModes.value.includes('hover')) {
+  if (prefetchModes.value.includes("hover")) {
     hoverTimeout = setTimeout(doPrefetch, 75);
   }
 }
@@ -179,14 +275,14 @@ function handleMouseLeave() {
 function handleMouseDown(e: MouseEvent) {
   if (!shouldIntercept(e)) return;
 
-  if (prefetchModes.value.includes('click')) {
+  if (prefetchModes.value.includes("click")) {
     doPrefetch();
   }
 }
 
 // Mount prefetch
 onMounted(() => {
-  if (prefetchModes.value.includes('mount')) {
+  if (prefetchModes.value.includes("mount")) {
     setTimeout(doPrefetch, 0);
   }
 });
@@ -207,13 +303,15 @@ function handleClick(e: MouseEvent) {
 
   isLoading.value = true;
 
+  const userOnSuccess = props.onSuccess;
+  const userOnError = props.onError;
+  const userOnFinish = props.onFinish;
+
   // Use Inertia router to fetch the modal page
   router.visit(finalHref.value, {
-    method: finalMethod.value,
-    data: props.data,
-    preserveState: true,
-    preserveScroll: true,
-    only: [],
+    ...visitOptions.value,
+    preserveState: props.preserveState ?? true,
+    preserveScroll: props.preserveScroll ?? true,
     onSuccess: (page) => {
       // Extract modal data from response
       const component = page.component;
@@ -233,16 +331,19 @@ function handleClick(e: MouseEvent) {
         props: componentProps,
         page: modalPage,
         config: props.modalConfig,
-        baseUrl: props.baseUrl || window.location.pathname,
+        baseUrl: props.returnUrl || props.baseUrl || window.location.href,
       });
 
       isLoading.value = false;
+      return userOnSuccess?.(page);
     },
-    onError: () => {
+    onError: (errors) => {
       isLoading.value = false;
+      return userOnError?.(errors);
     },
-    onFinish: () => {
+    onFinish: (visit) => {
       isLoading.value = false;
+      return userOnFinish?.(visit);
     },
   });
 }
