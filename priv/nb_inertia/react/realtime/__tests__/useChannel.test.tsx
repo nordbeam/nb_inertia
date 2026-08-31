@@ -5,8 +5,8 @@
  * handles events, and manages the channel lifecycle.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
+import { renderHook } from '@testing-library/react';
 import { useChannel, createSocket } from '../socket';
 import type { Socket, Channel } from 'phoenix';
 
@@ -241,12 +241,12 @@ describe('useChannel Hook', () => {
   describe('handler updates', () => {
     it('uses latest handler without rejoining', () => {
       let handler = vi.fn();
-      let capturedHandler: ((payload: any) => void) | null = null;
+      let capturedHandler: ((payload: { content: string }) => void) | null = null;
 
       // Capture the wrapped handler
-      mockOn.mockImplementation((event, wrappedHandler) => {
+      mockOn.mockImplementation((event: string, wrappedHandler: (payload: unknown) => void) => {
         if (event === 'message_created') {
-          capturedHandler = wrappedHandler;
+          capturedHandler = wrappedHandler as (payload: { content: string }) => void;
         }
       });
 
@@ -268,9 +268,9 @@ describe('useChannel Hook', () => {
       expect(mockJoin).toHaveBeenCalledTimes(1);
 
       // Simulate event - should call new handler
-      if (capturedHandler) {
-        capturedHandler({ content: 'test' });
-      }
+      const invokeCapturedHandler: (payload: { content: string }) => void =
+        capturedHandler ?? (() => undefined);
+      invokeCapturedHandler({ content: 'test' });
 
       expect(newHandler).toHaveBeenCalledWith({ content: 'test' });
     });

@@ -108,23 +108,11 @@ defprotocol NbInertia.PropSerializer do
       {:ok, %{name: "Alice", ...}}
   """
   @spec serialize(t, opts :: keyword()) :: {:ok, any()} | {:error, term()}
-  def serialize(value, opts \\ [])
+  def serialize(value, opts)
 end
 
-# Explicit implementations for primitive types
-# Note: These are required because Elixir protocols don't automatically fall back
-# to Any for built-in types like BitString, Atom, Integer, Float, etc.
-
-defimpl NbInertia.PropSerializer, for: BitString do
-  @moduledoc """
-  Implementation for strings (binaries).
-  Passes strings through unchanged.
-  """
-
-  def serialize(value, _opts) do
-    {:ok, value}
-  end
-end
+# Explicit implementations for values that need behavior beyond the Any fallback.
+# Strings use the pass-through Any implementation.
 
 defimpl NbInertia.PropSerializer, for: Atom do
   @moduledoc """
@@ -323,13 +311,6 @@ defimpl NbInertia.PropSerializer, for: Map do
   Keys are preserved unchanged, but values are serialized according
   to their types.
   """
-
-  def serialize(map, opts) when is_struct(map) do
-    # For structs, convert to map first (removing __struct__ key)
-    map
-    |> Map.from_struct()
-    |> serialize(opts)
-  end
 
   def serialize(map, opts) do
     max_depth = Keyword.get(opts, :depth)

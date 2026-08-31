@@ -7,6 +7,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
+    "noEmit": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
@@ -19,9 +20,8 @@
   "include": [
     "*.ts",
     "*.vue",
-    "__tests__/**/*.ts",
-    "vitest.config.ts",
+    "vite.config.ts",
     "vitest.setup.ts"
   ],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "__tests__"]
 }

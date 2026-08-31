@@ -136,13 +136,13 @@ defmodule NbInertia.PropertyTest do
   describe "PropSerializer protocol" do
     property "serializing primitives is identity" do
       check all(value <- primitive_value()) do
-        assert {:ok, value} == PropSerializer.serialize(value)
+        assert {:ok, value} == PropSerializer.serialize(value, [])
       end
     end
 
     property "serializing lists preserves length" do
       check all(list <- list_of(primitive_value())) do
-        {:ok, result} = PropSerializer.serialize(list)
+        {:ok, result} = PropSerializer.serialize(list, [])
 
         assert is_list(result)
         assert length(result) == length(list)
@@ -151,7 +151,7 @@ defmodule NbInertia.PropertyTest do
 
     property "serializing maps preserves keys" do
       check all(map <- map_of(atom(:alphanumeric), primitive_value())) do
-        {:ok, result} = PropSerializer.serialize(map)
+        {:ok, result} = PropSerializer.serialize(map, [])
 
         assert is_map(result)
         assert Map.keys(result) |> Enum.sort() == Map.keys(map) |> Enum.sort()
@@ -160,8 +160,8 @@ defmodule NbInertia.PropertyTest do
 
     property "serialization is idempotent for primitives" do
       check all(value <- primitive_value()) do
-        {:ok, result1} = PropSerializer.serialize(value)
-        {:ok, result2} = PropSerializer.serialize(result1)
+        {:ok, result1} = PropSerializer.serialize(value, [])
+        {:ok, result2} = PropSerializer.serialize(result1, [])
 
         assert result1 == result2
       end

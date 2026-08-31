@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { renderHook, act } from '@testing-library/react';
 import { useHttp, useHttpWithPrecognition } from '../useHttp';
 import type { RouteResult } from '../../shared/types';
@@ -70,10 +70,10 @@ describe('useHttp (React)', () => {
     );
 
     await act(async () => {
-      await result.current.submit({ preserveScroll: true });
+      await result.current.submit({ headers: { 'x-test': 'true' } });
     });
 
     expect(mockUseHttp).toHaveBeenCalledWith(validateRoute, { title: 'Test Post' });
-    expect(mockSubmit).toHaveBeenCalledWith('post', '/posts', { preserveScroll: true });
+    expect(mockSubmit).toHaveBeenCalledWith('post', '/posts', { headers: { 'x-test': 'true' } });
   });
 });

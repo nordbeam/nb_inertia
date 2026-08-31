@@ -77,9 +77,10 @@ var S = ({ children: t, onStackChange: r, resolveComponent: i }) => {
 	}, [r]), y = s((e) => {
 		let t = { current: null };
 		o((n) => {
-			t.current = n.find((t) => t.id === e)?.onClose || null;
-			let i = n.filter((t) => t.id !== e);
-			return r && r(i), i;
+			let i = n.find((t) => t.id === e);
+			t.current = i?.onClose || null;
+			let a = n.filter((t) => t.id !== e);
+			return r && r(a), a;
 		}), setTimeout(() => {
 			if (t.current) try {
 				t.current();

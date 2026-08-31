@@ -181,7 +181,11 @@ export const ModalRenderer: React.FC<ModalRendererProps> = ({
                 ) : (
                   <DefaultModalRenderer
                     {...context}
-                    backdropClassName={config.backdropClasses ? `${backdropClassName} ${config.backdropClasses}` : backdropClassName}
+                    backdropClassName={
+                      typeof config.backdropClasses === 'string'
+                        ? `${backdropClassName} ${config.backdropClasses}`
+                        : backdropClassName
+                    }
                     wrapperClassName={wrapperClassName}
                   />
                 )

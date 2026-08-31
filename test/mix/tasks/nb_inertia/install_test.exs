@@ -47,7 +47,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
          package_tarball,
          client_framework,
          deps,
-         checker
+         checker,
+         export_keys
        ) do
     files = generated_installer_assets!(client_framework)
     assets_dir = Path.join([tmp_dir, client_framework, "assets"])
@@ -60,6 +61,20 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     )
 
     File.write!(Path.join(assets_dir, "tsconfig.json"), files["assets/tsconfig.json"])
+
+    unless export_keys == [] do
+      export_smoke =
+        export_keys
+        |> Enum.with_index()
+        |> Enum.map_join("\n", fn {export_key, index} ->
+          "import * as export_#{index} from '@nordbeam/nb-inertia/#{export_key}';\nvoid export_#{index};"
+        end)
+
+      File.write!(
+        Path.join([assets_dir, "js", "lib", "package_exports_smoke.ts"]),
+        export_smoke <> "\n"
+      )
+    end
 
     run_command!("npm", ["init", "-y"], cd: assets_dir)
 
@@ -113,6 +128,13 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
                {:nb_ts, github: "nordbeam/nb_ts"},
                {:nb_flop, github: "nordbeam/nb_flop"}
              ]
+    end
+
+    test "accepts the conditional Zod registry option without adding a Hex dependency" do
+      info = Install.info(["--typescript", "--zod"], nil)
+
+      assert info.schema[:zod] == :boolean
+      assert info.adds_deps == [{:nb_ts, github: "nordbeam/nb_ts"}]
     end
 
     test "installer contract exposes controller and React/Vue options without Page-module mode" do
@@ -170,20 +192,69 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     end
   end
 
-  describe "npm_source_from_dep_declaration/2" do
-    test "falls back to the github source when nb_inertia is installed from path" do
+  describe "client_package_source_from_dep_declaration/2" do
+    test "installer never falls back to the published first-party registry package" do
       source =
-        Install.npm_source_from_dep_declaration(
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "github:nordbeam/nb_inertia"
+      refute source =~ "@nordbeam/nb-inertia@^1.0.0"
+    end
+
+    test "defaults the generated client install to the GitHub repository" do
+      igniter = test_project(app_name: :sample)
+
+      assert Install.nb_inertia_client_package_source(igniter) ==
+               "github:nordbeam/nb_inertia"
+    end
+
+    test "preserves an explicit local Mix path as an absolute file source" do
+      path = project_root()
+
+      source =
+        Install.client_package_source_from_dep_declaration(
+          "{:nb_inertia, [path: \"#{path}\", override: true]}",
+          "github:nordbeam/nb_inertia"
+        )
+
+      assert source == "file:#{path}"
+    end
+
+    test "uses an explicit local Mix path when reading the staged project" do
+      path = project_root()
+
+      igniter =
+        test_project(
+          app_name: :sample,
+          files: %{
+            "mix.exs" => """
+            defmodule Sample.MixProject do
+              use Mix.Project
+
+              def project, do: [app: :sample, version: "0.1.0", deps: deps()]
+              defp deps, do: [{:nb_inertia, path: "#{path}"}]
+            end
+            """
+          }
+        )
+
+      assert Install.nb_inertia_client_package_source(igniter) == "file:#{path}"
+    end
+
+    test "expands relative local Mix paths before creating the file source" do
+      source =
+        Install.client_package_source_from_dep_declaration(
           "{:nb_inertia, [path: \"../nb_inertia\", override: true]}",
           "github:nordbeam/nb_inertia"
         )
 
-      assert source == "github:nordbeam/nb_inertia"
+      assert source == "file:#{Path.expand("../nb_inertia")}"
     end
 
-    test "preserves github refs when nb_inertia is installed from github" do
+    test "preserves a GitHub ref when nb_inertia is installed from github" do
       source =
-        Install.npm_source_from_dep_declaration(
+        Install.client_package_source_from_dep_declaration(
           "{:nb_inertia, [github: \"nordbeam/nb_inertia\", ref: \"abc123\"]}",
           "github:nordbeam/nb_inertia"
         )
@@ -192,10 +263,49 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     end
 
     test "falls back to the default source for version-only deps" do
-      assert Install.npm_source_from_dep_declaration(
+      assert Install.client_package_source_from_dep_declaration(
                "{:nb_inertia, \"~> 1.0\"}",
                "github:nordbeam/nb_inertia"
              ) == "github:nordbeam/nb_inertia"
+    end
+
+    test "keeps the old helper name as a compatibility alias" do
+      assert Install.npm_source_from_dep_declaration(
+               "{:nb_inertia, [github: \"nordbeam/nb_inertia\", tag: \"v1.0.0\"]}",
+               "github:nordbeam/nb_inertia"
+             ) == "github:nordbeam/nb_inertia#v1.0.0"
+    end
+  end
+
+  describe "package manager detection" do
+    test "uses a global Vite+ executable when available" do
+      assert Install.vite_plus_command_prefix(fn "vp" -> "/usr/local/bin/vp" end) == "vp"
+    end
+
+    test "bootstraps the project-local Vite+ CLI through npm when vp is absent" do
+      assert Install.vite_plus_command_prefix(fn _command -> nil end) ==
+               "npm exec --yes --package=vite-plus@0.3.0 -- vp"
+    end
+
+    test "prefers Vite+ in staged package.json over a staged Bun lockfile" do
+      igniter =
+        test_project(
+          files: %{
+            "assets/package.json" => ~S({"devDependencies":{"vite-plus":"latest"}}),
+            "assets/bun.lock" => ""
+          }
+        )
+
+      assert Install.using_vite_plus?(igniter)
+      refute Install.using_bun?(igniter)
+      assert Install.get_package_manager_command(igniter) == "vp"
+    end
+
+    test "recognizes a staged Bun lockfile when Vite+ is absent" do
+      igniter = test_project(files: %{"assets/bun.lock" => ""})
+
+      assert Install.using_bun?(igniter)
+      assert Install.get_package_manager_command(igniter) == "bun"
     end
   end
 
@@ -214,6 +324,31 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
   end
 
   describe "generated controller migration" do
+    test "updates parenthesized stock PageController routes" do
+      igniter =
+        test_project(
+          app_name: :sample,
+          files: %{
+            "lib/sample_web/router.ex" => """
+            defmodule SampleWeb.Router do
+              use SampleWeb, :router
+
+              scope "/", SampleWeb do
+                pipe_through :browser
+                get("/", PageController, :home)
+              end
+            end
+            """
+          }
+        )
+        |> Install.update_home_route()
+        |> apply_igniter!()
+
+      router = igniter.assigns.test_files["lib/sample_web/router.ex"]
+      assert router =~ ~s(get "/", HomeController, :home)
+      refute router =~ "PageController"
+    end
+
     test "renames stock Phoenix controller files to HomeController files" do
       stock_controller = "Page" <> "Controller"
 
@@ -258,9 +393,81 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert home_controller =~
                ~S|render_inertia_page(conn, :home, greeting: "Welcome to Inertia.js!")|
 
+      assert String.trim_trailing(home_controller) ==
+               home_controller
+               |> Code.format_string!()
+               |> IO.iodata_to_binary()
+               |> String.trim_trailing()
+
       assert home_controller_test = files["test/sample_web/controllers/home_controller_test.exs"]
       assert home_controller_test =~ "defmodule SampleWeb.HomeControllerTest do"
       assert home_controller_test =~ ~S|assert html_response(conn, 200) =~ ~s(data-page="app")|
+    end
+
+    test "formats the full-stack HomeController demo emitted by the installer" do
+      igniter =
+        test_project(
+          app_name: :sample,
+          files: %{
+            "lib/sample_web/controllers/page_controller.ex" => """
+            defmodule SampleWeb.PageController do
+              use SampleWeb, :controller
+
+              def home(conn, _params), do: render(conn, :home)
+            end
+            """
+          }
+        )
+        |> put_options(full: true)
+        |> Install.update_home_controller()
+        |> apply_igniter!()
+
+      home_controller =
+        igniter.assigns.test_files["lib/sample_web/controllers/home_controller.ex"]
+
+      assert String.trim_trailing(home_controller) ==
+               home_controller
+               |> Code.format_string!()
+               |> IO.iodata_to_binary()
+               |> String.trim_trailing()
+    end
+  end
+
+  describe "web helper setup" do
+    test "controller and HTML helpers remain idempotent across installer reruns" do
+      igniter =
+        test_project(
+          app_name: :sample,
+          files: %{
+            "lib/sample_web.ex" => """
+            defmodule SampleWeb do
+              def controller do
+                quote do
+                  use Phoenix.Controller, formats: [:html, :json]
+                  import Plug.Conn
+                end
+              end
+
+              def html do
+                quote do
+                  use Phoenix.Component
+                  import Phoenix.Component
+                end
+              end
+            end
+            """
+          }
+        )
+        |> Install.setup_controller_helpers()
+        |> Install.setup_controller_helpers()
+        |> Install.setup_html_helpers()
+        |> Install.setup_html_helpers()
+        |> apply_igniter!()
+
+      web = igniter.assigns.test_files["lib/sample_web.ex"]
+
+      assert length(Regex.scan(~r/use NbInertia\.Controller/, web)) == 1
+      assert length(Regex.scan(~r/import NbInertia\.HTML/, web)) == 1
     end
   end
 
@@ -306,7 +513,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
                "import nodePrefixPlugin from './vite-plugins/node-prefix-plugin.js'"
 
       assert transformed =~
-               "export default defineConfig(({ command, mode, isSsrBuild }) => {"
+               "export default defineConfig(({ isSsrBuild }) => {"
 
       assert transformed =~ ~s(const isSSR = isSsrBuild || process.env.BUILD_SSR === "true";)
       assert transformed =~ ~s(input: "js/ssr_prod.tsx")
@@ -331,6 +538,38 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert lib_ts =~ "@nordbeam/nb-inertia/react/modals"
       assert lib_ts =~ "export * from '@inertiajs/react'"
       refute Map.has_key?(files, "assets/js/lib/inertia.js")
+    end
+
+    test "TypeScript + Zod wires the generated page registry only in the DEV branch" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "react", typescript: true, zod: true)
+        |> Install.create_lib_inertia()
+        |> apply_igniter!()
+
+      source = igniter.assigns.test_files["assets/js/lib/inertia.ts"]
+
+      assert source =~ "import.meta.env.DEV"
+      assert source =~ "await import('@/types/pages')"
+      assert source =~ "pageSchemaRegistry"
+      assert source =~ "schemaRuntime: { mode: 'throw'"
+      assert source =~ "createSchemaAwareInertiaApp"
+      assert source =~ "import type { Pages } from '@/types/pages'"
+      assert source =~ "export const usePageProps = createTypedUsePageProps<Pages>()"
+    end
+
+    test "non-Zod TypeScript template has no generated registry import" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "react", typescript: true, zod: false)
+        |> Install.create_lib_inertia()
+        |> apply_igniter!()
+
+      source = igniter.assigns.test_files["assets/js/lib/inertia.ts"]
+
+      refute source =~ "@/types/pages"
+      assert source =~ "export { createInertiaApp }"
+      assert source =~ "usePageProps,"
     end
 
     test "React without TypeScript generates assets/js/lib/inertia.js" do
@@ -361,6 +600,22 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert lib_ts =~ "@nordbeam/nb-inertia/vue/modals"
       assert lib_ts =~ "export * from '@inertiajs/vue3'"
       refute Map.has_key?(files, "assets/js/lib/inertia.js")
+    end
+
+    test "Vue TypeScript + Zod uses the same DEV-only generated registry wiring" do
+      igniter =
+        test_project(app_name: :sample)
+        |> put_options(client_framework: "vue", typescript: true, zod: true)
+        |> Install.create_lib_inertia()
+        |> apply_igniter!()
+
+      source = igniter.assigns.test_files["assets/js/lib/inertia.ts"]
+
+      assert source =~ "import.meta.env.DEV"
+      assert source =~ "await import('@/types/pages')"
+      assert source =~ "createSchemaAwareInertiaApp"
+      assert source =~ "import type { Pages } from '@/types/pages'"
+      assert source =~ "export const usePageProps = createTypedUsePageProps<Pages>()"
     end
 
     test "Vue without TypeScript generates assets/js/lib/inertia.js" do
@@ -407,6 +662,14 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert Enum.any?(cmd_tasks, fn {"cmd", [cmd | _]} ->
                String.contains?(cmd, "radix-vue")
              end)
+
+      assert Enum.any?(cmd_tasks, fn {"cmd", [cmd | _]} ->
+               String.contains?(cmd, "github:nordbeam/nb_inertia")
+             end)
+
+      refute Enum.any?(cmd_tasks, fn {"cmd", [cmd | _]} ->
+               String.contains?(cmd, "@nordbeam/nb-inertia@")
+             end)
     end
   end
 
@@ -424,7 +687,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert Map.has_key?(files, "assets/js/components/modals/index.ts")
     end
 
-    test "Vue does not copy local modal files — modals come from the npm package" do
+    test "Vue does not copy local modal files — modals come from the GitHub package" do
       igniter =
         test_project(app_name: :sample)
         |> put_options(client_framework: "vue", typescript: true)
@@ -567,12 +830,14 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       refute source =~ "use NbInertia.Page"
     end
 
-    test "Vue next-steps mention modal components via the npm package, not file copy" do
+    test "Vue next-steps mention modal components via the GitHub package, not file copy" do
       source =
         Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
         |> File.read!()
 
-      assert source =~ "Modal components are delivered via @nordbeam/nb-inertia/vue/modals"
+      assert source =~
+               "Modal components are delivered via the GitHub-installed @nordbeam/nb-inertia/vue/modals"
+
       assert source =~ "No local file copy required"
       assert source =~ "createModalStack"
       assert source =~ "MODAL_STACK_KEY"
@@ -629,8 +894,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
     assert source =~ ~s(import type { HomeProps } from "@/types";)
     assert source =~ ~s(const form = useForm<HomeProps["contactForm"]>()
-    assert source =~ "prop :contact_form, :map, default: %{}"
-    assert source =~ "prop :items, list_of(ref(ItemSerializer))"
+    assert source =~ "prop(:contact_form, :map, default: %{})"
+    assert source =~ "prop(:items, list_of(ref(ItemSerializer)))"
     refute source =~ ~s(import type { HomeProps, HomeFormInputs } from "@/types";)
     refute source =~ ~s(useForm<HomeFormInputs["contactForm"]>)
   end
@@ -673,7 +938,24 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     refute source =~ "meta: {FlopMetaSerializer, meta, schema: Post}"
   end
 
-  describe "vue/modals npm package export type compatibility" do
+  describe "vue/modals GitHub package export type compatibility" do
+    test "package metadata points GitHub installs at this repository root" do
+      package_json =
+        Path.expand("../../../../package.json", __DIR__)
+        |> File.read!()
+        |> Jason.decode!()
+
+      assert package_json["repository"] == %{
+               "type" => "git",
+               "url" => "git+https://github.com/nordbeam/nb_inertia.git"
+             }
+
+      assert package_json["homepage"] == "https://github.com/nordbeam/nb_inertia#readme"
+      assert package_json["private"] == true
+      assert "dist" in package_json["files"]
+      assert "priv/nb_inertia/vue/modals" in package_json["files"]
+    end
+
     test "package.json ./vue/modals lists the types condition before the runtime import" do
       package_json =
         Path.expand("../../../../package.json", __DIR__)
@@ -712,6 +994,37 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
              "expected ./vue/modals import to be a .js file — a .ts import entry causes " <>
                "vue-tsc to process the source and fail on .vue SFC re-exports with TS2305; " <>
                "got: #{vue_modals["import"]}"
+    end
+
+    test "every package export target is present in the packed GitHub artifact" do
+      package_json_path = Path.expand("../../../../package.json", __DIR__)
+      package_root = Path.dirname(package_json_path)
+      package_json = package_json_path |> File.read!() |> Jason.decode!()
+
+      {output, status} =
+        System.cmd("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"],
+          cd: package_root,
+          stderr_to_stdout: true
+        )
+
+      assert status == 0, "npm pack --dry-run failed:\n#{output}"
+
+      [pack_info] = Jason.decode!(output)
+      packed_paths = MapSet.new(pack_info["files"], & &1["path"])
+
+      Enum.each(package_json["exports"], fn {export_name, export_spec} ->
+        Enum.each([export_spec["import"], export_spec["types"]], fn target ->
+          if is_binary(target) do
+            relative_target = String.trim_leading(target, "./")
+
+            assert File.exists?(Path.join(package_root, relative_target)),
+                   "#{export_name} points to missing #{target}"
+
+            assert MapSet.member?(packed_paths, relative_target),
+                   "#{export_name} target #{target} is not included by package.files"
+          end
+        end)
+      end)
     end
 
     test "dist/vue/modals/index.js exists as the bundler-facing runtime entry" do
@@ -771,16 +1084,38 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         package_tarball,
         "react",
         [
-          "@inertiajs/react@^3.0.3",
-          "react@^19.0.0",
-          "react-dom@^19.0.0",
+          "@inertiajs/react@^3.7.0",
+          "react@^19.2.8",
+          "react-dom@^19.2.8",
           "@radix-ui/react-visually-hidden",
           "@types/react",
           "@types/react-dom",
-          "typescript",
-          "vite"
+          "@types/phoenix",
+          "laravel-precognition@^2.0.0",
+          "phoenix@^1.8.13",
+          "typescript@^5.9.3",
+          "vite@npm:@voidzero-dev/vite-plus-core@0.3.0"
         ],
-        "tsc"
+        "tsc",
+        ~w[
+          shared/types
+          shared/schemaRuntime
+          shared/pageProps
+          react/createInertiaApp
+          react/schemaRuntime
+          react/usePageProps
+          react/router
+          react/Link
+          react/useForm
+          react/useHttp
+          react/useRoutes
+          react/usePage
+          react/Head
+          react/useFlash
+          react/useOnFlash
+          react/modals
+          react/realtime
+        ]
       )
 
       assert_generated_barrel_compiles!(
@@ -788,16 +1123,33 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         package_tarball,
         "vue",
         [
-          "@inertiajs/vue3@^3.0.3",
-          "vue@^3.0.0",
+          "@inertiajs/vue3@^3.7.0",
+          "vue@^3.5.42",
           "vue-loader",
-          "radix-vue@^1.9.0",
+          "radix-vue@^1.9.17",
           "@vue/compiler-sfc",
           "vue-tsc",
-          "typescript",
-          "vite"
+          "laravel-precognition@^2.0.0",
+          "typescript@^5.9.3",
+          "vite@npm:@voidzero-dev/vite-plus-core@0.3.0"
         ],
-        "vue-tsc"
+        "vue-tsc",
+        ~w[
+          shared/types
+          shared/schemaRuntime
+          shared/pageProps
+          vue/useForm
+          vue/usePage
+          vue/Head
+          vue/useFlash
+          vue/router
+          vue/Link
+          vue/useHttp
+          vue/schemaRuntime
+          vue/createInertiaApp
+          vue/usePageProps
+          vue/modals
+        ]
       )
     end
   end

@@ -1,15 +1,17 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { renderHook, act } from '@testing-library/react';
 import { ModalStackProvider, useModalStack } from '../modals';
 
-const mockVisit = vi.fn();
-const mockOn = vi.fn(() => () => {});
+const { mockVisit, mockOn } = vi.hoisted(() => ({
+  mockVisit: vi.fn(),
+  mockOn: vi.fn(() => () => {}),
+}));
 
 vi.mock('@inertiajs/react', () => ({
   router: {
-    visit: (...args: unknown[]) => mockVisit(...args),
-    on: (...args: unknown[]) => mockOn(...args),
+    visit: mockVisit,
+    on: mockOn,
   },
 }));
 

@@ -5,7 +5,7 @@
  * Feel free to customize the styling, animations, and behavior to match your app.
  *
  * Prerequisites:
- *   npx shadcn@latest add dialog sheet
+ *   vp dlx shadcn@latest add dialog sheet
  *
  * This component uses:
  * - Dialog (for centered modals)
@@ -13,7 +13,7 @@
  * - @radix-ui/react-visually-hidden (for accessibility)
  *
  * Install the accessibility helper:
- *   npm install @radix-ui/react-visually-hidden
+ *   vp add @radix-ui/react-visually-hidden
  */
 
 import { Suspense, useState, useCallback } from 'react';

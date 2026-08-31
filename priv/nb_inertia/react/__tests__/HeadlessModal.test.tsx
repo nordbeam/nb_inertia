@@ -1,16 +1,18 @@
 import React, { useEffect } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vite-plus/test';
 import { Modal, ModalStackProvider, useModalStack, useCurrentModal, HeadlessModal } from '../modals';
 
-const mockVisit = vi.fn();
-const mockOn = vi.fn(() => () => {});
+const { mockVisit, mockOn } = vi.hoisted(() => ({
+  mockVisit: vi.fn(),
+  mockOn: vi.fn(() => () => {}),
+}));
 
 vi.mock('@inertiajs/react', () => ({
   router: {
-    visit: (...args: unknown[]) => mockVisit(...args),
-    on: (...args: unknown[]) => mockOn(...args),
-    reload: (...args: unknown[]) => mockVisit(...args),
+    visit: mockVisit,
+    on: mockOn,
+    reload: mockVisit,
   },
 }));
 

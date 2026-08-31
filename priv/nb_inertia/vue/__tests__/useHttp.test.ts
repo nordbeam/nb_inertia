@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { useHttp, useHttpWithPrecognition } from '../useHttp';
 import type { RouteResult } from '../../shared/types';
 
@@ -65,9 +65,9 @@ describe('useHttp (Vue)', () => {
     mockSubmit.mockResolvedValue({ ok: true });
 
     const http = useHttpWithPrecognition({ title: 'Test Post' }, validateRoute, submitRoute);
-    await http.submit({ preserveScroll: true });
+    await http.submit({ headers: { 'x-test': 'true' } });
 
     expect(mockUseHttp).toHaveBeenCalledWith(validateRoute, { title: 'Test Post' });
-    expect(mockSubmit).toHaveBeenCalledWith('post', '/posts', { preserveScroll: true });
+    expect(mockSubmit).toHaveBeenCalledWith('post', '/posts', { headers: { 'x-test': 'true' } });
   });
 });

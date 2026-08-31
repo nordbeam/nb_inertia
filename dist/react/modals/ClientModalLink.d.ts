@@ -55,6 +55,6 @@ export interface ClientModalLinkProps {
  * then switches to ModalLink on the client after mount.
  * This prevents SSR errors from useModalStack context.
  */
-export declare function ClientModalLink({ href, children, className, modalConfig, loadingComponent, prefetch, cacheFor, cacheTags, }: ClientModalLinkProps): import("react/jsx-runtime").JSX.Element;
+export declare function ClientModalLink({ href, children, className, modalConfig, loadingComponent, prefetch, cacheFor, cacheTags, }: ClientModalLinkProps): import("react").JSX.Element;
 export default ClientModalLink;
 //# sourceMappingURL=ClientModalLink.d.ts.map

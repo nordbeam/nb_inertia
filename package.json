@@ -1,19 +1,19 @@
 {
   "name": "@nordbeam/nb-inertia",
   "version": "1.0.0",
+  "private": true,
   "description": "Modal system, route-bound forms, and SSR-safe components for Phoenix + Inertia.js",
   "type": "module",
   "author": "Nordbeam",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nordbeam/nb.git",
-    "directory": "nb_inertia"
+    "url": "git+https://github.com/nordbeam/nb_inertia.git"
   },
   "bugs": {
-    "url": "https://github.com/nordbeam/nb/issues"
+    "url": "https://github.com/nordbeam/nb_inertia/issues"
   },
-  "homepage": "https://github.com/nordbeam/nb/tree/main/nb_inertia#readme",
+  "homepage": "https://github.com/nordbeam/nb_inertia#readme",
   "keywords": [
     "inertia",
     "inertiajs",
@@ -25,13 +25,40 @@
     "nb_routes"
   ],
   "scripts": {
-    "build": "vite build --mode production",
-    "dev": "vite build --watch"
+    "build": "vp build --mode production",
+    "dev": "vp build --watch",
+    "test": "cd priv/nb_inertia/react && ./node_modules/.bin/vp test run && cd ../vue && ./node_modules/.bin/vp test run",
+    "typecheck": "tsc --noEmit",
+    "check": "vp check"
+  },
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "exports": {
     "./shared/types": {
       "import": "./dist/shared/types.js",
       "types": "./dist/shared/types.d.ts"
+    },
+    "./shared/schemaRuntime": {
+      "import": "./dist/shared/schemaRuntime.js",
+      "types": "./dist/shared/schemaRuntime.d.ts"
+    },
+    "./shared/pageProps": {
+      "import": "./dist/shared/pageProps.js",
+      "types": "./dist/shared/pageProps.d.ts"
+    },
+    "./react/createInertiaApp": {
+      "import": "./dist/react/createInertiaApp.js",
+      "types": "./dist/react/createInertiaApp.d.ts"
+    },
+    "./react/schemaRuntime": {
+      "import": "./dist/react/schemaRuntime.js",
+      "types": "./dist/react/schemaRuntime.d.ts"
+    },
+    "./react/usePageProps": {
+      "import": "./dist/react/usePageProps.js",
+      "types": "./dist/react/usePageProps.d.ts"
     },
     "./react/router": {
       "import": "./dist/react/router.js",
@@ -105,6 +132,18 @@
       "import": "./priv/nb_inertia/vue/useHttp.ts",
       "types": "./priv/nb_inertia/vue/useHttp.ts"
     },
+    "./vue/schemaRuntime": {
+      "import": "./priv/nb_inertia/vue/schemaRuntime.ts",
+      "types": "./priv/nb_inertia/vue/schemaRuntime.ts"
+    },
+    "./vue/createInertiaApp": {
+      "import": "./priv/nb_inertia/vue/createInertiaApp.ts",
+      "types": "./priv/nb_inertia/vue/createInertiaApp.ts"
+    },
+    "./vue/usePageProps": {
+      "import": "./priv/nb_inertia/vue/usePageProps.ts",
+      "types": "./priv/nb_inertia/vue/usePageProps.ts"
+    },
     "./vue/modals": {
       "types": "./priv/nb_inertia/vue/modals/index.d.ts",
       "import": "./dist/vue/modals/index.js"
@@ -121,22 +160,41 @@
     "priv/nb_inertia/vue/useForm.ts",
     "priv/nb_inertia/vue/useHttp.ts",
     "priv/nb_inertia/vue/usePage.ts",
+    "priv/nb_inertia/vue/schemaRuntime.ts",
+    "priv/nb_inertia/vue/createInertiaApp.ts",
+    "priv/nb_inertia/vue/usePageProps.ts",
     "priv/nb_inertia/shared",
     "README.md",
     "LICENSE"
   ],
   "peerDependencies": {
-    "@inertiajs/react": "^3.0.3",
-    "@inertiajs/vue3": "^3.0.3",
+    "@inertiajs/core": "^3.7.0",
+    "@inertiajs/react": "^3.7.0",
+    "@inertiajs/vue3": "^3.7.0",
+    "@types/phoenix": "^1.6.7",
+    "laravel-precognition": "^2.0.0",
+    "phoenix": "^1.8.0",
     "radix-vue": "^1.9.0",
     "react": "^19.0.0",
     "vue": "^3.0.0"
   },
   "peerDependenciesMeta": {
+    "@inertiajs/core": {
+      "optional": true
+    },
     "@inertiajs/react": {
       "optional": true
     },
     "@inertiajs/vue3": {
+      "optional": true
+    },
+    "@types/phoenix": {
+      "optional": true
+    },
+    "laravel-precognition": {
+      "optional": true
+    },
+    "phoenix": {
       "optional": true
     },
     "radix-vue": {
@@ -150,17 +208,27 @@
     }
   },
   "devDependencies": {
-    "@inertiajs/core": "^3.0.3",
-    "@inertiajs/react": "^3.0.3",
-    "@inertiajs/vue3": "^3.0.3",
-    "@types/react": "^19.2.6",
-    "@vitejs/plugin-react": "^6.0.1",
-    "phoenix": "^1.8.5",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "@inertiajs/core": "^3.7.0",
+    "@inertiajs/react": "^3.7.0",
+    "@inertiajs/vue3": "^3.7.0",
+    "@types/node": "^26.4.0",
+    "@types/phoenix": "^1.6.7",
+    "@types/react": "^19.2.18",
+    "@vitejs/plugin-react": "^6.1.1",
+    "laravel-precognition": "^2.0.0",
+    "phoenix": "^1.8.13",
+    "radix-vue": "^1.9.17",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "typescript": "^5.9.3",
-    "vite": "^8.0.8",
-    "vite-plugin-dts": "^4.5.4",
-    "vue": "^3.5.30"
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
+    "vite-plugin-dts": "^5.0.3",
+    "vite-plus": "0.3.0",
+    "vue": "^3.5.42",
+    "zod": "^4.5.4"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
+    "vitest": "^4.1.11"
   }
 }

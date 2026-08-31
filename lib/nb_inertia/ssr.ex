@@ -38,13 +38,14 @@ defmodule NbInertia.SSR do
 
   **Development**: Uses an external HTTP server with vite-node for on-demand transformation
     - Pros: Hot Module Replacement, source maps, no rebuild needed
-    - Cons: Requires external process running (`npm run dev:ssr`)
+    - Cons: Requires the Vite+ dev process (`vp dev`) to be running
     - Setup: Add watcher to config/dev.exs to start the dev SSR server automatically
 
   **Production**: Uses DenoRider with pre-bundled JavaScript
     - Pros: Embedded runtime, no external server, faster cold starts
     - Cons: Requires rebuild to see changes
-    - Setup: Build SSR bundle with `npm run build:ssr`
+    - Setup: Build the SSR bundle with `vp run build:ssr` (or directly with
+      `vp build --ssr`)
 
   Note: SSR rendering is handled directly by the `NbInertia.SSR` GenServer,
   which delegates to either the dev HTTP server or DenoRider based on the
@@ -112,7 +113,7 @@ defmodule NbInertia.SSR do
 
   1. Build your SSR bundle (typically done in your assets build step):
 
-         cd assets && npm run build:ssr
+         cd assets && vp run build:ssr
 
   2. Ensure the SSR bundle is included in your release:
 

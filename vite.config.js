@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
@@ -23,6 +23,7 @@ function getEntryPoints(dir, baseDir = null) {
                !file.endsWith('.test.ts') &&
                !file.endsWith('.test.tsx') &&
                !file.includes('vitest') &&
+               !file.includes('vite.config') &&
                !file.endsWith('.d.ts') &&
                !fullPath.includes('/node_modules/') &&
                !fullPath.includes('/vue/')) {
@@ -66,7 +67,9 @@ export default defineConfig({
       development: false,
     },
   },
-  plugins: [
+  // Vite+ reads this config for `vp check` and editor metadata. Keep framework
+  // plugins out of that path; they are only instantiated for actual Vite work.
+  plugins: lazyPlugins(() => [
     react(),
     emitVueModalRuntimeEntry(),
     dts({
@@ -75,7 +78,48 @@ export default defineConfig({
       outDir: 'dist',
       rollupTypes: true,
     }),
-  ],
+  ]),
+  fmt: {
+    ignorePatterns: ['dist/**', 'priv/components/**', '**/node_modules/**', '**/coverage/**'],
+    singleQuote: true,
+    semi: true,
+  },
+  lint: {
+    ignorePatterns: [
+      'dist/**',
+      'priv/components/**',
+      '**/node_modules/**',
+      '**/coverage/**',
+    ],
+    options: {
+      typeAware: true,
+      typeCheck: true,
+    },
+    overrides: [
+      {
+        // These tests intentionally inspect Vitest mocks by reference; the
+        // methods are mock functions and do not depend on a receiver.
+        files: ['priv/nb_inertia/**/*.test.ts', 'priv/nb_inertia/**/*.test.tsx'],
+        rules: {
+          'typescript/unbound-method': 'off',
+        },
+      },
+      {
+        // The enhanced router deliberately copies Inertia's public methods so
+        // consumers can continue using the complete router surface.
+        files: ['priv/nb_inertia/react/router.ts'],
+        rules: {
+          'typescript/no-misused-spread': 'off',
+        },
+      },
+    ],
+  },
+  // The package predates Vite+ and intentionally keeps its existing source
+  // formatting. Keep formatting available via the standalone `fmt` command,
+  // while making the default check enforce linting and TypeScript correctness.
+  check: {
+    fmt: false,
+  },
   build: {
     lib: {
       entry: getEntryPoints('./priv/nb_inertia'),

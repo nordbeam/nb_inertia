@@ -41,9 +41,11 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     7. Adds configuration to config/config.exs under :nb_inertia namespace
     8. Updates root layout template (with nb_vite support if detected)
     9. Configures asset bundler (esbuild by default, or skips if nb_vite is present)
-    10. Detects and uses appropriate package manager (npm, yarn, pnpm, or bun)
-    11. Installs npm packages including @nordbeam/nb-inertia for enhanced components
-    12. Creates assets/js/lib/inertia.ts with enhanced router, Link, and useForm
+    10. Detects and uses Vite+ (`vp`) when `vite-plus` is present, bootstrapping
+        the project-local CLI through npm when no global `vp` is available
+    11. Installs the first-party JavaScript package from
+        `github:nordbeam/nb_inertia` and third-party packages from npm
+    12. Creates assets/js/lib/inertia.ts with enhanced router, Link, useForm, and the schema-aware createInertiaApp wrapper
     13. Sets up TypeScript type generation (when --typescript is used)
     14. Creates sample Inertia page component
     15. Prints helpful next steps
@@ -64,6 +66,7 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
         --camelize-props              Enable camelCase for props (stored in :nb_inertia config)
         --history-encrypt             Enable history encryption (stored in :nb_inertia config)
         --typescript                  Enable TypeScript
+        --zod                         Emit nb_ts Zod schemas and wire the dev page registry (requires --typescript)
         --ssr                         Enable Server-Side Rendering (SSR) support
         --with-flop                   Install nb_flop for pagination, sorting, and filtering
         --table                       Generate sample Table DSL module (requires --with-flop)
@@ -100,20 +103,27 @@ defmodule Mix.Tasks.NbInertia.Install.Docs do
     If you have `nb_vite` in your dependencies, the installer will automatically:
     - Skip esbuild configuration (Vite handles bundling)
     - Generate a root layout that uses NbVite helper functions
-    - Detect if Bun is configured via nb_vite and use it for package installation
-    - Use the appropriate package manager (bun, pnpm, yarn, or npm)
+    - Detect Vite+ in `assets/package.json` and use `vp` for package installation
+    - Fall back to Bun, pnpm, Yarn, or npm based on the assets lockfile
 
-    To use nb_inertia with nb_vite and Bun:
+    To use nb_inertia with nb_vite and Vite+:
 
     ```bash
-    # First install nb_vite with Bun support
-    mix nb_vite.install --bun --typescript
+    # First install nb_vite with Vite+
+    mix igniter.install nb_vite --typescript
 
     # Then install nb_inertia
     mix nb_inertia.install --client-framework react --typescript
+
+    # Vite+ is used automatically when assets/package.json includes vite-plus
+    cd assets && vp install
     ```
 
-    The installer will detect the nb_vite setup and configure accordingly.
+    The installer will detect the nb_vite/Vite+ setup and configure accordingly.
+
+    The first-party JavaScript package is fetched from
+    `github:nordbeam/nb_inertia`; it retains `@nordbeam/nb-inertia` as the
+    import name for generated and handwritten client code.
     """
   end
 end
@@ -127,6 +137,7 @@ if Code.ensure_loaded?(Igniter) do
     use Igniter.Mix.Task
 
     @task_group :nb
+    @vite_plus_version "0.3.0"
     @forwarded_child_flags ~w(--yes)
     @schema [
       full: :boolean,
@@ -134,6 +145,7 @@ if Code.ensure_loaded?(Igniter) do
       camelize_props: :boolean,
       history_encrypt: :boolean,
       typescript: :boolean,
+      zod: :boolean,
       ssr: :boolean,
       with_flop: :boolean,
       table: :boolean,
@@ -149,6 +161,7 @@ if Code.ensure_loaded?(Igniter) do
       client_framework: "react",
       camelize_props: true,
       typescript: true,
+      zod: true,
       ssr: true,
       with_flop: true,
       table: true
@@ -376,8 +389,12 @@ if Code.ensure_loaded?(Igniter) do
       update_web_ex_helper(igniter, :controller, fn zipper ->
         use_code = "use NbInertia.Controller"
 
-        with {:ok, zipper} <- move_to_last_import_or_alias(zipper) do
-          {:ok, Igniter.Code.Common.add_code(zipper, use_code)}
+        if zipper_contains?(zipper, use_code) do
+          {:ok, zipper}
+        else
+          with {:ok, zipper} <- move_to_last_import_or_alias(zipper) do
+            {:ok, Igniter.Code.Common.add_code(zipper, use_code)}
+          end
         end
       end)
     end
@@ -389,10 +406,21 @@ if Code.ensure_loaded?(Igniter) do
             import NbInertia.HTML
         """
 
-        with {:ok, zipper} <- move_to_last_import_or_alias(zipper) do
-          {:ok, Igniter.Code.Common.add_code(zipper, import_code)}
+        if zipper_contains?(zipper, String.trim(import_code)) do
+          {:ok, zipper}
+        else
+          with {:ok, zipper} <- move_to_last_import_or_alias(zipper) do
+            {:ok, Igniter.Code.Common.add_code(zipper, import_code)}
+          end
         end
       end)
+    end
+
+    defp zipper_contains?(zipper, code) do
+      zipper
+      |> Sourceror.Zipper.node()
+      |> Sourceror.to_string()
+      |> String.contains?(code)
     end
 
     # Run an update function within the quote do ... end block inside a *web.ex helper function
@@ -451,9 +479,7 @@ if Code.ensure_loaded?(Igniter) do
           |> Igniter.update_file(router_path, fn source ->
             Rewrite.Source.update(source, :content, fn
               content when is_binary(content) ->
-                String.replace(content, stock_home_route(), "get \"/\", HomeController, :home",
-                  global: false
-                )
+                replace_stock_home_route(content)
 
               content ->
                 content
@@ -465,7 +491,15 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    defp stock_home_route, do: "get \"/\", " <> "Page" <> "Controller, :home"
+    @doc false
+    def replace_stock_home_route(content) when is_binary(content) do
+      Regex.replace(
+        ~r/get\s*(?:\(\s*)?["']\/["']\s*,\s*PageController\s*,\s*:home\s*\)?/,
+        content,
+        ~s(get "/", HomeController, :home),
+        global: false
+      )
+    end
 
     defp stock_controller_module(web_module),
       do: "defmodule #{inspect(web_module)}." <> "Page" <> "Controller do"
@@ -856,34 +890,58 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
-    def using_bun?(_igniter) do
-      # Check if bun lockfile exists or bun is available
-      File.exists?("assets/bun.lockb") || System.find_executable("bun") != nil
+    def using_vite_plus?(igniter) do
+      case package_json_content(igniter) do
+        {:ok, content} -> String.contains?(content, "\"vite-plus\"")
+        _ -> false
+      end
+    end
+
+    @doc false
+    def using_bun?(igniter) do
+      # Vite+ owns the package-manager/runtime choice when it is installed.
+      # Keep Bun as the legacy fallback for projects that have not migrated.
+      !using_vite_plus?(igniter) &&
+        (asset_file_exists?(igniter, "assets/bun.lock") ||
+           asset_file_exists?(igniter, "assets/bun.lockb") ||
+           System.find_executable("bun") != nil)
     end
 
     @doc false
     def get_package_manager_command(igniter) do
-      # First check if using Bun via nb_vite configuration
-      if using_bun?(igniter) do
-        "bun"
-      else
-        # Detect package manager from lockfiles in assets directory
-        detect_package_manager_from_lockfile()
+      cond do
+        using_vite_plus?(igniter) -> "vp"
+        using_bun?(igniter) -> "bun"
+        true -> detect_package_manager_from_lockfile(igniter)
       end
     end
 
-    defp detect_package_manager_from_lockfile do
+    @doc false
+    def vite_plus_command_prefix(find_executable \\ &System.find_executable/1)
+        when is_function(find_executable, 1) do
+      if find_executable.("vp") do
+        "vp"
+      else
+        "npm exec --yes --package=vite-plus@#{@vite_plus_version} -- vp"
+      end
+    end
+
+    defp detect_package_manager_from_lockfile(igniter) do
       cond do
-        File.exists?("assets/bun.lockb") ->
+        package_json_content(igniter) |> vite_plus_package_json?() ->
+          "vp"
+
+        asset_file_exists?(igniter, "assets/bun.lock") ||
+            asset_file_exists?(igniter, "assets/bun.lockb") ->
           "bun"
 
-        File.exists?("assets/pnpm-lock.yaml") ->
+        asset_file_exists?(igniter, "assets/pnpm-lock.yaml") ->
           "pnpm"
 
-        File.exists?("assets/yarn.lock") ->
+        asset_file_exists?(igniter, "assets/yarn.lock") ->
           "yarn"
 
-        File.exists?("assets/package-lock.json") ->
+        asset_file_exists?(igniter, "assets/package-lock.json") ->
           "npm"
 
         # Fallback to system detection if no lockfile exists
@@ -900,6 +958,25 @@ if Code.ensure_loaded?(Igniter) do
           "npm"
       end
     end
+
+    defp package_json_content(igniter) do
+      path = "assets/package.json"
+
+      if Rewrite.has_source?(igniter.rewrite, path) do
+        {:ok, igniter.rewrite |> Rewrite.source!(path) |> Rewrite.Source.get(:content)}
+      else
+        File.read(path)
+      end
+    end
+
+    defp asset_file_exists?(igniter, path) do
+      Rewrite.has_source?(igniter.rewrite, path) || File.exists?(path)
+    end
+
+    defp vite_plus_package_json?({:ok, content}),
+      do: String.contains?(content, "\"vite-plus\"")
+
+    defp vite_plus_package_json?(_), do: false
 
     defp maybe_create_typescript_config(igniter) do
       if igniter.args.options[:typescript] do
@@ -927,17 +1004,17 @@ if Code.ensure_loaded?(Igniter) do
       nb_inertia_source = nb_inertia_client_package_source(igniter)
 
       # Keep the React plugin aligned with nb_vite's current Vite major.
-      react_plugin = if using_nb_vite?(igniter), do: ["@vitejs/plugin-react@^6.0.1"], else: []
+      react_plugin = if using_nb_vite?(igniter), do: ["@vitejs/plugin-react@^6.1.1"], else: []
 
       install_cmd =
         package_manager_install_command(
           pkg_manager,
           assets_dir,
           [
-            "@inertiajs/react@^3.0.3",
+            "@inertiajs/react@^3.7.0",
             nb_inertia_source,
-            "react@^19.0.0",
-            "react-dom@^19.0.0",
+            "react@^19.2.8",
+            "react-dom@^19.2.8",
             "@radix-ui/react-visually-hidden"
           ] ++ react_plugin
         )
@@ -952,11 +1029,11 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         package_manager_install_command(pkg_manager, assets_dir, [
-          "@inertiajs/vue3@^3.0.3",
+          "@inertiajs/vue3@^3.7.0",
           nb_inertia_source,
-          "vue@^3.0.0",
+          "vue@^3.5.42",
           "vue-loader",
-          "radix-vue@^1.9.0"
+          "radix-vue@^1.9.17"
         ])
 
       Igniter.add_task(igniter, "cmd", [install_cmd])
@@ -1015,7 +1092,10 @@ if Code.ensure_loaded?(Igniter) do
     def nb_inertia_client_package_source(igniter) do
       case Igniter.Project.Deps.get_dep(igniter, :nb_inertia) do
         {:ok, dep_declaration} when is_binary(dep_declaration) ->
-          npm_source_from_dep_declaration(dep_declaration, "github:nordbeam/nb_inertia")
+          client_package_source_from_dep_declaration(
+            dep_declaration,
+            "github:nordbeam/nb_inertia"
+          )
 
         _ ->
           "github:nordbeam/nb_inertia"
@@ -1023,11 +1103,16 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @doc false
-    def npm_source_from_dep_declaration(dep_declaration, default_source) do
+    def client_package_source_from_dep_declaration(dep_declaration, default_source) do
       dep_declaration
       |> parse_dep_declaration()
-      |> dep_source_to_npm_requirement(default_source)
+      |> dep_source_to_client_requirement(default_source)
     end
+
+    # Kept as a compatibility alias for callers that used the old helper name.
+    @doc false
+    def npm_source_from_dep_declaration(dep_declaration, default_source),
+      do: client_package_source_from_dep_declaration(dep_declaration, default_source)
 
     defp parse_dep_declaration(dep_declaration) when is_binary(dep_declaration) do
       dep_declaration
@@ -1037,18 +1122,25 @@ if Code.ensure_loaded?(Igniter) do
       _ -> nil
     end
 
-    defp dep_source_to_npm_requirement({_, opts}, default_source) when is_list(opts) do
-      dep_opts_to_npm_requirement(opts, default_source)
+    defp dep_source_to_client_requirement({_, opts}, default_source) when is_list(opts) do
+      dep_opts_to_client_requirement(opts, default_source)
     end
 
-    defp dep_source_to_npm_requirement({_, _version, opts}, default_source) when is_list(opts) do
-      dep_opts_to_npm_requirement(opts, default_source)
+    defp dep_source_to_client_requirement({_, _version, opts}, default_source)
+         when is_list(opts) do
+      dep_opts_to_client_requirement(opts, default_source)
     end
 
-    defp dep_source_to_npm_requirement(_, default_source), do: default_source
+    defp dep_source_to_client_requirement(_, default_source), do: default_source
 
-    defp dep_opts_to_npm_requirement(opts, default_source) do
+    defp dep_opts_to_client_requirement(opts, default_source) do
       cond do
+        is_binary(opts[:path]) ->
+          # A local Mix dependency is also a complete npm package at its
+          # repository root. Keep local development installs local instead of
+          # silently switching them to the remote GitHub checkout.
+          "file:#{Path.expand(opts[:path])}"
+
         github = opts[:github] ->
           "github:#{github}#{dependency_ref_suffix(opts)}"
 
@@ -1076,6 +1168,7 @@ if Code.ensure_loaded?(Igniter) do
       dev_flag =
         if opts[:dev] do
           case pkg_manager do
+            "vp" -> " -D"
             "bun" -> " -D"
             "pnpm" -> " --save-dev"
             "yarn" -> " -D"
@@ -1086,6 +1179,9 @@ if Code.ensure_loaded?(Igniter) do
         end
 
       case pkg_manager do
+        "vp" ->
+          "#{vite_plus_command_prefix()} -C #{assets_dir} add#{dev_flag} #{package_args}"
+
         "bun" ->
           "bun add --cwd #{shell_escape(assets_dir)}#{dev_flag} #{package_args}"
 
@@ -1153,14 +1249,19 @@ if Code.ensure_loaded?(Igniter) do
       # Vite natively handles JSX/TSX, esbuild is configured to handle it too
       typescript = igniter.args.options[:typescript] || false
       extension = if typescript, do: "tsx", else: "jsx"
+      app_name = igniter |> Igniter.Project.Application.app_name() |> to_string()
 
       """
-      import React from "react";
-
+      import "phoenix-colocated/#{app_name}/colocated.css";
       import { createInertiaApp, http } from "@/lib/inertia";
       import { createRoot } from "react-dom/client";
+      import type { ComponentType } from "react";
 
-      const pages = import.meta.glob("./pages/**/*.#{extension}");
+      type PageModule = {
+        default: ComponentType<Record<string, unknown>>;
+      };
+
+      const pages = import.meta.glob<PageModule>("./pages/**/*.#{extension}");
 
       const getCsrfToken = () =>
         document
@@ -1177,13 +1278,13 @@ if Code.ensure_loaded?(Igniter) do
         return {
           ...config,
           headers: {
-            ...(config.headers ?? {}),
+            ...config.headers,
             "x-csrf-token": csrfToken,
           },
         };
       });
 
-      createInertiaApp({
+      void createInertiaApp({
         // Inertia v3: resolve receives (name, props). Props can be used for
         // per-page layout selection or conditional logic.
         resolve: async (name, _props) => {
@@ -1192,9 +1293,10 @@ if Code.ensure_loaded?(Igniter) do
           if (!resolver) {
             throw new Error(`Page not found: ${name}`);
           }
-          return resolver();
+          return (await resolver()).default;
         },
         setup({ App, el, props }) {
+          if (!el) throw new Error("Inertia root element was not found");
           createRoot(el).render(<App {...props} />);
         },
         // Inertia v3: optional layout callback for default layouts
@@ -1410,7 +1512,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp ssr_define_config_prefix(extension) do
       """
-      export default defineConfig(({ command, mode, isSsrBuild }) => {
+      export default defineConfig(({ isSsrBuild }) => {
         const isSSR = isSsrBuild || process.env.BUILD_SSR === "true";
 
         if (isSSR) {
@@ -1491,10 +1593,10 @@ if Code.ensure_loaded?(Igniter) do
               updated_json =
                 update_in(json, ["scripts"], fn
                   nil ->
-                    %{"build:ssr" => "vite build --ssr"}
+                    %{"build:ssr" => "vp build --ssr"}
 
                   scripts when is_map(scripts) ->
-                    Map.put(scripts, "build:ssr", "vite build --ssr")
+                    Map.put(scripts, "build:ssr", "vp build --ssr")
                 end)
 
               case Jason.encode(updated_json, pretty: true) do
@@ -1719,10 +1821,12 @@ if Code.ensure_loaded?(Igniter) do
     @doc false
     def maybe_setup_nb_ts(igniter) do
       typescript_enabled = igniter.args.options[:typescript] || false
+      zod_enabled = typescript_enabled && (igniter.args.options[:zod] || false)
 
       if typescript_enabled do
         # Compose the nb_ts installer instead of duplicating setup logic
-        compose_installer_task(igniter, "nb_ts.install", ["--output-dir", "assets/js/types"])
+        args = ["--output-dir", "assets/js/types"] ++ if(zod_enabled, do: ["--zod"], else: [])
+        compose_installer_task(igniter, "nb_ts.install", args)
       else
         igniter
       end
@@ -1865,7 +1969,6 @@ if Code.ensure_loaded?(Igniter) do
 
     defp full_react_home_page do
       ~S"""
-      import React from "react";
       import { Head, router, useForm, useFlash, usePage } from "@/lib/inertia";
       import type { HomeProps } from "@/types";
       import type { Item } from "@/types/ItemSerializer";
@@ -2056,9 +2159,9 @@ if Code.ensure_loaded?(Igniter) do
 
     defp sample_react_page(extension) do
       """
-      import React from "react";
+      import type { HomeProps } from "@/types";
 
-      export default function Home({ greeting }) {
+      export default function Home({ greeting }: HomeProps) {
         return (
           <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
             <h1>{greeting || "Welcome to NbInertia!"}</h1>
@@ -2085,7 +2188,7 @@ if Code.ensure_loaded?(Igniter) do
         use MyAppWeb, :controller
 
         inertia_page :home do
-          prop :greeting, :string
+          prop(:greeting, :string)
         end
 
         def home(conn, _params) do
@@ -2155,7 +2258,7 @@ if Code.ensure_loaded?(Igniter) do
                 else
                   String.replace(
                     content,
-                    ~r/def home\(conn, _params\) do\s*\n\s*render\(conn, :home\)\s*\n\s*end/,
+                    ~r/^[ \t]*def home\(conn, _params\) do\s*\n\s*render\(conn, :home\)\s*\n\s*end/m,
                     basic_home_action_body(),
                     global: false
                   )
@@ -2176,13 +2279,14 @@ if Code.ensure_loaded?(Igniter) do
     defp basic_home_action_body do
       """
         inertia_page :home do
-            prop :greeting, :string
-          end
+          prop(:greeting, :string)
+        end
 
-          def home(conn, _params) do
-            render_inertia_page(conn, :home, greeting: "Welcome to Inertia.js!")
-          end
+        def home(conn, _params) do
+          render_inertia_page(conn, :home, greeting: "Welcome to Inertia.js!")
+        end
       """
+      |> String.trim_trailing()
     end
 
     defp full_home_controller_content(web_module) do
@@ -2200,34 +2304,61 @@ if Code.ensure_loaded?(Igniter) do
         include_shared_props(DemoShared)
 
         @items [
-          %{id: 1, name: "Alpha", status: "active", tags: ["ui", "core"],
+          %{
+            id: 1,
+            name: "Alpha",
+            status: "active",
+            tags: ["ui", "core"],
             bio: "First sample item used to demo the serializer DSL.",
-            metadata: %{weight: 1, unit: "kg"}},
-          %{id: 2, name: "Bravo", status: "pending", tags: ["docs"],
-            bio: nil, metadata: %{weight: 2, unit: "kg"}},
-          %{id: 3, name: "Charlie", status: "archived", tags: ["legacy", "ops"],
+            metadata: %{weight: 1, unit: "kg"}
+          },
+          %{
+            id: 2,
+            name: "Bravo",
+            status: "pending",
+            tags: ["docs"],
+            bio: nil,
+            metadata: %{weight: 2, unit: "kg"}
+          },
+          %{
+            id: 3,
+            name: "Charlie",
+            status: "archived",
+            tags: ["legacy", "ops"],
             bio: "Kept around so we can show archived styling.",
-            metadata: %{weight: 3, unit: "kg"}},
-          %{id: 4, name: "Delta", status: "active", tags: ["data"],
-            bio: "Short bio.", metadata: %{weight: 4, unit: "kg"}},
-          %{id: 5, name: "Echo", status: "pending", tags: ["api", "core"],
+            metadata: %{weight: 3, unit: "kg"}
+          },
+          %{
+            id: 4,
+            name: "Delta",
+            status: "active",
+            tags: ["data"],
+            bio: "Short bio.",
+            metadata: %{weight: 4, unit: "kg"}
+          },
+          %{
+            id: 5,
+            name: "Echo",
+            status: "pending",
+            tags: ["api", "core"],
             bio: "Longer bio that will get truncated by the computed field.",
-            metadata: %{weight: 5, unit: "kg"}}
+            metadata: %{weight: 5, unit: "kg"}
+          }
         ]
 
         @contact_types %{name: :string, email: :string, message: :string}
 
         inertia_page :home do
-          prop :items, list_of(ref(ItemSerializer))
-          prop :meta, ref(FlopMetaSerializer)
-          prop :stats, :map, defer: true
-          prop :contact_form, :map, default: %{}
-          prop :ping, :string, once: true
+          prop(:items, list_of(ref(ItemSerializer)))
+          prop(:meta, ref(FlopMetaSerializer))
+          prop(:stats, :map, defer: true)
+          prop(:contact_form, :map, default: %{})
+          prop(:ping, :string, once: true)
 
           form_inputs :contact_form do
-            field :name, :string
-            field :email, :string
-            field :message, :string
+            field(:name, :string)
+            field(:email, :string)
+            field(:message, :string)
           end
         end
 
@@ -2238,12 +2369,12 @@ if Code.ensure_loaded?(Igniter) do
 
           conn
           |> inertia_flash(:notice, "Welcome to the nb_* demo page")
-          |> render_inertia_page(:home, [
+          |> render_inertia_page(:home,
             items: serialize(ItemSerializer, @items),
             meta: serialize(FlopMetaSerializer, meta),
             stats: fn -> compute_stats() end,
             ping: "pong-\#{System.system_time(:second)}"
-          ])
+          )
         end
 
         def contact(conn, params) do
@@ -2371,11 +2502,12 @@ if Code.ensure_loaded?(Igniter) do
     def create_lib_inertia(igniter) do
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
+      zod = typescript && (igniter.args.options[:zod] || false)
 
       case client_framework do
         "react" ->
           extension = if typescript, do: "ts", else: "js"
-          content = lib_inertia_react_content()
+          content = lib_inertia_react_content(zod)
 
           Igniter.create_new_file(igniter, "assets/js/lib/inertia.#{extension}", content,
             on_exists: :skip
@@ -2383,7 +2515,7 @@ if Code.ensure_loaded?(Igniter) do
 
         "vue" ->
           extension = if typescript, do: "ts", else: "js"
-          content = lib_inertia_vue_content()
+          content = lib_inertia_vue_content(zod)
 
           Igniter.create_new_file(igniter, "assets/js/lib/inertia.#{extension}", content,
             on_exists: :skip
@@ -2436,7 +2568,67 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    defp lib_inertia_react_content() do
+    defp lib_inertia_react_content(zod_enabled) do
+      create_app_export =
+        if zod_enabled do
+          """
+          import { createInertiaApp as createSchemaAwareInertiaApp } from '@nordbeam/nb-inertia/react/createInertiaApp';
+
+          /**
+           * The generated Zod registry is loaded only in development. Vite
+           * folds this DEV branch out of production bundles, so the default
+           * production path contains neither the registry nor Zod. Pass an
+           * explicit schemaRuntime/pageSchemas option to enforce production
+           * checks and choose a report or throw policy.
+           */
+          async function createInertiaAppWithSchemas(options: Record<string, unknown> = {}) {
+            if (!import.meta.env.DEV) return createSchemaAwareInertiaApp(options);
+
+            try {
+              const { pageSchemaRegistry } = await import('@/types/pages');
+              return createSchemaAwareInertiaApp({
+                ...options,
+                pageSchemas: pageSchemaRegistry,
+                schemaRuntime: { mode: 'throw', registry: pageSchemaRegistry },
+              });
+            } catch {
+              // `pages.ts` is created by `mix ts.gen`; keep a fresh install
+              // usable before the first generation has run.
+              return createSchemaAwareInertiaApp(options);
+            }
+          }
+
+          export const createInertiaApp = createInertiaAppWithSchemas as typeof createSchemaAwareInertiaApp;
+          """
+        else
+          """
+          export { createInertiaApp } from '@nordbeam/nb-inertia/react/createInertiaApp';
+          """
+        end
+
+      page_props_export =
+        if zod_enabled do
+          """
+          import { createUsePageProps as createTypedUsePageProps } from '@nordbeam/nb-inertia/react/usePageProps';
+          import type { Pages } from '@/types/pages';
+
+          /** Page-scoped props inferred from the generated component map. */
+          export const usePageProps = createTypedUsePageProps<Pages>();
+          export {
+            createUsePageProps,
+            PagePropsComponentMismatchError
+          } from '@nordbeam/nb-inertia/react/usePageProps';
+          """
+        else
+          """
+          export {
+            createUsePageProps,
+            usePageProps,
+            PagePropsComponentMismatchError
+          } from '@nordbeam/nb-inertia/react/usePageProps';
+          """
+        end
+
       """
       // Enhanced Inertia.js integration with nb_routes support (React)
       //
@@ -2451,7 +2643,42 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));           // Works with RouteResult objects
       //   <Link href={user_path(1)}>User</Link> // Works with RouteResult objects
 
+      #{create_app_export}
       export { router } from '@nordbeam/nb-inertia/react/router';
+      // The adapter entrypoint lazy-loads page-schema decoding only when a
+      // registry is configured. This keeps disabled production bundles free
+      // of the optional validation runtime.
+      export {
+        clearPageSchemaRuntimeConfig,
+        configurePageSchemaRuntime,
+        getPageSchemaRuntimeConfig
+      } from '@nordbeam/nb-inertia/react/createInertiaApp';
+      #{page_props_export}
+      export type {
+        PageMap,
+        PagePropsHookOptions,
+        PagePropsMismatch,
+        PageSnapshotLike,
+        UsePageProps
+      } from '@nordbeam/nb-inertia/react/usePageProps';
+      export type {
+        PagePropSchema,
+        PageSchema,
+        PageSchemaValue,
+        PageSchemaAppOptions,
+        PageSchemaRegistry,
+        PageSchemaRegistryLike,
+        PageSchemaRuntimeOptions,
+        SchemaFailure,
+        SchemaFailureResult,
+        SchemaFailureReporter,
+        SchemaParser,
+        SchemaResult,
+        SchemaSuccess,
+        SchemaRuntime,
+        SchemaRuntimeMode,
+        SchemaRuntimePhase
+      } from '@nordbeam/nb-inertia/shared/schemaRuntime';
       export { Link } from '@inertiajs/react';
       export { useForm } from '@nordbeam/nb-inertia/react/useForm';
       export { useHttp } from '@nordbeam/nb-inertia/react/useHttp';
@@ -2486,7 +2713,57 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    defp lib_inertia_vue_content() do
+    defp lib_inertia_vue_content(zod_enabled) do
+      create_app_export =
+        if zod_enabled do
+          """
+          import { createInertiaApp as createSchemaAwareInertiaApp } from '@nordbeam/nb-inertia/vue/createInertiaApp';
+
+          /** The generated registry is development-only; see the React template. */
+          export async function createInertiaApp(options: Record<string, unknown> = {}) {
+            if (!import.meta.env.DEV) return createSchemaAwareInertiaApp(options);
+
+            try {
+              const { pageSchemaRegistry } = await import('@/types/pages');
+              return createSchemaAwareInertiaApp({
+                ...options,
+                pageSchemas: pageSchemaRegistry,
+                schemaRuntime: { mode: 'throw', registry: pageSchemaRegistry },
+              });
+            } catch (_error) {
+              return createSchemaAwareInertiaApp(options);
+            }
+          }
+          """
+        else
+          """
+          export { createInertiaApp } from '@nordbeam/nb-inertia/vue/createInertiaApp';
+          """
+        end
+
+      page_props_export =
+        if zod_enabled do
+          """
+          import { createUsePageProps as createTypedUsePageProps } from '@nordbeam/nb-inertia/vue/usePageProps';
+          import type { Pages } from '@/types/pages';
+
+          /** Page-scoped props inferred from the generated component map. */
+          export const usePageProps = createTypedUsePageProps<Pages>();
+          export {
+            createUsePageProps,
+            PagePropsComponentMismatchError
+          } from '@nordbeam/nb-inertia/vue/usePageProps';
+          """
+        else
+          """
+          export {
+            createUsePageProps,
+            usePageProps,
+            PagePropsComponentMismatchError
+          } from '@nordbeam/nb-inertia/vue/usePageProps';
+          """
+        end
+
       """
       // Enhanced Inertia.js integration with nb_routes support (Vue)
       //
@@ -2501,7 +2778,42 @@ if Code.ensure_loaded?(Igniter) do
       //   router.visit(user_path(1));              // Works with RouteResult objects
       //   <Link :href="user_path(1)">User</Link>   // Works with RouteResult objects
 
+      #{create_app_export}
       export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
+      // The adapter entrypoint lazy-loads page-schema decoding only when a
+      // registry is configured. This keeps disabled production bundles free
+      // of the optional validation runtime.
+      export {
+        clearPageSchemaRuntimeConfig,
+        configurePageSchemaRuntime,
+        getPageSchemaRuntimeConfig
+      } from '@nordbeam/nb-inertia/vue/createInertiaApp';
+      #{page_props_export}
+      export type {
+        PageMap,
+        PagePropsHookOptions,
+        PagePropsMismatch,
+        PageSnapshotLike,
+        UsePageProps
+      } from '@nordbeam/nb-inertia/vue/usePageProps';
+      export type {
+        PagePropSchema,
+        PageSchema,
+        PageSchemaValue,
+        PageSchemaAppOptions,
+        PageSchemaRegistry,
+        PageSchemaRegistryLike,
+        PageSchemaRuntimeOptions,
+        SchemaFailure,
+        SchemaFailureResult,
+        SchemaFailureReporter,
+        SchemaParser,
+        SchemaResult,
+        SchemaSuccess,
+        SchemaRuntime,
+        SchemaRuntimeMode,
+        SchemaRuntimePhase
+      } from '@nordbeam/nb-inertia/shared/schemaRuntime';
       export { useHttp } from '@nordbeam/nb-inertia/vue/useHttp';
       export { usePage } from '@nordbeam/nb-inertia/vue/usePage';
       export { default as Head } from '@nordbeam/nb-inertia/vue/Head';
@@ -2564,11 +2876,20 @@ if Code.ensure_loaded?(Igniter) do
       full_install = igniter.args.options[:full] || false
       client_framework = igniter.args.options[:client_framework]
       typescript = igniter.args.options[:typescript] || false
+      zod = typescript && (igniter.args.options[:zod] || false)
+
+      zod_info =
+        if zod,
+          do:
+            "- Enabled Zod 4 page schemas and DEV-only page registry wiring in assets/js/lib/inertia.ts",
+          else: ""
+
       camelize_props = igniter.args.options[:camelize_props] || false
       history_encrypt = igniter.args.options[:history_encrypt] || false
       ssr_enabled = igniter.args.options[:ssr] || false
       with_flop = igniter.args.options[:with_flop] || false
       using_vite = using_nb_vite?(igniter)
+      using_vite_plus_runtime = using_vite_plus?(igniter)
       using_bun_runtime = using_bun?(igniter)
       pkg_manager = get_package_manager_command(igniter)
 
@@ -2590,7 +2911,14 @@ if Code.ensure_loaded?(Igniter) do
 
       bundler_info =
         if using_vite do
-          "- Using nb_vite for asset bundling (with #{if using_bun_runtime, do: "Bun", else: "Node.js"})"
+          runtime =
+            cond do
+              using_vite_plus_runtime -> "Vite+ (`vp`)"
+              using_bun_runtime -> "Bun"
+              true -> "Node.js"
+            end
+
+          "- Using nb_vite for asset bundling with #{runtime}"
         else
           "- Configured esbuild for code splitting"
         end
@@ -2630,6 +2958,7 @@ if Code.ensure_loaded?(Igniter) do
           - Will generate TypeScript interfaces for:
             • NbSerializer serializers
             • Inertia page props
+          #{zod_info}
 
           NOTE: Type generation is manual. Run 'mix ts.gen' after making changes to keep types in sync.
           """
@@ -2647,8 +2976,7 @@ if Code.ensure_loaded?(Igniter) do
           - Copied React components to assets/js/components/flop/
           - Installed @tanstack/react-table
 
-          Prerequisites for Flop components (shadcn/ui):
-              npx shadcn@latest add button badge popover dropdown-menu command input
+          The stack installer initializes shadcn/ui and installs the Flop UI dependencies.
 
           Usage:
           1. Add @derive Flop.Schema to your Ecto schemas
@@ -2713,7 +3041,7 @@ if Code.ensure_loaded?(Igniter) do
           Modal Components (shadcn/ui):
           - Copied ModalStackRenderer to assets/js/components/modals/
           - Uses shadcn Dialog (modals) and Sheet (slideovers)
-          - Prerequisites: npx shadcn@latest add dialog sheet
+          - The stack installer adds the required Dialog and Sheet components
           - Customize the renderer to match your app's design
 
           To enable modals, wrap your app:
@@ -2756,7 +3084,7 @@ if Code.ensure_loaded?(Igniter) do
             compatibility with standard Inertia.js usage.
 
             Modal Components (Vue):
-            - Modal components are delivered via @nordbeam/nb-inertia/vue/modals (npm package)
+            - Modal components are delivered via the GitHub-installed @nordbeam/nb-inertia/vue/modals package
             - No local file copy required — components are imported directly from the package
             - Available: Modal, HeadlessModal, ModalLink, SlideoverContent, CloseButton, createModalStack
             - radix-vue is installed automatically as a peer dependency (required by modal components)
@@ -2930,7 +3258,7 @@ else
 
       Add to your mix.exs for direct task usage:
 
-          {:igniter, "~> 0.7", only: [:dev, :test]}
+          {:igniter, "~> 0.8", only: [:dev, :test]}
 
       Or install Igniter first and use the preferred installer flow:
 

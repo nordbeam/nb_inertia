@@ -66,44 +66,51 @@ defmodule NbInertia.Controller do
 
   @doc false
   defmacro __using__(_opts) do
-    quote do
-      import NbInertia.Controller
-      import NbInertia.Type
-
-      # Import NbInertia.CoreController functions except those we override
-      import NbInertia.CoreController,
-        except: [
-          render_inertia: 2,
-          render_inertia: 3,
-          render_inertia: 4
-        ]
-
-      # Import flash helpers
-      import NbInertia.Flash, only: [inertia_flash: 2, inertia_flash: 3]
-
-      Module.register_attribute(__MODULE__, :inertia_pages, accumulate: false)
-      Module.register_attribute(__MODULE__, :inertia_shared, accumulate: false)
-      Module.register_attribute(__MODULE__, :inertia_shared_modules, accumulate: true)
-      Module.register_attribute(__MODULE__, :current_page, accumulate: false)
-      Module.register_attribute(__MODULE__, :current_props, accumulate: true)
-
-      # Form inputs tracking for TypeScript generation
-      Module.register_attribute(__MODULE__, :current_page_forms, accumulate: false)
-      Module.register_attribute(__MODULE__, :current_form_name, accumulate: false)
-      Module.register_attribute(__MODULE__, :current_form_fields, accumulate: true)
-
-      Module.put_attribute(__MODULE__, :inertia_pages, %{})
-      Module.put_attribute(__MODULE__, :inertia_shared, [])
-      Module.put_attribute(__MODULE__, :current_page_forms, %{})
-
-      # Optional: Register compile hook for NbTs type generation
-      # This enables real-time TypeScript type regeneration when controllers are recompiled
-      # Only activates if nb_ts is installed (it's an optional dependency)
-      if Code.ensure_loaded?(NbTs.CompileHooks) do
-        @after_compile {NbTs.CompileHooks, :__after_compile__}
+    if Module.get_attribute(__CALLER__.module, :nb_inertia_controller_used) do
+      quote do
       end
+    else
+      Module.put_attribute(__CALLER__.module, :nb_inertia_controller_used, true)
 
-      @before_compile NbInertia.Controller
+      quote do
+        import NbInertia.Controller
+        import NbInertia.Type
+
+        # Import NbInertia.CoreController functions except those we override
+        import NbInertia.CoreController,
+          except: [
+            render_inertia: 2,
+            render_inertia: 3,
+            render_inertia: 4
+          ]
+
+        # Import flash helpers
+        import NbInertia.Flash, only: [inertia_flash: 2, inertia_flash: 3]
+
+        Module.register_attribute(__MODULE__, :inertia_pages, accumulate: false)
+        Module.register_attribute(__MODULE__, :inertia_shared, accumulate: false)
+        Module.register_attribute(__MODULE__, :inertia_shared_modules, accumulate: true)
+        Module.register_attribute(__MODULE__, :current_page, accumulate: false)
+        Module.register_attribute(__MODULE__, :current_props, accumulate: true)
+
+        # Form inputs tracking for TypeScript generation
+        Module.register_attribute(__MODULE__, :current_page_forms, accumulate: false)
+        Module.register_attribute(__MODULE__, :current_form_name, accumulate: false)
+        Module.register_attribute(__MODULE__, :current_form_fields, accumulate: true)
+
+        Module.put_attribute(__MODULE__, :inertia_pages, %{})
+        Module.put_attribute(__MODULE__, :inertia_shared, [])
+        Module.put_attribute(__MODULE__, :current_page_forms, %{})
+
+        # Optional: Register compile hook for NbTs type generation
+        # This enables real-time TypeScript type regeneration when controllers are recompiled
+        # Only activates if nb_ts is installed (it's an optional dependency)
+        if Code.ensure_loaded?(NbTs.CompileHooks) do
+          @after_compile {NbTs.CompileHooks, :__after_compile__}
+        end
+
+        @before_compile NbInertia.Controller
+      end
     end
   end
 
@@ -1111,11 +1118,7 @@ defmodule NbInertia.Controller do
 
       # Build a map of prop name -> DSL opts for quick lookup
       # inertia_page_config returns nil for undeclared pages
-      page_prop_configs =
-        case inertia_page_config(page_ref) do
-          nil -> []
-          page_config -> page_config.props
-        end
+      page_prop_configs = NbInertia.Controller.page_prop_configs(__MODULE__, page_ref)
 
       {props_map, saved_errors} =
         NbInertia.Controller.prepare_page_props_for_render(
@@ -1239,11 +1242,7 @@ defmodule NbInertia.Controller do
           shared_modules = __MODULE__.__inertia_shared_modules__()
           inline_shared_configs = __MODULE__.inertia_shared_props()
 
-          page_prop_configs =
-            case inertia_page_config(page_ref) do
-              nil -> []
-              page_config -> page_config.props
-            end
+          page_prop_configs = NbInertia.Controller.page_prop_configs(__MODULE__, page_ref)
 
           {props_map, saved_errors} =
             NbInertia.Controller.prepare_page_props_for_render(
@@ -1374,11 +1373,7 @@ defmodule NbInertia.Controller do
 
       # Build a map of prop name -> DSL opts for quick lookup
       # inertia_page_config returns nil for undeclared pages
-      page_prop_configs =
-        case inertia_page_config(page_ref) do
-          nil -> []
-          page_config -> page_config.props
-        end
+      page_prop_configs = NbInertia.Controller.page_prop_configs(__MODULE__, page_ref)
 
       {props_map, saved_errors} =
         NbInertia.Controller.prepare_page_props_for_render(
@@ -1901,6 +1896,14 @@ defmodule NbInertia.Controller do
       ":#{name}"
     else
       inspect(name)
+    end
+  end
+
+  @doc false
+  def page_prop_configs(module, page_ref) do
+    case module.inertia_page_config(page_ref) do
+      nil -> []
+      page_config -> page_config.props
     end
   end
 

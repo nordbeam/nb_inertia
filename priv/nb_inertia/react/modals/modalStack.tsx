@@ -44,7 +44,6 @@ import { router } from '@inertiajs/react';
 import { routerPrefetch } from '../../shared/routerCompat';
 import { isRouteResult, type RouteResult } from '../../shared/types';
 import type {
-  ModalConfig,
   ModalInstance,
   ModalVisitOptions,
   ModalStackContextValue,

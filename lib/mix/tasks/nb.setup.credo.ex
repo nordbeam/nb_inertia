@@ -467,7 +467,7 @@ defmodule Mix.Tasks.Nb.Setup.Credo do
   defp missing_custom_check_modules?(desired_checks) do
     Enum.any?(desired_checks, fn entry ->
       case check_module(entry) do
-        module when is_atom(module) -> not Code.ensure_loaded?(module)
+        module when is_atom(module) and not is_nil(module) -> not Code.ensure_loaded?(module)
         _ -> false
       end
     end)

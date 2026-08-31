@@ -45,7 +45,7 @@ defmodule NbInertia.MixProject do
 
   defp deps do
     [
-      {:igniter, "~> 0.7", optional: true},
+      {:igniter, "~> 0.8", optional: true},
       # Required dependencies
       {:phoenix, "~> 1.7"},
       {:phoenix_html, "~> 4.0"},
@@ -58,7 +58,7 @@ defmodule NbInertia.MixProject do
 
       # Development and test dependencies
       {:wallaby, "~> 0.30", optional: true},
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
       {:credo, "~> 1.7", optional: true, runtime: false},
       {:stream_data, "~> 1.0", only: [:test, :dev]},
@@ -91,7 +91,8 @@ defmodule NbInertia.MixProject do
       main: "readme",
       extras: [
         "README.md",
-        "docs/performance.md"
+        "docs/performance.md",
+        "docs/page-schema-runtime.md"
       ],
       source_ref: "v#{@version}",
       formatters: ["html"],

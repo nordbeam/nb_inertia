@@ -7,19 +7,93 @@ on:
     branches: [ main, master ]
 
 jobs:
+  javascript:
+    name: JavaScript (Vite+)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Vite+
+      uses: voidzero-dev/setup-vp@v1.18.0
+      with:
+        cache: true
+        run-install: true
+
+    - name: Install React adapter dependencies
+      run: vp install
+      working-directory: priv/nb_inertia/react
+
+    - name: Install Vue adapter dependencies
+      run: vp install
+      working-directory: priv/nb_inertia/vue
+
+    - name: Build library
+      run: vp build
+
+    - name: Verify GitHub-installable package layout
+      run: |
+        node --input-type=module <<'NODE'
+          import { execFileSync } from "node:child_process";
+          import fs from "node:fs";
+
+          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const requiredFiles = [
+            "dist/react/useForm.js",
+            "dist/react/useForm.d.ts",
+            "priv/nb_inertia/vue/modals/index.d.ts",
+          ];
+
+          if (packageJson.repository?.url !== "git+https://github.com/nordbeam/nb_inertia.git") {
+            throw new Error("package.json must point GitHub installs at nordbeam/nb_inertia");
+          }
+          if (packageJson.private !== true) {
+            throw new Error("package.json must be private; install the package from GitHub");
+          }
+
+          const packInfo = JSON.parse(
+            execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
+              encoding: "utf8",
+            }),
+          )[0];
+          const packedFiles = new Set(packInfo.files.map(({ path }) => path));
+
+          for (const [exportName, exportSpec] of Object.entries(packageJson.exports)) {
+            for (const field of ["import", "types"]) {
+              const target = exportSpec[field];
+              if (typeof target !== "string") continue;
+              if (!packedFiles.has(target.slice(2))) {
+                throw new Error(`${exportName} target is not packed: ${target}`);
+              }
+            }
+          }
+
+          for (const file of requiredFiles) {
+            if (!fs.existsSync(file)) throw new Error(`Missing package file: ${file}`);
+          }
+        NODE
+
+    - name: Test React adapter
+      run: vp test run
+      working-directory: priv/nb_inertia/react
+
+    - name: Test Vue adapter
+      run: vp test run
+      working-directory: priv/nb_inertia/vue
+
   test:
     name: Test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        elixir: ['1.15', '1.16', '1.17', '1.18']
-        otp: ['25', '26', '27']
-        exclude:
+        include:
           - elixir: '1.15'
-            otp: '27'
+            otp: '25'
+          - elixir: '1.20'
+            otp: '29'
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Elixir
       uses: erlef/setup-beam@v1
@@ -28,7 +102,7 @@ jobs:
         otp-version: ${{ matrix.otp }}
 
     - name: Restore dependencies cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           deps
@@ -48,34 +122,38 @@ jobs:
 
     - name: Run performance gate
       run: mix nb_inertia.perf_gate
-      if: matrix.elixir == '1.18' && matrix.otp == '27'
+      if: matrix.elixir == '1.20' && matrix.otp == '29'
 
     - name: Check formatting
       run: mix format --check-formatted
-      if: matrix.elixir == '1.18' && matrix.otp == '27'
+      if: matrix.elixir == '1.20' && matrix.otp == '29'
+
+    - name: Run Credo
+      run: mix credo --strict
+      if: matrix.elixir == '1.20' && matrix.otp == '29'
 
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Elixir
       uses: erlef/setup-beam@v1
       with:
-        elixir-version: '1.18'
-        otp-version: '27'
+        elixir-version: '1.20'
+        otp-version: '29'
 
     - name: Restore dependencies cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           deps
           _build
-        key: ${{ runner.os }}-mix-27-1.18-${{ hashFiles('**/mix.lock') }}
+        key: ${{ runner.os }}-mix-29-1.20-${{ hashFiles('**/mix.lock') }}
         restore-keys: |
-          ${{ runner.os }}-mix-27-1.18-
+          ${{ runner.os }}-mix-29-1.20-
 
     - name: Install dependencies
       run: mix deps.get
@@ -86,7 +164,7 @@ jobs:
         MIX_ENV: test
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       with:
         files: ./cover/excoveralls.json
         flags: nb_inertia

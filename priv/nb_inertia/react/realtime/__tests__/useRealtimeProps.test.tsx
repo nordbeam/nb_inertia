@@ -5,12 +5,28 @@
  * syncs with server props on navigation, and provides prop update methods.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { renderHook, act } from '@testing-library/react';
+import type { PageProps } from '@inertiajs/core';
 import { useRealtimeProps } from '../useRealtimeProps';
 
+type Message = { id: number; content: string };
+type Room = { id: number; name: string };
+type Notification = { id: number; text: string };
+type TypingUser = { id: number; name: string };
+type MockServerProps = PageProps & {
+  messages: Message[];
+  room: Room;
+  unreadCount?: number;
+  notifications?: Notification[];
+  typingUsers?: TypingUser[];
+};
+
 // Mock Inertia usePage
-let mockServerProps = { messages: [], room: { id: 1, name: 'Test Room' } };
+let mockServerProps: MockServerProps = {
+  messages: [],
+  room: { id: 1, name: 'Test Room' },
+};
 
 vi.mock('@inertiajs/react', () => ({
   usePage: vi.fn(() => ({ props: mockServerProps })),
@@ -25,18 +41,34 @@ vi.mock('@inertiajs/react', () => ({
 describe('useRealtimeProps Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockServerProps = { messages: [], room: { id: 1, name: 'Test Room' } };
+    mockServerProps = {
+      messages: [],
+      room: { id: 1, name: 'Test Room' },
+    };
   });
 
   describe('props access', () => {
     it('returns server props initially', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       expect(result.current.props).toEqual(mockServerProps);
     });
 
+    it('uses runtime-decoded initial props when provided', () => {
+      const initialProps: MockServerProps = {
+        messages: [{ id: 1, content: 'Decoded' }],
+        room: { id: 2, name: 'Runtime Room' },
+      };
+
+      const { result } = renderHook(() =>
+        useRealtimeProps<MockServerProps>({ initialProps }),
+      );
+
+      expect(result.current.props).toEqual(initialProps);
+    });
+
     it('merges optimistic updates with server props', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProp('messages', [{ id: 1, content: 'Hello' }]);
@@ -49,7 +81,7 @@ describe('useRealtimeProps Hook', () => {
 
   describe('setProp', () => {
     it('updates prop with direct value', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProp('messages', [{ id: 1, content: 'Hello' }]);
@@ -61,7 +93,7 @@ describe('useRealtimeProps Hook', () => {
     it('updates prop with updater function', () => {
       mockServerProps = { messages: [{ id: 1, content: 'First' }], room: { id: 1, name: 'Test' } };
 
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProp('messages', (msgs: any[]) => [...msgs, { id: 2, content: 'Second' }]);
@@ -74,7 +106,7 @@ describe('useRealtimeProps Hook', () => {
     });
 
     it('handles multiple sequential updates', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProp('messages', [{ id: 1, content: 'First' }]);
@@ -92,7 +124,7 @@ describe('useRealtimeProps Hook', () => {
     });
 
     it('uses latest server props in updater function', () => {
-      const { result, rerender } = renderHook(() => useRealtimeProps());
+      const { result, rerender } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       // Add optimistic update
       act(() => {
@@ -112,7 +144,7 @@ describe('useRealtimeProps Hook', () => {
 
   describe('setProps', () => {
     it('updates multiple props with object', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProps({
@@ -128,7 +160,7 @@ describe('useRealtimeProps Hook', () => {
     it('updates multiple props with updater function', () => {
       mockServerProps = { messages: [{ id: 1, content: 'First' }], room: { id: 1, name: 'Test' } };
 
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProps((current) => ({
@@ -147,13 +179,13 @@ describe('useRealtimeProps Hook', () => {
 
   describe('hasOptimisticUpdates', () => {
     it('is false initially', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       expect(result.current.hasOptimisticUpdates).toBe(false);
     });
 
     it('is true after setProp', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProp('messages', [{ id: 1, content: 'Hello' }]);
@@ -163,7 +195,7 @@ describe('useRealtimeProps Hook', () => {
     });
 
     it('is true after setProps', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProps({ messages: [] });
@@ -175,7 +207,7 @@ describe('useRealtimeProps Hook', () => {
 
   describe('resetOptimistic', () => {
     it('clears optimistic updates', () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProp('messages', [{ id: 1, content: 'Hello' }]);
@@ -195,7 +227,7 @@ describe('useRealtimeProps Hook', () => {
   describe('reload', () => {
     it('calls router.reload', async () => {
       const { router } = await import('@inertiajs/react');
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.reload();
@@ -206,7 +238,7 @@ describe('useRealtimeProps Hook', () => {
 
     it('passes only option to router.reload', async () => {
       const { router } = await import('@inertiajs/react');
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.reload({ only: ['messages'] });
@@ -220,7 +252,7 @@ describe('useRealtimeProps Hook', () => {
     });
 
     it('resets optimistic state on success', async () => {
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       act(() => {
         result.current.setProp('messages', [{ id: 1, content: 'Optimistic' }]);
@@ -238,7 +270,7 @@ describe('useRealtimeProps Hook', () => {
 
   describe('server props sync', () => {
     it('resets optimistic state when server props change', () => {
-      const { result, rerender } = renderHook(() => useRealtimeProps());
+      const { result, rerender } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       // Add optimistic update
       act(() => {
@@ -258,11 +290,11 @@ describe('useRealtimeProps Hook', () => {
   });
 
   describe('type safety', () => {
-    interface TestProps {
+    type TestProps = PageProps & {
       messages: { id: number; content: string }[];
       room: { id: number; name: string };
       count?: number;
-    }
+    };
 
     it('provides typed props access', () => {
       const { result } = renderHook(() => useRealtimeProps<TestProps>());
@@ -290,7 +322,7 @@ describe('useRealtimeProps Hook', () => {
     it('handles chat message append pattern', () => {
       mockServerProps = { messages: [{ id: 1, content: 'First' }], room: { id: 1, name: 'Test' } };
 
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       // Simulate receiving multiple messages via WebSocket
       act(() => {
@@ -310,9 +342,14 @@ describe('useRealtimeProps Hook', () => {
     });
 
     it('handles notification badge pattern', () => {
-      mockServerProps = { unreadCount: 0, notifications: [] };
+      mockServerProps = {
+        messages: [],
+        room: { id: 1, name: 'Test Room' },
+        unreadCount: 0,
+        notifications: [],
+      };
 
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       // Simulate new notification
       act(() => {
@@ -327,9 +364,13 @@ describe('useRealtimeProps Hook', () => {
     });
 
     it('handles typing indicator pattern', () => {
-      mockServerProps = { typingUsers: [], messages: [] };
+      mockServerProps = {
+        messages: [],
+        room: { id: 1, name: 'Test Room' },
+        typingUsers: [],
+      };
 
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       // User starts typing
       act(() => {
@@ -340,7 +381,10 @@ describe('useRealtimeProps Hook', () => {
 
       // Another user starts typing
       act(() => {
-        result.current.setProp('typingUsers', (users: any[]) => [...users, { id: 2, name: 'Bob' }]);
+        result.current.setProp(
+          'typingUsers',
+          (users: TypingUser[] = []) => [...users, { id: 2, name: 'Bob' }]
+        );
       });
 
       expect(result.current.props.typingUsers).toHaveLength(2);
@@ -363,7 +407,7 @@ describe('useRealtimeProps Hook', () => {
         room: { id: 1, name: 'Test' },
       };
 
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       // Delete message with id 2
       act(() => {
@@ -385,7 +429,7 @@ describe('useRealtimeProps Hook', () => {
         room: { id: 1, name: 'Test' },
       };
 
-      const { result } = renderHook(() => useRealtimeProps());
+      const { result } = renderHook(() => useRealtimeProps<MockServerProps>());
 
       // Update message with id 1
       act(() => {

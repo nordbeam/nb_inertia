@@ -19,7 +19,6 @@
 
 import { ref, readonly, inject, type InjectionKey } from 'vue';
 import type {
-  ModalConfig,
   ModalEventType,
   ModalEventHandler,
   ModalInstance,

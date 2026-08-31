@@ -141,8 +141,6 @@ if Code.ensure_loaded?(Credo.Check) do
       end)
     end
 
-    defp find_assigns_access(_), do: []
-
     # Recursively check if AST contains conn.assigns access
     defp contains_assigns_access?({{:., _, [{:conn, _, nil}, :assigns]}, _, _}), do: true
 

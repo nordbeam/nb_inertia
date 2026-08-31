@@ -67,7 +67,7 @@ var d = ({ renderModal: n, backdropClassName: s = "fixed inset-0 bg-black/50", w
 				onClose: m,
 				children: () => n ? n(h) : /* @__PURE__ */ o(u, {
 					...h,
-					backdropClassName: p.backdropClasses ? `${s} ${p.backdropClasses}` : s,
+					backdropClassName: typeof p.backdropClasses == "string" ? `${s} ${p.backdropClasses}` : s,
 					wrapperClassName: c
 				})
 			})

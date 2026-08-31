@@ -121,8 +121,6 @@ if Code.ensure_loaded?(Credo.Check) do
       end)
     end
 
-    defp has_base_url?(_), do: false
-
     defp issue_for(issue_meta, line_no) do
       format_issue(
         issue_meta,

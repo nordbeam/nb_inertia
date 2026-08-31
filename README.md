@@ -9,6 +9,7 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 - **Shared Props**: Define props shared across all pages (inline or as dedicated modules)
 - **Flash Data**: One-time data that doesn't persist in browser history (Inertia v2.3.3+ compatible)
 - **Type Safety**: Runtime default/assign materialization plus dev/test page prop validation
+- **Client Page Contracts**: Optional nb_ts page-schema decoding at Inertia's lifecycle boundary
 - **Server-Side Rendering**: Built-in SSR support with DenoRider (Deno-based)
 - **NbSerializer Integration**: Optional automatic serialization for high-performance JSON
 - **Flexible Rendering**: Support for both all-in-one and pipe-friendly patterns
@@ -108,6 +109,19 @@ Run:
 ```bash
 mix deps.get
 ```
+
+The installer obtains the first-party JavaScript package from the same GitHub
+repository (the package keeps `@nordbeam/nb-inertia` as its import name):
+
+```bash
+cd assets
+vp add github:nordbeam/nb_inertia
+```
+
+The repository root is the JavaScript package root and includes the built `dist/`
+artifacts plus the Vue source entrypoints, so the GitHub shorthand works with
+Vite+, npm, pnpm, Yarn, and Bun. Third-party dependencies such as Inertia,
+React, Vue, and Radix remain registry packages.
 
 ## Quick Start Guide
 
@@ -626,6 +640,39 @@ render_inertia_page(conn, :users_show, user: user)
 - `lazy: true` props are resolved lazily but still participate in the initial page visit, so they stay required in generated TypeScript.
 - `partial: true` props are omitted from the initial payload unless explicitly requested in a partial reload, so they become optional in generated TypeScript.
 - `defer: true` props are omitted from the initial payload and loaded after the first render, so they also become optional in generated TypeScript.
+
+### Client Page-schema Runtime (with NbTs)
+
+When `nb_ts` emits a page-schema registry, pass it to the installer-generated
+`createInertiaApp` wrapper to validate and decode props before Inertia commits a
+page. With `--typescript --zod`, the installer wires `pageSchemaRegistry` from
+`@/types/pages` into the development path automatically; the `import.meta.env.DEV`
+guard lets production tree-shake generated schemas and Zod. The runtime covers
+initial/SSR props, navigation, partial and deferred reloads, history
+restoration, instant visits, prefetched modal data, and nested modal props. See
+the dedicated [page-schema runtime guide](docs/page-schema-runtime.md) for the
+registry contract, failure policies, and structural-sharing behavior.
+
+```ts
+import { createInertiaApp } from '@/lib/inertia';
+import { pageSchemaRegistry } from '@/types/pages';
+
+createInertiaApp({
+  pageSchemas: pageSchemaRegistry,
+  schemaRuntime: { mode: import.meta.env.DEV ? 'throw' : 'report' },
+  // ...normal Inertia options
+});
+```
+
+`throw` is the development default and integrates with the Vite error overlay;
+production defaults to `off` unless `report` or `throw` is selected. Validation
+and decode/transform failures are reported separately, and report mode never
+passes a failed transform's original wire value through to a page.
+
+For typed page access, bind the generated map once with
+`createUsePageProps<Pages>()` from the React or Vue adapter. The resulting
+`usePageProps('Users/Index')` reads official Inertia `usePage()` props and
+performs a development-only component-name check without reparsing.
 
 ### Once Props
 
@@ -2142,7 +2189,7 @@ The Vue modal components use `radix-vue` for accessible dialog primitives:
 
 ```bash
 cd assets
-npm install radix-vue
+vp add radix-vue
 ```
 
 The React modal system is hook-first and has no required UI library dependency — you bring your own UI (Radix, shadcn, etc.) and use `useModalStack` to drive it.

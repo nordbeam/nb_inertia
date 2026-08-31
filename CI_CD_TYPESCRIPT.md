@@ -172,7 +172,7 @@ jobs:
   },
   "husky": {
     "hooks": {
-      "pre-commit": "npm run types && git add assets/js/types/"
+      "pre-commit": "vp run types && git add assets/js/types/"
     }
   }
 }

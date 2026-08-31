@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { useForm, useFormWithPrecognition } from '../useForm';
 import type { RouteResult } from '../../shared/types';
 

@@ -24,7 +24,7 @@
 import { useMemo } from 'react';
 import { Socket } from 'phoenix';
 import { useChannel, type ChannelOptions, type EventHandlers } from './socket';
-import { useRealtimeProps, type UseRealtimePropsReturn, type ReloadOptions } from './useRealtimeProps';
+import { useRealtimeProps, type UseRealtimePropsReturn } from './useRealtimeProps';
 
 // ============================================================================
 // Types
@@ -140,7 +140,7 @@ export type EventConfig<TProps extends Record<string, unknown>, TEvent> =
  */
 export type EventConfigs<
   TProps extends Record<string, unknown>,
-  TEvents extends Record<string, unknown>
+  TEvents extends object
 > = {
   [K in keyof TEvents]?: EventConfig<TProps, TEvents[K]>;
 };
@@ -150,6 +150,12 @@ export type EventConfigs<
  */
 export interface UseChannelPropsReturn<T extends Record<string, unknown>>
   extends UseRealtimePropsReturn<T> {}
+
+export interface UseChannelPropsOptions<T extends Record<string, unknown>>
+  extends ChannelOptions {
+  /** Runtime-decoded props to seed optimistic updates. */
+  initialProps?: T;
+}
 
 // ============================================================================
 // useChannelProps Hook
@@ -248,15 +254,15 @@ export interface UseChannelPropsReturn<T extends Record<string, unknown>>
  */
 export function useChannelProps<
   TProps extends Record<string, unknown> = Record<string, unknown>,
-  TEvents extends Record<string, unknown> = Record<string, unknown>
+  TEvents extends object = Record<string, unknown>
 >(
   socket: Socket | null,
   topic: string,
   configs: EventConfigs<TProps, TEvents>,
-  options?: ChannelOptions
+  options?: UseChannelPropsOptions<TProps>
 ): UseChannelPropsReturn<TProps> {
   // Get props and update helpers
-  const realtimeProps = useRealtimeProps<TProps>();
+  const realtimeProps = useRealtimeProps<TProps>({ initialProps: options?.initialProps });
   const { props, setProp, setProps, reload } = realtimeProps;
 
   // Build event handlers from configs

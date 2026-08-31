@@ -33,9 +33,9 @@ function a(e) {
 function o(e, t) {
 	let n = a(t);
 	return n ? {
-		...e ?? {},
+		...e,
 		headers: {
-			...e?.headers ?? {},
+			...e?.headers,
 			"x-inertia-modal": "true",
 			"x-inertia-modal-base-url": n
 		}

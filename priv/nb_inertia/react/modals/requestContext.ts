@@ -91,9 +91,9 @@ export function mergeModalHeaders<
   }
 
   const merged = {
-    ...(options ?? {}),
+    ...options,
     headers: {
-      ...(options?.headers ?? {}),
+      ...options?.headers,
       'x-inertia-modal': 'true',
       'x-inertia-modal-base-url': baseUrl,
     },

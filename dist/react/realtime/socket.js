@@ -4,9 +4,7 @@ import { Channel as i, Presence as a, Socket as o } from "phoenix";
 function s(e, t = {}) {
 	return new o(e, {
 		params: t.params ?? (() => ({ _csrf_token: document.querySelector("meta[name=\"csrf-token\"]")?.content })),
-		logger: t.logger ?? ((e, t, n) => {
-			console.debug(`[socket:${e}]`, t, n);
-		}),
+		logger: t.logger ?? ((e, t, n) => {}),
 		reconnectAfterMs: t.reconnectAfterMs,
 		heartbeatIntervalMs: t.heartbeatIntervalMs
 	});
@@ -22,11 +20,11 @@ function c(e, r, i, a = {}) {
 				s.current[e]?.(t);
 			});
 		}), t.join().receive("ok", (e) => {
-			console.debug(`[channel] Joined ${r}`), a.onJoin?.(e);
+			a.onJoin?.(e);
 		}).receive("error", (e) => {
 			console.error(`[channel] Failed to join ${r}:`, e), a.onError?.(e);
 		}), t.onClose(() => {
-			console.debug(`[channel] Left ${r}`), a.onClose?.();
+			a.onClose?.();
 		}), () => {
 			t.leave(), o.current = null;
 		};
@@ -45,9 +43,7 @@ function l(n, i, o = {}) {
 		let e = n.channel(i, o.params), t = new a(e);
 		return t.onSync(() => {
 			c({ ...t.state }), o.onSync?.();
-		}), o.onJoin && t.onJoin(o.onJoin), o.onLeave && t.onLeave(o.onLeave), e.join().receive("ok", (e) => {
-			console.debug(`[presence] Joined ${i}`);
-		}).receive("error", (e) => {
+		}), o.onJoin && t.onJoin(o.onJoin), o.onLeave && t.onLeave(o.onLeave), e.join().receive("ok", () => {}).receive("error", (e) => {
 			console.error(`[presence] Failed to join ${i}:`, e), o.onError?.(e);
 		}), () => {
 			e.leave();

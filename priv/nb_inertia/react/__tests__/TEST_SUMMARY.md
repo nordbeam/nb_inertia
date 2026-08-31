@@ -143,19 +143,19 @@ Tests the enhanced useForm hook with optional route binding.
 ```bash
 # Install dependencies
 cd /Users/assim/Projects/nb/nb_inertia/priv/nb_inertia/react
-npm install
+vp install
 
 # Run all tests
 npm test
 
 # Watch mode (for development)
-npm run test:watch
+vp run test:watch
 
 # Generate coverage report
-npm run test:coverage
+vp run test:coverage
 
 # Interactive UI
-npm run test:ui
+vp run test:ui
 ```
 
 ## Test Stack
@@ -230,7 +230,7 @@ This test suite is ready for CI/CD integration:
   working-directory: priv/nb_inertia/react
 
 - name: Check coverage
-  run: npm run test:coverage -- --coverage.thresholds.lines=80
+  run: vp run test:coverage -- --coverage.thresholds.lines=80
   working-directory: priv/nb_inertia/react
 ```
 

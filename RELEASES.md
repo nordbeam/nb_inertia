@@ -79,10 +79,8 @@ end
 Build your client and SSR bundles:
 
 ```bash
-cd assets
-npm run build        # or: bun run build
-npm run build:ssr    # or: bun run build:ssr
-cd ..
+vp -C assets run build
+vp -C assets run build:ssr
 ```
 
 This creates:
@@ -242,8 +240,8 @@ config :nb_inertia,
 5. **Rebuild assets and release**:
 
    ```bash
-   cd assets && npm run build:ssr
-   cd .. && MIX_ENV=prod mix release --overwrite
+   vp -C assets run build:ssr
+   MIX_ENV=prod mix release --overwrite
    ```
 
 ### Issue: "Redefining module Inertia.SSR" Warning
@@ -296,7 +294,7 @@ When deploying with Docker, ensure:
 1. Your Dockerfile builds the SSR bundle:
 
    ```dockerfile
-   RUN cd assets && npm run build && npm run build:ssr
+   RUN vp -C assets run build && vp -C assets run build:ssr
    ```
 
 2. The priv directory is copied to the release:

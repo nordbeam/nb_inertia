@@ -4,11 +4,11 @@ import { RouteResult } from '../../shared/types';
 /**
  * Modal size presets and custom sizes
  */
-export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full' | string;
+export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full' | (string & {});
 /**
  * Modal position presets and custom positions
  */
-export type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | string;
+export type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | (string & {});
 /**
  * Configuration for a modal instance
  *

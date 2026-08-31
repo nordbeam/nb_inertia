@@ -115,6 +115,16 @@ When using the nb_inertia installer with Vue, these components are automatically
 mix nb_inertia.install --client-framework vue --typescript
 ```
 
+For a manual JavaScript setup, install the first-party package from GitHub:
+
+```bash
+cd assets
+vp add github:nordbeam/nb_inertia
+```
+
+The package is named `@nordbeam/nb-inertia` for imports, but is intentionally
+resolved from `github:nordbeam/nb_inertia` rather than the npm registry.
+
 The installer creates `assets/js/lib/inertia.ts` that re-exports these enhanced components:
 
 ```typescript
@@ -227,10 +237,10 @@ The components are fully tested using Vitest and Vue Test Utils:
 npm test
 
 # Run tests in watch mode
-npm run test:watch
+vp run test:watch
 
 # Run tests with coverage
-npm run test:coverage
+vp run test:coverage
 ```
 
 Test coverage includes:
@@ -254,7 +264,8 @@ All components maintain full backward compatibility with standard Inertia.js usa
 - **nb_routes**: Type-safe route helpers with rich mode support
 - **nb_inertia**: Declarative page DSL and type-safe props for Inertia.js
 - **nb_ts**: TypeScript type generation from Elixir serializers
-- **@nordbeam/nb-inertia**: NPM package containing these enhanced components
+- **@nordbeam/nb-inertia**: GitHub-installable package containing these enhanced components
+  (`github:nordbeam/nb_inertia`; the `@nordbeam/nb-inertia` name remains the import name)
 
 ## License
 

@@ -24,7 +24,7 @@ defmodule Mix.Tasks.NbInertia.Gen.Realtime.Docs do
 
     2. **Frontend:**
        - `assets/js/lib/socket.{ts,js}` - Socket setup with hooks
-       - Installs `phoenix` npm package for JavaScript client
+       - Installs the `phoenix` JavaScript client with the detected assets package manager
 
     ## Usage
 
@@ -197,17 +197,57 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    defp get_package_manager(_igniter) do
+    defp get_package_manager(igniter) do
       cond do
-        File.exists?("assets/bun.lockb") -> "bun"
-        File.exists?("assets/pnpm-lock.yaml") -> "pnpm"
-        File.exists?("assets/yarn.lock") -> "yarn"
-        File.exists?("assets/package-lock.json") -> "npm"
-        System.find_executable("bun") -> "bun"
-        System.find_executable("pnpm") -> "pnpm"
-        System.find_executable("yarn") -> "yarn"
-        true -> "npm"
+        vite_plus_project?(igniter) ->
+          "vp"
+
+        asset_file_exists?(igniter, "assets/bun.lock") or
+            asset_file_exists?(igniter, "assets/bun.lockb") ->
+          "bun"
+
+        asset_file_exists?(igniter, "assets/pnpm-lock.yaml") ->
+          "pnpm"
+
+        asset_file_exists?(igniter, "assets/yarn.lock") ->
+          "yarn"
+
+        asset_file_exists?(igniter, "assets/package-lock.json") ->
+          "npm"
+
+        System.find_executable("bun") ->
+          "bun"
+
+        System.find_executable("pnpm") ->
+          "pnpm"
+
+        System.find_executable("yarn") ->
+          "yarn"
+
+        true ->
+          "npm"
       end
+    end
+
+    defp vite_plus_project?(igniter) do
+      case package_json_content(igniter) do
+        {:ok, content} -> String.contains?(content, "\"vite-plus\"")
+        _ -> false
+      end
+    end
+
+    defp package_json_content(igniter) do
+      path = "assets/package.json"
+
+      if Rewrite.has_source?(igniter.rewrite, path) do
+        {:ok, igniter.rewrite |> Rewrite.source!(path) |> Rewrite.Source.get(:content)}
+      else
+        File.read(path)
+      end
+    end
+
+    defp asset_file_exists?(igniter, path) do
+      Rewrite.has_source?(igniter.rewrite, path) || File.exists?(path)
     end
 
     # ========================================================================
@@ -337,6 +377,7 @@ if Code.ensure_loaded?(Igniter) do
 
       install_cmd =
         case pkg_manager do
+          "vp" -> "vp -C #{assets_dir} add phoenix"
           "bun" -> "bun add --cwd #{assets_dir} phoenix"
           "pnpm" -> "pnpm add --dir #{assets_dir} phoenix"
           "yarn" -> "yarn --cwd #{assets_dir} add phoenix"
@@ -473,7 +514,7 @@ if Code.ensure_loaded?(Igniter) do
 
       2. **Frontend:**
          - assets/js/lib/socket.#{extension}
-         - Installed `phoenix` npm package
+         - Installed the `phoenix` JavaScript client
 
       ## Next Steps
 

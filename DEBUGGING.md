@@ -573,7 +573,7 @@ SSR script not found at: /path/to/priv/static/ssr.js
 **Solution:**
 ```bash
 cd assets
-npm run build:ssr  # or: bun run build:ssr
+vp run build:ssr
 ```
 
 **Verify:**
@@ -618,7 +618,7 @@ Available pages (5):
 **2. Import errors in SSR bundle:**
 ```bash
 # Build SSR bundle and check for errors
-npm run build:ssr
+vp run build:ssr
 
 # Look for:
 # - Missing imports

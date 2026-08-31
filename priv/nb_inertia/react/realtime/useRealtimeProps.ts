@@ -31,6 +31,11 @@ import { usePage, router } from '@inertiajs/react';
 
 export type ReloadOptions = InertiaReloadOptions;
 
+export interface UseRealtimePropsOptions<T extends PageProps> {
+  /** Runtime-decoded props to use instead of the raw Inertia page payload. */
+  initialProps?: T;
+}
+
 /**
  * Return type for useRealtimeProps hook
  */
@@ -109,9 +114,10 @@ export interface UseRealtimePropsReturn<T extends PageProps> {
  */
 export function useRealtimeProps<
   T extends PageProps = PageProps
->(): UseRealtimePropsReturn<T> {
+>(options: UseRealtimePropsOptions<T> = {}): UseRealtimePropsReturn<T> {
   // Get server props from Inertia
-  const serverProps = usePage<T>().props as unknown as T;
+  const inertiaProps = usePage<T>().props as unknown as T;
+  const serverProps = options.initialProps ?? inertiaProps;
 
   // Track optimistic updates separately
   const [optimistic, setOptimistic] = useState<Partial<T>>({});

@@ -128,9 +128,6 @@ defmodule NbInertia.Modal.Renderer do
 
       {:error, {:inject_failed, reason}} ->
         raise RuntimeError, "Failed to inject modal data into HTML: #{inspect(reason)}"
-
-      {:error, reason} ->
-        raise RuntimeError, "Failed to render modal: #{inspect(reason)}"
     end
   end
 

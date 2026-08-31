@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vite-plus/test';
 import { InitialModalHandler, ModalStackProvider, useModalStack } from '../modals';
 
 let pageProps: Record<string, unknown> = {};

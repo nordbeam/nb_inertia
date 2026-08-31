@@ -49,12 +49,6 @@ export { isRouteResult } from '../shared/types';
 type FormDataArgument<TForm> = TForm | (() => TForm);
 type RouteResolver = () => UrlMethodPair;
 type RouteLike = RouteResult | RouteResolver;
-type ReservedFormKeys = keyof InertiaForm<any>;
-type ValidateFormData<T> = {
-  [K in keyof T]: K extends ReservedFormKeys
-    ? ['Error: This field name is reserved by useForm:', K]
-    : T[K];
-};
 
 function isRouteLike(value: unknown): value is RouteLike {
   return typeof value === 'function' || isRouteResult(value);
@@ -68,14 +62,14 @@ export function useForm<TForm extends FormDataType<TForm>>(): InertiaForm<TForm>
 /**
  * Create standard form with inline or lazy initial data.
  */
-export function useForm<TForm extends FormDataType<TForm> & ValidateFormData<TForm>>(
+export function useForm<TForm extends FormDataType<TForm>>(
   data: FormDataArgument<TForm>
 ): InertiaForm<TForm>;
 
 /**
  * Create standard form with remember key support.
  */
-export function useForm<TForm extends FormDataType<TForm> & ValidateFormData<TForm>>(
+export function useForm<TForm extends FormDataType<TForm>>(
   rememberKey: string,
   data: FormDataArgument<TForm>
 ): InertiaForm<TForm>;
@@ -83,7 +77,7 @@ export function useForm<TForm extends FormDataType<TForm> & ValidateFormData<TFo
 /**
  * Create a precognitive form from explicit method, URL, and data.
  */
-export function useForm<TForm extends FormDataType<TForm> & ValidateFormData<TForm>>(
+export function useForm<TForm extends FormDataType<TForm>>(
   method: Method | (() => Method),
   url: string | (() => string),
   data: FormDataArgument<TForm>
@@ -92,7 +86,7 @@ export function useForm<TForm extends FormDataType<TForm> & ValidateFormData<TFo
 /**
  * Create a precognitive form from a route result or lazy route resolver.
  */
-export function useForm<TForm extends FormDataType<TForm> & ValidateFormData<TForm>>(
+export function useForm<TForm extends FormDataType<TForm>>(
   route: UrlMethodPair | RouteResolver,
   data: FormDataArgument<TForm>
 ): InertiaPrecognitiveForm<TForm>;
@@ -100,7 +94,7 @@ export function useForm<TForm extends FormDataType<TForm> & ValidateFormData<TFo
 /**
  * Convenience overload that preserves nb_inertia's historic data-first route binding API.
  */
-export function useForm<TForm extends FormDataType<TForm> & ValidateFormData<TForm>>(
+export function useForm<TForm extends FormDataType<TForm>>(
   data: FormDataArgument<TForm>,
   route: RouteLike
 ): InertiaPrecognitiveForm<TForm>;
@@ -164,7 +158,7 @@ export function useForm<TForm extends FormDataType<TForm>>(
  * );
  * ```
  */
-export function useFormWithPrecognition<TForm extends FormDataType<TForm> & ValidateFormData<TForm>>(
+export function useFormWithPrecognition<TForm extends FormDataType<TForm>>(
   data: FormDataArgument<TForm>,
   validationRoute: RouteResult,
   submitRoute?: RouteResult

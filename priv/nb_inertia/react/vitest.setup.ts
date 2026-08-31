@@ -4,7 +4,7 @@
  * This file is loaded before all tests to configure the test environment.
  */
 
-import { expect, afterEach } from 'vitest';
+import { expect, afterEach } from 'vite-plus/test';
 import { cleanup } from '@testing-library/react';
 import * as matchers from '@testing-library/jest-dom/matchers';
 

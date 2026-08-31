@@ -1,0 +1,4 @@
+interface:
+  display_name: "nb Inertia"
+  short_description: "Build typed Phoenix Inertia applications"
+  default_prompt: "Use $nb-inertia to configure or troubleshoot typed Inertia pages in my Phoenix app."

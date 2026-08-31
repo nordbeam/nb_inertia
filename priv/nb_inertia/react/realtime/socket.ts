@@ -36,7 +36,7 @@ export type EventHandler<T = unknown> = (payload: T) => void;
 /**
  * Map of event names to their handlers
  */
-export type EventHandlers<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type EventHandlers<T extends object = Record<string, unknown>> = {
   [K in keyof T]?: EventHandler<T[K]>;
 };
 
@@ -175,7 +175,7 @@ export function createSocket(endpoint: string, options: SocketOptions = {}): Soc
  *   enabled: isLoggedIn,
  * });
  */
-export function useChannel<TEvents extends Record<string, unknown> = Record<string, unknown>>(
+export function useChannel<TEvents extends object = Record<string, unknown>>(
   socket: Socket | null,
   topic: string,
   handlers: EventHandlers<TEvents>,
@@ -317,7 +317,7 @@ export function usePresence<T = unknown>(
     // Join the channel
     channel
       .join()
-      .receive('ok', (response: unknown) => {
+      .receive('ok', () => {
         if (import.meta.env?.DEV) {
           console.debug(`[presence] Joined ${topic}`);
         }

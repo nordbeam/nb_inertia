@@ -1,0 +1,22 @@
+{
+  "name": "nb_inertia",
+  "version": "0.1.0",
+  "description": "Version-aware Codex guidance for nb_inertia pages, props, contracts, SSR, modals, and real-time features.",
+  "author": { "name": "Nordbeam", "url": "https://github.com/nordbeam" },
+  "homepage": "https://github.com/nordbeam/nb_inertia",
+  "repository": "https://github.com/nordbeam/nb_inertia",
+  "license": "MIT",
+  "keywords": ["elixir", "phoenix", "inertia", "react", "vue"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "nb_inertia",
+    "shortDescription": "Build typed Phoenix Inertia applications",
+    "longDescription": "Install, configure, upgrade, diagnose, and verify nb_inertia page contracts, client adapters, SSR, modals, and real-time behavior.",
+    "developerName": "Nordbeam",
+    "category": "Developer Tools",
+    "capabilities": ["Install", "Configure", "Migrate", "Diagnose", "Verify"],
+    "websiteURL": "https://github.com/nordbeam/nb_inertia",
+    "brandColor": "#5E3AAE",
+    "defaultPrompt": ["Use $nb-inertia to implement or diagnose a typed Inertia page flow."]
+  }
+}

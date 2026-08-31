@@ -26,9 +26,15 @@ export type ModalSize =
   | '4xl'
   | '5xl'
   | 'full'
-  | string;
+  | (string & {});
 
-export type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | string;
+export type ModalPosition =
+  | 'center'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | (string & {});
 
 export interface ModalConfig {
   size?: ModalSize;

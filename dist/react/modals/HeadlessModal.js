@@ -20,13 +20,9 @@ var g = i(function({ children: e }, t) {
 		g.current || (g.current = !0, i(), setTimeout(() => {
 			g.current = !1;
 		}, 0));
-	}, [i]);
-	a((e) => {
-		e || b();
-	}, [b]);
-	let x = a((t, n) => {
+	}, [i]), x = a((t, n) => {
 		d.visit(t.url, e({
-			...n ?? {},
+			...n,
 			preserveState: n?.preserveState ?? !0,
 			preserveScroll: n?.preserveScroll ?? !0
 		}, {
@@ -41,7 +37,7 @@ var g = i(function({ children: e }, t) {
 			id: e.id,
 			index: t,
 			onTopOfStack: t === v.length - 1,
-			isOpen: e.id === r.id ? o : !0,
+			isOpen: e.id !== r.id || o,
 			config: n(e.config),
 			close: () => y(e.id),
 			setOpen: (t) => {

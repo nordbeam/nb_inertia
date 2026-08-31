@@ -6,7 +6,7 @@ export type EventHandler<T = unknown> = (payload: T) => void;
 /**
  * Map of event names to their handlers
  */
-export type EventHandlers<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type EventHandlers<T extends object = Record<string, unknown>> = {
     [K in keyof T]?: EventHandler<T[K]>;
 };
 /**
@@ -117,7 +117,7 @@ export declare function createSocket(endpoint: string, options?: SocketOptions):
  *   enabled: isLoggedIn,
  * });
  */
-export declare function useChannel<TEvents extends Record<string, unknown> = Record<string, unknown>>(socket: Socket | null, topic: string, handlers: EventHandlers<TEvents>, options?: ChannelOptions): Channel | null;
+export declare function useChannel<TEvents extends object = Record<string, unknown>>(socket: Socket | null, topic: string, handlers: EventHandlers<TEvents>, options?: ChannelOptions): Channel | null;
 /**
  * React hook for Phoenix Presence with automatic sync and diff tracking
  *

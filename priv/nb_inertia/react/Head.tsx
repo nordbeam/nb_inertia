@@ -24,7 +24,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Head as InertiaHead } from '@inertiajs/react';
-import { useIsInModal, useModalPageContext } from './modals/modalStack';
+import { useIsInModal } from './modals/modalStack';
 
 /**
  * Props for the Head component (matches Inertia's HeadProps)

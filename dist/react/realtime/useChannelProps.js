@@ -3,8 +3,7 @@ import t from "./useRealtimeProps.js";
 import { useMemo as n } from "react";
 //#region priv/nb_inertia/react/realtime/useChannelProps.ts
 function r(r, i, a, o) {
-	let s = t(), { props: c, setProp: l, setProps: u, reload: d } = s;
-	return e(r, i, n(() => {
+	let s = t({ initialProps: o?.initialProps }), { props: c, setProp: l, setProps: u, reload: d } = s, f = n(() => {
 		let e = {};
 		for (let [t, n] of Object.entries(a)) {
 			if (!n) continue;
@@ -46,9 +45,7 @@ function r(r, i, a, o) {
 					case "replace":
 						l(i, r.transform(e));
 						break;
-					case "reload":
-						d({ only: r.only });
-						break;
+					case "reload": d({ only: r.only });
 				}
 			});
 		}
@@ -58,7 +55,8 @@ function r(r, i, a, o) {
 		l,
 		u,
 		d
-	]), o), s;
+	]);
+	return e(r, i, f, o), s;
 }
 //#endregion
 export { r as default, r as useChannelProps };

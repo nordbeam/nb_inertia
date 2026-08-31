@@ -54,7 +54,7 @@ Tests for the enhanced useForm hook with optional route binding.
 ### Install Dependencies
 ```bash
 cd /Users/assim/Projects/nb/nb_inertia/priv/nb_inertia/react
-npm install
+vp install
 ```
 
 ### Run All Tests
@@ -64,17 +64,17 @@ npm test
 
 ### Watch Mode (for development)
 ```bash
-npm run test:watch
+vp run test:watch
 ```
 
 ### Coverage Report
 ```bash
-npm run test:coverage
+vp run test:coverage
 ```
 
 ### Interactive UI
 ```bash
-npm run test:ui
+vp run test:ui
 ```
 
 ## Test Stack
@@ -133,7 +133,7 @@ When adding new features to the React components:
 3. Test both happy path and edge cases
 4. Include backward compatibility tests
 5. Verify type safety with TypeScript
-6. Run `npm run test:coverage` to ensure good coverage
+6. Run `vp run test:coverage` to ensure good coverage
 
 ## CI/CD Integration
 
@@ -147,16 +147,16 @@ npm test
 
 For coverage requirements, use:
 ```bash
-npm run test:coverage -- --coverage.thresholds.lines=80
+vp run test:coverage -- --coverage.thresholds.lines=80
 ```
 
 ## Troubleshooting
 
 ### Tests fail with "Cannot find module '@inertiajs/react'"
-Run `npm install` to install dependencies.
+Run `vp install` to install dependencies.
 
 ### Tests fail with TypeScript errors
-Make sure `tsconfig.json` is properly configured and run `npm install` to get the latest type definitions.
+Make sure `tsconfig.json` is properly configured and run `vp install` to get the latest type definitions.
 
 ### Mock not working as expected
 Verify the mock is defined before the component import. Vitest hoists `vi.mock()` calls automatically.

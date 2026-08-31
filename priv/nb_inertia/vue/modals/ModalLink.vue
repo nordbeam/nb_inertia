@@ -35,10 +35,9 @@ import { isRouteResult } from '../../shared/types';
  *   </ModalLink>
  * </template>
  *
- * <script setup>
+ * ```ts
  * import { ModalLink } from '@/modals';
  * import { user_path } from '@/routes';
- * </script>
  * ```
  */
 

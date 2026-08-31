@@ -1,5 +1,9 @@
 import { PageProps, ReloadOptions as InertiaReloadOptions } from '@inertiajs/core';
 export type ReloadOptions = InertiaReloadOptions;
+export interface UseRealtimePropsOptions<T extends PageProps> {
+    /** Runtime-decoded props to use instead of the raw Inertia page payload. */
+    initialProps?: T;
+}
 /**
  * Return type for useRealtimeProps hook
  */
@@ -68,6 +72,6 @@ export interface UseRealtimePropsReturn<T extends PageProps> {
  * // Full reload
  * reload();
  */
-export declare function useRealtimeProps<T extends PageProps = PageProps>(): UseRealtimePropsReturn<T>;
+export declare function useRealtimeProps<T extends PageProps = PageProps>(options?: UseRealtimePropsOptions<T>): UseRealtimePropsReturn<T>;
 export default useRealtimeProps;
 //# sourceMappingURL=useRealtimeProps.d.ts.map

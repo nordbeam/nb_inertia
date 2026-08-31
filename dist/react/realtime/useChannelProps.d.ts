@@ -83,13 +83,17 @@ export type EventConfig<TProps extends Record<string, unknown>, TEvent> = Declar
 /**
  * Map of event names to their configurations
  */
-export type EventConfigs<TProps extends Record<string, unknown>, TEvents extends Record<string, unknown>> = {
+export type EventConfigs<TProps extends Record<string, unknown>, TEvents extends object> = {
     [K in keyof TEvents]?: EventConfig<TProps, TEvents[K]>;
 };
 /**
  * Return type for useChannelProps hook
  */
 export interface UseChannelPropsReturn<T extends Record<string, unknown>> extends UseRealtimePropsReturn<T> {
+}
+export interface UseChannelPropsOptions<T extends Record<string, unknown>> extends ChannelOptions {
+    /** Runtime-decoded props to seed optimistic updates. */
+    initialProps?: T;
 }
 /**
  * React hook combining Phoenix Channel subscription with Inertia prop updates
@@ -182,6 +186,6 @@ export interface UseChannelPropsReturn<T extends Record<string, unknown>> extend
  *   }
  * );
  */
-export declare function useChannelProps<TProps extends Record<string, unknown> = Record<string, unknown>, TEvents extends Record<string, unknown> = Record<string, unknown>>(socket: Socket | null, topic: string, configs: EventConfigs<TProps, TEvents>, options?: ChannelOptions): UseChannelPropsReturn<TProps>;
+export declare function useChannelProps<TProps extends Record<string, unknown> = Record<string, unknown>, TEvents extends object = Record<string, unknown>>(socket: Socket | null, topic: string, configs: EventConfigs<TProps, TEvents>, options?: UseChannelPropsOptions<TProps>): UseChannelPropsReturn<TProps>;
 export default useChannelProps;
 //# sourceMappingURL=useChannelProps.d.ts.map

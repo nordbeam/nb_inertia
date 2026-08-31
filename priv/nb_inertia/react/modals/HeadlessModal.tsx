@@ -113,21 +113,12 @@ export const HeadlessModal = forwardRef<ModalHandle, HeadlessModalProps>(functio
     }, 0);
   }, [onClose]);
 
-  const setOpen = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        close();
-      }
-    },
-    [close]
-  );
-
   const reloadModal = useCallback((target: ModalInstance, options?: ModalReloadOptions) => {
     inertiaRouter.visit(
       target.url,
       mergeModalHeaders(
         {
-          ...(options ?? {}),
+          ...options,
           preserveState: options?.preserveState ?? true,
           preserveScroll: options?.preserveScroll ?? true,
         },
