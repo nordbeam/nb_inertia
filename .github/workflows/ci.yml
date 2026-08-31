@@ -120,6 +120,8 @@ jobs:
       uses: actions/setup-node@v7
       with:
         node-version: '24.20.0'
+        # Avoid setup-node probing npm 11 before Corepack activates npm 12.
+        package-manager-cache: false
 
     - name: Enable and verify Corepack npm 12
       run: |
@@ -174,6 +176,8 @@ jobs:
       uses: actions/setup-node@v7
       with:
         node-version: '24.20.0'
+        # Avoid setup-node probing npm 11 before Corepack activates npm 12.
+        package-manager-cache: false
 
     - name: Enable and verify Corepack npm 12
       run: |
