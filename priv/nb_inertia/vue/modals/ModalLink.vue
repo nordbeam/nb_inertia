@@ -2,6 +2,9 @@
   <a
     :href="finalHref"
     :class="linkClassName"
+    :target="target"
+    :rel="rel"
+    :download="download"
     @click="handleClick"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
@@ -13,10 +16,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { shouldIntercept } from '@inertiajs/core';
 import { router } from '@inertiajs/vue3';
 import { useModalStack } from './modalStack';
 import { routerPrefetch } from '../../shared/routerCompat.vue';
 import type { ModalConfig } from './types';
+import type { ModalPageObject } from '../modalPageContext';
 import type { RouteResult } from '../../shared/types';
 import { isRouteResult } from '../../shared/types';
 
@@ -95,11 +100,19 @@ interface Props {
    * Tags for organizing cached prefetch data
    */
   cacheTags?: string[];
+
+  /** Standard anchor target. Non-self targets bypass modal interception. */
+  target?: string;
+
+  /** Standard anchor relationship metadata. */
+  rel?: string;
+
+  /** Standard anchor download attribute. */
+  download?: string | boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modalConfig: () => ({}),
-  method: 'get',
   prefetch: false,
 });
 
@@ -112,7 +125,7 @@ const finalHref = computed(() => {
 });
 
 const finalMethod = computed(() => {
-  return (isRouteResult(props.href) && !props.method ? props.href.method : props.method) || 'get';
+  return isRouteResult(props.href) ? (props.method ?? props.href.method) : (props.method ?? 'get');
 });
 
 const linkClassName = computed(() => {
@@ -136,10 +149,14 @@ const prefetchModes = computed((): PrefetchMode[] => {
 // Prefetch function - only GET requests can be prefetched
 function doPrefetch() {
   if (finalMethod.value !== 'get') return;
-  routerPrefetch(finalHref.value, { preserveState: true }, {
-    cacheFor: props.cacheFor,
-    cacheTags: props.cacheTags,
-  });
+  routerPrefetch(
+    finalHref.value,
+    { preserveState: true },
+    {
+      cacheFor: props.cacheFor,
+      cacheTags: props.cacheTags,
+    },
+  );
 }
 
 // Hover prefetch with delay
@@ -159,7 +176,9 @@ function handleMouseLeave() {
 }
 
 // Click prefetch (mousedown)
-function handleMouseDown() {
+function handleMouseDown(e: MouseEvent) {
+  if (!shouldIntercept(e)) return;
+
   if (prefetchModes.value.includes('click')) {
     doPrefetch();
   }
@@ -180,10 +199,9 @@ onUnmounted(() => {
 });
 
 function handleClick(e: MouseEvent) {
-  // Allow modifier keys to work normally (open in new tab, etc.)
-  if (e.ctrlKey || e.metaKey || e.shiftKey) {
-    return;
-  }
+  // Match Inertia's native anchor behavior for modifiers, alternate targets,
+  // non-left clicks, contenteditable elements, and already-prevented events.
+  if (!shouldIntercept(e)) return;
 
   e.preventDefault();
 
@@ -200,11 +218,20 @@ function handleClick(e: MouseEvent) {
       // Extract modal data from response
       const component = page.component;
       const componentProps = page.props;
+      const modalPage: ModalPageObject = {
+        ...page,
+        props: componentProps,
+        version: page.version ?? null,
+        flash: page.flash ?? {},
+        rememberedState: page.rememberedState ?? {},
+        rescuedProps: page.rescuedProps ?? [],
+      };
 
       // Push modal to stack
       pushModal({
         component: component as any,
         props: componentProps,
+        page: modalPage,
         config: props.modalConfig,
         baseUrl: props.baseUrl || window.location.pathname,
       });

@@ -1,4 +1,4 @@
-import type { PageProps, SharedPageProps } from '@inertiajs/core';
+import type { Page as InertiaPage, PageProps, SharedPageProps } from '@inertiajs/core';
 import { computed, inject, provide, type ComputedRef, type InjectionKey } from 'vue';
 
 export interface ModalPageObject<TProps = Record<string, unknown>> {
@@ -6,12 +6,24 @@ export interface ModalPageObject<TProps = Record<string, unknown>> {
   props: TProps;
   url: string;
   version: string | number | null;
+  clearHistory?: InertiaPage['clearHistory'];
+  preserveFragment?: InertiaPage['preserveFragment'];
+  encryptHistory?: InertiaPage['encryptHistory'];
+  deferredProps?: InertiaPage['deferredProps'];
+  initialDeferredProps?: InertiaPage['initialDeferredProps'];
+  /** Inertia v3 always provides this array; modal pages default it to `[]`. */
+  rescuedProps: InertiaPage['rescuedProps'];
+  mergeProps?: InertiaPage['mergeProps'];
+  prependProps?: InertiaPage['prependProps'];
+  deepMergeProps?: InertiaPage['deepMergeProps'];
+  matchPropsOn?: InertiaPage['matchPropsOn'];
+  sharedProps?: InertiaPage['sharedProps'];
+  scrollProps?: InertiaPage['scrollProps'];
   flash?: Record<string, unknown>;
+  onceProps?: InertiaPage['onceProps'];
+  optimisticUpdatedAt?: InertiaPage['optimisticUpdatedAt'];
   scrollRegions?: Array<{ top: number; left: number }>;
   rememberedState?: Record<string, unknown>;
-  clearHistory?: boolean;
-  encryptHistory?: boolean;
-  preserveFragment?: boolean;
 }
 
 export type ModalPageRef = ComputedRef<ModalPageObject | null>;
@@ -31,15 +43,6 @@ export function useIsInModal(): ComputedRef<boolean> {
   return computed(() => modalPage?.value != null);
 }
 
-export type ModalPage<TProps extends PageProps = PageProps> = {
-  component: string;
-  props: TProps & SharedPageProps;
-  url: string;
-  version: string | number | null;
-  flash?: Record<string, unknown>;
-  scrollRegions?: Array<{ top: number; left: number }>;
-  rememberedState?: Record<string, unknown>;
-  clearHistory?: boolean;
-  encryptHistory?: boolean;
-  preserveFragment?: boolean;
-};
+export type ModalPage<TProps extends PageProps = PageProps> = ModalPageObject<
+  TProps & SharedPageProps
+>;

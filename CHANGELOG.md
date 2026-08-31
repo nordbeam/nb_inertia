@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Full Inertia.js 3.7 protocol and React/Vue adapter compatibility, including
+  deferred-prop rescue metadata, nested deferred/once dot paths, server-provided
+  head reconciliation, polling state, instant/client visits, cached navigation,
+  optimistic router/form chains, and the current official adapter exports.
+- `inertia_defer/2` and `inertia_defer/3` support for `on_error: :ignore`, with
+  `rescuedProps` output and deferred-rescue telemetry.
+- Generated app barrels now expose `useFormWithPrecognition` and
+  `useHttpWithPrecognition` in addition to the official Inertia 3.7 surface.
 - Repeatable performance tooling with `mix nb_inertia.bench`, the lightweight
   `mix nb_inertia.perf_gate` budget check, and documented smoke budgets in
   `bench/perf_budgets.exs`.
@@ -29,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `mix nb_inertia.install --pages`, and `mix nb_inertia.migrate_to_pages`.
 
 ### Fixed
+- React router and form wrappers preserve native Inertia class prototypes,
+  getters, fluent builders, modal request headers, and separate submit routes.
+- React and Vue modal pages retain the full Inertia 3.7 page metadata, and modal
+  links follow native target, modifier-key, and non-left-click behavior.
+- Inertia response handling now preserves redirect flags, avoids fragment
+  redirects during prefetches, handles external hash locations correctly,
+  emits `Vary: X-Inertia`, and redirects empty successful responses.
 - Modal base-page composition now dispatches internally through the Phoenix
   endpoint instead of depending on Req.
 - Modal rendering preserves string-component props, query strings, styling

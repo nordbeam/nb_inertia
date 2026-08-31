@@ -1337,6 +1337,8 @@ if Code.ensure_loaded?(Igniter) do
       });
 
       void createInertiaApp({
+        // Inertia v3.5+: reconcile head elements supplied in the `head` prop.
+        serverHead: true,
         // Inertia v3: resolve receives (name, props). Props can be used for
         // per-page layout selection or conditional logic.
         resolve: async (name, _props) => {
@@ -1695,6 +1697,7 @@ if Code.ensure_loaded?(Igniter) do
         return await createInertiaApp({
           page,
           render: ReactDOMServer.renderToString,
+          serverHead: true,
           // Inertia v3: resolve receives (name, props)
           resolve: async (name, _props) => {
             const pagePath = `./pages/${name}.#{extension}`;
@@ -1755,6 +1758,7 @@ if Code.ensure_loaded?(Igniter) do
         return await createInertiaApp({
           page,
           render: ReactDOMServer.renderToString,
+          serverHead: true,
           // Inertia v3: resolve receives (name, props)
           resolve: async (name, _props) => {
             // Eager loading - all pages are bundled
@@ -2732,8 +2736,14 @@ if Code.ensure_loaded?(Igniter) do
         SchemaRuntimePhase
       } from '@nordbeam/nb-inertia/shared/schemaRuntime';
       export { Link } from '@inertiajs/react';
-      export { useForm } from '@nordbeam/nb-inertia/react/useForm';
-      export { useHttp } from '@nordbeam/nb-inertia/react/useHttp';
+      export {
+        useForm,
+        useFormWithPrecognition
+      } from '@nordbeam/nb-inertia/react/useForm';
+      export {
+        useHttp,
+        useHttpWithPrecognition
+      } from '@nordbeam/nb-inertia/react/useHttp';
       export { useRoutes } from '@nordbeam/nb-inertia/react/useRoutes';
       export { usePage } from '@nordbeam/nb-inertia/react/usePage';
       export { Head } from '@nordbeam/nb-inertia/react/Head';
@@ -2772,7 +2782,7 @@ if Code.ensure_loaded?(Igniter) do
           import { createInertiaApp as createSchemaAwareInertiaApp } from '@nordbeam/nb-inertia/vue/createInertiaApp';
 
           /** The generated registry is development-only; see the React template. */
-          export async function createInertiaApp(options: Record<string, unknown> = {}) {
+          async function createInertiaAppWithSchemas(options: Record<string, unknown> = {}) {
             if (!import.meta.env.DEV) return createSchemaAwareInertiaApp(options);
 
             try {
@@ -2786,6 +2796,8 @@ if Code.ensure_loaded?(Igniter) do
               return createSchemaAwareInertiaApp(options);
             }
           }
+
+          export const createInertiaApp = createInertiaAppWithSchemas as typeof createSchemaAwareInertiaApp;
           """
         else
           """
@@ -2831,7 +2843,10 @@ if Code.ensure_loaded?(Igniter) do
       //   <Link :href="user_path(1)">User</Link>   // Works with RouteResult objects
 
       #{create_app_export}
-      export { useForm } from '@nordbeam/nb-inertia/vue/useForm';
+      export {
+        useForm,
+        useFormWithPrecognition
+      } from '@nordbeam/nb-inertia/vue/useForm';
       // The adapter entrypoint lazy-loads page-schema decoding only when a
       // registry is configured. This keeps disabled production bundles free
       // of the optional validation runtime.
@@ -2866,7 +2881,10 @@ if Code.ensure_loaded?(Igniter) do
         SchemaRuntimeMode,
         SchemaRuntimePhase
       } from '@nordbeam/nb-inertia/shared/schemaRuntime';
-      export { useHttp } from '@nordbeam/nb-inertia/vue/useHttp';
+      export {
+        useHttp,
+        useHttpWithPrecognition
+      } from '@nordbeam/nb-inertia/vue/useHttp';
       export { usePage } from '@nordbeam/nb-inertia/vue/usePage';
       export { default as Head } from '@nordbeam/nb-inertia/vue/Head';
 

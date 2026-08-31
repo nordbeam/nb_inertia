@@ -9,45 +9,84 @@ function i(t) {
 function a(e) {
 	return Object.prototype.toString.call(e) === "[object Object]";
 }
-function o(e, n) {
-	return n ? new Proxy(e, { get(e, r, i) {
-		let o = Reflect.get(e, r, i);
-		return typeof o != "function" || ![
-			"submit",
-			"get",
-			"post",
-			"put",
-			"patch",
-			"delete"
-		].includes(String(r)) ? o : (...r) => {
-			let i = [...r], s = i[i.length - 1], c = t(a(s) ? s : void 0, {
-				url: n.url,
-				baseUrl: n.baseUrl,
-				returnUrl: n.returnUrl
-			});
-			return a(s) ? i[i.length - 1] = c : i.push(c), o.apply(e, i);
-		};
-	} }) : e;
+var o = /* @__PURE__ */ new Set([
+	"submit",
+	"get",
+	"post",
+	"put",
+	"patch",
+	"delete"
+]), s = /* @__PURE__ */ new Set([
+	"dontRemember",
+	"optimistic",
+	"withPrecognition",
+	"withAllErrors",
+	"withoutFileValidation",
+	"setValidationTimeout",
+	"touch",
+	"validate",
+	"validateFiles",
+	"setErrors",
+	"forgetError"
+]);
+function c(e) {
+	return (typeof e == "object" && !!e || typeof e == "function") && typeof e.submit == "function";
 }
-function s(...e) {
+function l(e) {
+	return e ? {
+		url: e.url,
+		baseUrl: e.baseUrl,
+		returnUrl: e.returnUrl
+	} : null;
+}
+function u(n, r) {
+	let i = a(n) && !e(n) ? n : void 0;
+	return t(i, l(r));
+}
+function d(t, n, r) {
+	if (r) {
+		let i;
+		return t.length >= 3 ? i = t[2] : t.length === 2 && e(t[0]) ? i = t[1] : t.length === 1 && (i = t[0]), [
+			r.method,
+			r.url,
+			u(i, n)
+		];
+	}
+	if (t.length === 0) return [u(void 0, n)];
+	let i = [...t], o = i[i.length - 1];
+	return a(o) && !e(o) ? i[i.length - 1] = u(o, n) : i.push(u(void 0, n)), i;
+}
+function f(e, t, n) {
+	return !t && !n ? e : new Proxy(e, { get(e, r, i) {
+		let a = Reflect.get(e, r, i);
+		if (typeof a != "function") return a;
+		let l = String(r);
+		return s.has(l) ? (...r) => {
+			let i = a.apply(e, r);
+			return c(i) ? f(i, t, n) : i;
+		} : o.has(l) ? (...r) => {
+			let i = l === "submit" ? d(r, t, n) : d(r, t);
+			return a.apply(e, i);
+		} : (...t) => a.apply(e, t);
+	} });
+}
+function p(...e) {
 	let t = n();
-	if (e.length === 0) return o(r(), t);
+	if (e.length === 0) return f(r(), t);
 	if (e.length === 3) {
 		let [n, i, a] = e;
-		return o(r(n, i, a), t);
+		return f(r(n, i, a), t);
 	}
 	if (e.length === 2) {
 		let [n, a] = e;
-		if (typeof n == "string" && !i(a) || i(n)) return o(r(n, a), t);
-		if (typeof n != "string" && i(a)) return o(r(a, n), t);
+		if (typeof n == "string" && !i(a) || i(n)) return f(r(n, a), t);
+		if (typeof n != "string" && i(a)) return f(r(a, n), t);
 	}
-	return o(r(e[0]), t);
+	return f(r(e[0]), t);
 }
-function c(e, t, i) {
-	let a = n(), s = r(t, e);
-	return !i || i.url === t.url && i.method === t.method ? o(s, a) : o(new Proxy(s, { get(e, t, n) {
-		return t === "submit" ? (t) => e.submit(i.method, i.url, t) : Reflect.get(e, t, n);
-	} }), a);
+function m(e, t, i) {
+	let a = n(), o = r(t, e);
+	return !i || i.url === t.url && i.method === t.method ? f(o, a) : f(o, a, i);
 }
 //#endregion
-export { s as default, s as useForm, e as isRouteResult, c as useFormWithPrecognition };
+export { p as default, p as useForm, e as isRouteResult, m as useFormWithPrecognition };

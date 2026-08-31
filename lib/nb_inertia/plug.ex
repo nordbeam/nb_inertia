@@ -43,6 +43,8 @@ defmodule NbInertia.Plug do
   def call(conn, _opts) do
     conn
     |> assign(:inertia_head, [])
+    |> ensure_inertia_vary()
+    |> register_before_send(&ensure_inertia_vary/1)
     |> put_private(:inertia_version, compute_version())
     |> put_private(:inertia_error_bag, get_error_bag(conn))
     |> put_private(:inertia_encrypt_history, default_encrypt_history())
@@ -56,7 +58,25 @@ defmodule NbInertia.Plug do
     |> merge_forwarded_flash()
     |> fetch_inertia_errors()
     |> register_flash_persistence()
+    |> fetch_preserve_fragment()
+    |> fetch_clear_history()
     |> detect_inertia()
+  end
+
+  @doc false
+  def ensure_inertia_vary(conn) do
+    vary_values =
+      conn
+      |> get_resp_header("vary")
+      |> Enum.flat_map(&String.split(&1, ","))
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    if Enum.any?(vary_values, &(String.downcase(&1) == "x-inertia")) do
+      conn
+    else
+      put_resp_header(conn, "vary", Enum.join(vary_values ++ ["X-Inertia"], ", "))
+    end
   end
 
   # -- Flash persistence (absorbed from NbInertia.Plugs.Flash) --
@@ -97,6 +117,42 @@ defmodule NbInertia.Plug do
     end)
   end
 
+  defp fetch_preserve_fragment(conn) do
+    conn =
+      if get_session(conn, "inertia_preserve_fragment") do
+        put_private(conn, :inertia_preserve_fragment, true)
+      else
+        conn
+      end
+
+    register_before_send(conn, fn %{status: status} = conn ->
+      if (status in @redirect_statuses or status == 409) and
+           conn.private[:inertia_preserve_fragment] do
+        put_session(conn, "inertia_preserve_fragment", true)
+      else
+        delete_session(conn, "inertia_preserve_fragment")
+      end
+    end)
+  end
+
+  defp fetch_clear_history(conn) do
+    conn =
+      if get_session(conn, "inertia_clear_history") do
+        put_private(conn, :inertia_clear_history, true)
+      else
+        conn
+      end
+
+    register_before_send(conn, fn %{status: status} = conn ->
+      if (status in @redirect_statuses or status == 409) and
+           conn.private[:inertia_clear_history] do
+        put_session(conn, "inertia_clear_history", true)
+      else
+        delete_session(conn, "inertia_clear_history")
+      end
+    end)
+  end
+
   # -- Inertia request detection --
 
   defp detect_inertia(conn) do
@@ -111,6 +167,7 @@ defmodule NbInertia.Plug do
         |> detect_prefetch()
         |> detect_except_once_props()
         |> convert_redirects()
+        |> handle_empty_response()
         |> check_version()
 
       _ ->
@@ -210,14 +267,6 @@ defmodule NbInertia.Plug do
   defp convert_redirects(conn) do
     register_before_send(conn, fn %{method: method, status: status} = conn ->
       cond do
-        # Hash fragment redirect: return 409 so client can do SPA visit preserving fragment
-        fragment_redirect?(conn) ->
-          [location] = get_resp_header(conn, "location")
-
-          conn
-          |> put_status(409)
-          |> put_resp_header("x-inertia-redirect", location)
-
         # External redirects: https://inertiajs.com/redirects#external-redirects
         external_redirect?(conn) ->
           [location] = get_resp_header(conn, "location")
@@ -225,6 +274,15 @@ defmodule NbInertia.Plug do
           conn
           |> put_status(409)
           |> put_resp_header("x-inertia-location", location)
+
+        # Hash fragment redirect: return 409 so client can do SPA visit preserving fragment.
+        # Prefetch responses must never trigger a navigation.
+        fragment_redirect?(conn) ->
+          [location] = get_resp_header(conn, "location")
+
+          conn
+          |> put_status(409)
+          |> put_resp_header("x-inertia-redirect", location)
 
         # 303 conversion: https://inertiajs.com/redirects#303-response-code
         method in ["PUT", "PATCH", "DELETE"] and status in [301, 302] ->
@@ -238,8 +296,12 @@ defmodule NbInertia.Plug do
 
   defp fragment_redirect?(%{status: status} = conn) when status in 300..308 do
     case get_resp_header(conn, "location") do
-      [location] -> has_fragment?(location) and conn.private[:inertia_request] == true
-      _ -> false
+      [location] ->
+        has_fragment?(location) and conn.private[:inertia_request] == true and
+          conn.private[:inertia_prefetch] != true
+
+      _ ->
+        false
     end
   end
 
@@ -259,6 +321,39 @@ defmodule NbInertia.Plug do
   end
 
   defp external_redirect?(_conn), do: false
+
+  defp handle_empty_response(conn) do
+    register_before_send(conn, fn conn ->
+      if conn.status == 200 and empty_body?(conn) do
+        location =
+          case get_req_header(conn, "referer") do
+            [url] when url != "" -> extract_path(url)
+            _ -> "/"
+          end
+
+        conn
+        |> put_status(303)
+        |> put_resp_header("location", location)
+      else
+        conn
+      end
+    end)
+  end
+
+  defp extract_path(url) do
+    uri = URI.parse(url)
+    path = uri.path || "/"
+
+    case uri.query do
+      nil -> path
+      query -> "#{path}?#{query}"
+    end
+  end
+
+  defp empty_body?(%{resp_body: nil}), do: true
+  defp empty_body?(%{resp_body: ""}), do: true
+  defp empty_body?(%{resp_body: []}), do: true
+  defp empty_body?(_conn), do: false
 
   # -- Asset versioning --
 

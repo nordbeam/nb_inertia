@@ -19,8 +19,8 @@
  * supported for generated page schemas that want per-prop structural
  * sharing; fields not present in a partial/deferred response are untouched.
  */
-export type SchemaRuntimePhase = "initial" | "navigation" | "partial" | "deferred" | "instant" | "history" | "modal" | "prefetch" | "ssr";
-export type SchemaRuntimeMode = "throw" | "report" | "off";
+export type SchemaRuntimePhase = 'initial' | 'navigation' | 'partial' | 'deferred' | 'instant' | 'history' | 'modal' | 'prefetch' | 'ssr';
+export type SchemaRuntimeMode = 'throw' | 'report' | 'off';
 export type SchemaParser<T = unknown> = (value: unknown) => T | SchemaResult<T>;
 export type SchemaValidator = (value: unknown) => unknown;
 export interface SchemaSuccess<T = unknown> {
@@ -104,9 +104,9 @@ export interface PageLike {
 }
 export interface SchemaFailure {
     /** The category is intentionally stable for reporting and telemetry. */
-    kind: "validation" | "decode";
+    kind: 'validation' | 'decode';
     /** Alias that makes the distinction easy to consume in error handlers. */
-    stage: "validation" | "decode";
+    stage: 'validation' | 'decode';
     component: string;
     prop?: string;
     path?: string;

@@ -2,6 +2,7 @@ defmodule NbInertia.V3ProtocolTest do
   use ExUnit.Case, async: true
 
   import NbInertia.CoreController
+  import ExUnit.CaptureLog
   import Plug.Conn
   import Plug.Test
 
@@ -57,6 +58,110 @@ defmodule NbInertia.V3ProtocolTest do
 
     assert page["onceProps"] == %{"plans" => %{"prop" => "plans"}}
     assert page["props"]["plans"] == [%{"id" => 1, "name" => "Basic"}]
+  end
+
+  test "rescues deferred prop failures and exposes rescuedProps metadata" do
+    log =
+      capture_log(fn ->
+        conn =
+          inertia_conn([
+            {"x-inertia-partial-component", "Analytics/Show"},
+            {"x-inertia-partial-data", "riskScore"}
+          ])
+          |> render_inertia("Analytics/Show", %{
+            risk_score: inertia_defer(fn -> raise "analytics unavailable" end, on_error: :ignore),
+            stable: true
+          })
+
+        page = Jason.decode!(conn.resp_body)
+
+        assert conn.status == 200
+        assert page["rescuedProps"] == ["riskScore"]
+        refute Map.has_key?(page["props"], "riskScore")
+        refute Map.has_key?(page["props"], "stable")
+      end)
+
+    assert log =~ "Rescued deferred Inertia prop \"riskScore\""
+    assert log =~ "analytics unavailable"
+  end
+
+  test "does not rescue deferred failures unless explicitly requested" do
+    assert_raise RuntimeError, "analytics unavailable", fn ->
+      inertia_conn([
+        {"x-inertia-partial-component", "Analytics/Show"},
+        {"x-inertia-partial-data", "riskScore"}
+      ])
+      |> render_inertia("Analytics/Show", %{
+        risk_score: inertia_defer(fn -> raise "analytics unavailable" end)
+      })
+    end
+  end
+
+  test "supports a named rescue-enabled deferred group" do
+    prop = inertia_defer(fn -> :ok end, "analytics", on_error: :ignore)
+
+    assert {:defer, {fun, "analytics", :ignore}} = prop
+    assert fun.() == :ok
+  end
+
+  test "supports nested deferred paths and nested rescue metadata" do
+    initial =
+      inertia_conn()
+      |> render_inertia("Analytics/Show", %{
+        analytics: %{
+          risk_score:
+            inertia_defer(fn -> raise "analytics unavailable" end, "analytics", on_error: :ignore)
+        }
+      })
+      |> then(&Jason.decode!(&1.resp_body))
+
+    assert initial["deferredProps"] == %{"analytics" => ["analytics.riskScore"]}
+    assert initial["props"]["analytics"] == %{}
+
+    log =
+      capture_log(fn ->
+        page =
+          inertia_conn([
+            {"x-inertia-partial-component", "Analytics/Show"},
+            {"x-inertia-partial-data", "analytics.riskScore"}
+          ])
+          |> render_inertia("Analytics/Show", %{
+            analytics: %{
+              risk_score:
+                inertia_defer(fn -> raise "analytics unavailable" end, "analytics",
+                  on_error: :ignore
+                )
+            }
+          })
+          |> then(&Jason.decode!(&1.resp_body))
+
+        assert page["props"]["analytics"] == %{}
+        assert page["rescuedProps"] == ["analytics.riskScore"]
+      end)
+
+    assert log =~ "analytics.riskScore"
+  end
+
+  test "supports nested once props and client exclusions" do
+    initial =
+      inertia_conn()
+      |> render_inertia("Billing/Plans", %{
+        billing: %{plans: inertia_once(fn -> [%{id: 1}] end)}
+      })
+      |> then(&Jason.decode!(&1.resp_body))
+
+    assert initial["onceProps"] == %{"billing.plans" => %{"prop" => "billing.plans"}}
+    assert initial["props"]["billing"]["plans"] == [%{"id" => 1}]
+
+    cached =
+      inertia_conn([{"x-inertia-except-once-props", "billing.plans"}])
+      |> render_inertia("Billing/Plans", %{
+        billing: %{plans: inertia_once(fn -> raise "must not run" end)}
+      })
+      |> then(&Jason.decode!(&1.resp_body))
+
+    assert cached["onceProps"] == %{"billing.plans" => %{"prop" => "billing.plans"}}
+    assert cached["props"]["billing"] == %{}
   end
 
   test "serializes matchPropsOn using dot-notation paths" do

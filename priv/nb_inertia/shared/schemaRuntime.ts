@@ -21,17 +21,17 @@
  */
 
 export type SchemaRuntimePhase =
-  | "initial"
-  | "navigation"
-  | "partial"
-  | "deferred"
-  | "instant"
-  | "history"
-  | "modal"
-  | "prefetch"
-  | "ssr";
+  | 'initial'
+  | 'navigation'
+  | 'partial'
+  | 'deferred'
+  | 'instant'
+  | 'history'
+  | 'modal'
+  | 'prefetch'
+  | 'ssr';
 
-export type SchemaRuntimeMode = "throw" | "report" | "off";
+export type SchemaRuntimeMode = 'throw' | 'report' | 'off';
 
 export type SchemaParser<T = unknown> = (value: unknown) => T | SchemaResult<T>;
 export type SchemaValidator = (value: unknown) => unknown;
@@ -133,9 +133,9 @@ export interface PageLike {
 
 export interface SchemaFailure {
   /** The category is intentionally stable for reporting and telemetry. */
-  kind: "validation" | "decode";
+  kind: 'validation' | 'decode';
   /** Alias that makes the distinction easy to consume in error handlers. */
-  stage: "validation" | "decode";
+  stage: 'validation' | 'decode';
   component: string;
   prop?: string;
   path?: string;
@@ -151,9 +151,9 @@ export class PageSchemaRuntimeError extends Error {
   constructor(failure: SchemaFailure) {
     const location = failure.prop ? `${failure.component}.${failure.prop}` : failure.component;
     const detail =
-      failure.kind === "validation" ? "failed validation" : "failed decoding/transform";
+      failure.kind === 'validation' ? 'failed validation' : 'failed decoding/transform';
     super(`Inertia page ${location} ${detail}`);
-    this.name = "PageSchemaRuntimeError";
+    this.name = 'PageSchemaRuntimeError';
     this.failure = failure;
   }
 }
@@ -215,8 +215,8 @@ export interface PageSchemaAppOptions {
   pageSchemas?: PageSchemaRegistryLike | null;
 }
 
-const RUNTIME_INSTALLATION = Symbol.for("nb_inertia.page_schema_runtime");
-const RUNTIME_CONFIG_GLOBAL = "__NB_INERTIA_PAGE_SCHEMA_RUNTIME__";
+const RUNTIME_INSTALLATION = Symbol.for('nb_inertia.page_schema_runtime');
+const RUNTIME_CONFIG_GLOBAL = '__NB_INERTIA_PAGE_SCHEMA_RUNTIME__';
 
 function readGlobalRuntimeConfig(): PageSchemaRuntimeOptions | false | undefined {
   return (globalThis as Record<string, unknown>)[RUNTIME_CONFIG_GLOBAL] as
@@ -229,7 +229,7 @@ type CachedResult =
   | { ok: true; value: unknown }
   | {
       ok: false;
-      failure: Omit<SchemaFailure, "phase" | "component" | "prop" | "path" | "value"> & {
+      failure: Omit<SchemaFailure, 'phase' | 'component' | 'prop' | 'path' | 'value'> & {
         error?: unknown;
         issues?: unknown;
       };
@@ -300,11 +300,11 @@ export function isPageSchemaRuntimeError(error: unknown): error is PageSchemaRun
 }
 
 function isObject(value: unknown): value is object {
-  return (typeof value === "object" && value !== null) || typeof value === "function";
+  return (typeof value === 'object' && value !== null) || typeof value === 'function';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function hasOwn(value: object, key: string): boolean {
@@ -313,11 +313,11 @@ function hasOwn(value: object, key: string): boolean {
 
 function isProductionEnvironment(): boolean {
   const processLike = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process;
-  return processLike?.env?.NODE_ENV === "production";
+  return processLike?.env?.NODE_ENV === 'production';
 }
 
 function defaultMode(): SchemaRuntimeMode {
-  return isProductionEnvironment() ? "off" : "throw";
+  return isProductionEnvironment() ? 'off' : 'throw';
 }
 
 function resolveOptions(
@@ -327,7 +327,7 @@ function resolveOptions(
   const configured = readGlobalRuntimeConfig() ?? configuredRuntime;
 
   if (options === false) {
-    return { enabled: false, mode: "off" };
+    return { enabled: false, mode: 'off' };
   }
 
   const source = options || (configured === false ? undefined : configured) || {};
@@ -355,15 +355,15 @@ function lookupRegistry(
   let result: PageSchemaValue | undefined;
 
   try {
-    if (typeof registry === "function") {
+    if (typeof registry === 'function') {
       result = registry(component);
-    } else if (typeof (registry as PageSchemaRegistry).get === "function") {
+    } else if (typeof (registry as PageSchemaRegistry).get === 'function') {
       result = (registry as PageSchemaRegistry).get(component);
-    } else if (typeof (registry as { lookup?: unknown }).lookup === "function") {
+    } else if (typeof (registry as { lookup?: unknown }).lookup === 'function') {
       result = (registry as { lookup: (name: string) => PageSchemaValue | undefined }).lookup(
         component,
       );
-    } else if (typeof (registry as { getPageSchema?: unknown }).getPageSchema === "function") {
+    } else if (typeof (registry as { getPageSchema?: unknown }).getPageSchema === 'function') {
       result = (
         registry as { getPageSchema: (name: string) => PageSchemaValue | undefined }
       ).getPageSchema(component);
@@ -388,7 +388,7 @@ function lookupRegistry(
 function normalizeSchema(
   schema: PageSchemaValue | undefined,
 ): PageSchema | PagePropSchema | undefined {
-  if (typeof schema === "function") {
+  if (typeof schema === 'function') {
     return { parse: schema as SchemaParser };
   }
   if (!isObject(schema)) return undefined;
@@ -427,7 +427,7 @@ function schemaFields(
 ): Record<string, PagePropSchema> | undefined {
   const candidate = schema as PageSchema;
 
-  for (const key of ["fields", "props", "shape", "propertySchemas", "properties"]) {
+  for (const key of ['fields', 'props', 'shape', 'propertySchemas', 'properties']) {
     // Zod object schemas expose a prototype `shape` getter. Only accept the
     // explicit page-entry aliases emitted by nb_ts (or supplied as own
     // properties by a hand-written registry), otherwise a whole Zod schema
@@ -445,8 +445,8 @@ function schemaFields(
 function hasTransform(schema: PagePropSchema): boolean {
   const zodLike =
     isObject(schema) &&
-    ("_def" in (schema as object) || "def" in (schema as object)) &&
-    (typeof schema.safeParse === "function" || typeof schema.parse === "function");
+    ('_def' in (schema as object) || 'def' in (schema as object)) &&
+    (typeof schema.safeParse === 'function' || typeof schema.parse === 'function');
 
   return (
     schema.transforms === true ||
@@ -456,9 +456,9 @@ function hasTransform(schema: PagePropSchema): boolean {
     // transform marker, so only treat a generic callback as such for
     // non-Zod schema implementations. Zod codecs/pipes are identified from
     // their definition below (or by explicit generated markers).
-    (typeof schema.transform === "function" && !zodLike) ||
+    (typeof schema.transform === 'function' && !zodLike) ||
     zodSchemaHasTransform(schema) ||
-    (typeof schema.decode === "function" && !zodLike)
+    (typeof schema.decode === 'function' && !zodLike)
   );
 }
 
@@ -484,35 +484,35 @@ function zodSchemaHasTransform(schema: unknown, seen = new Set<object>(), depth 
     return Object.values(candidate).some((value) => zodSchemaHasTransform(value, seen, depth + 1));
   }
   const type = (definition as Record<string, unknown>).type;
-  if (type === "transform" || type === "codec" || type === "preprocess") return true;
+  if (type === 'transform' || type === 'codec' || type === 'preprocess') return true;
   if (
-    type === "pipe" &&
+    type === 'pipe' &&
     isObject((definition as Record<string, unknown>).in) &&
     isObject((definition as Record<string, unknown>).out)
   ) {
     return (
       zodSchemaHasTransform((definition as Record<string, unknown>).in, seen, depth + 1) ||
       zodSchemaHasTransform((definition as Record<string, unknown>).out, seen, depth + 1) ||
-      typeof (definition as Record<string, unknown>).transform === "function" ||
-      typeof (definition as Record<string, unknown>).reverseTransform === "function" ||
-      typeof (definition as Record<string, unknown>).decode === "function" ||
-      typeof (definition as Record<string, unknown>).encode === "function"
+      typeof (definition as Record<string, unknown>).transform === 'function' ||
+      typeof (definition as Record<string, unknown>).reverseTransform === 'function' ||
+      typeof (definition as Record<string, unknown>).decode === 'function' ||
+      typeof (definition as Record<string, unknown>).encode === 'function'
     );
   }
   if ((definition as Record<string, unknown>).coerce === true) return true;
 
   for (const key of [
-    "in",
-    "out",
-    "innerType",
-    "schema",
-    "element",
-    "items",
-    "left",
-    "right",
-    "valueType",
-    "keyType",
-    "options",
+    'in',
+    'out',
+    'innerType',
+    'schema',
+    'element',
+    'items',
+    'left',
+    'right',
+    'valueType',
+    'keyType',
+    'options',
   ]) {
     const value = (definition as Record<string, unknown>)[key];
     if (Array.isArray(value)) {
@@ -523,7 +523,7 @@ function zodSchemaHasTransform(schema: unknown, seen = new Set<object>(), depth 
   }
 
   const shape = (definition as Record<string, unknown>).shape;
-  if (typeof shape === "function") {
+  if (typeof shape === 'function') {
     try {
       return zodSchemaHasTransform(shape(), seen, depth + 1);
     } catch {
@@ -535,12 +535,12 @@ function zodSchemaHasTransform(schema: unknown, seen = new Set<object>(), depth 
 
 function hasSchemaOperation(schema: PagePropSchema): boolean {
   return (
-    typeof schema.safeParse === "function" ||
-    typeof schema.parse === "function" ||
-    typeof schema.decode === "function" ||
-    typeof schema.transform === "function" ||
-    typeof schema.validate === "function" ||
-    typeof schema.type === "string" ||
+    typeof schema.safeParse === 'function' ||
+    typeof schema.parse === 'function' ||
+    typeof schema.decode === 'function' ||
+    typeof schema.transform === 'function' ||
+    typeof schema.validate === 'function' ||
+    typeof schema.type === 'string' ||
     Array.isArray(schema.type) ||
     Array.isArray(schema.enum) ||
     isRecord(schema.properties) ||
@@ -568,7 +568,7 @@ function normalizeValidation(
       return { ok: true };
     }
 
-    if ("error" in value && value.error !== undefined && value.error !== null) {
+    if ('error' in value && value.error !== undefined && value.error !== null) {
       return {
         ok: false,
         error: value.error,
@@ -608,16 +608,16 @@ function normalizeParserResult(
   }
 
   if (value.success === true) {
-    return { ok: true, value: "data" in value ? value.data : value.value };
+    return { ok: true, value: 'data' in value ? value.data : value.value };
   }
 
   if (value.ok === true) {
-    return { ok: true, value: "value" in value ? value.value : value.data };
+    return { ok: true, value: 'value' in value ? value.value : value.data };
   }
 
   // A parser returning an object with an error but no success marker is an
   // error result in the same spirit as common decoder libraries.
-  if ("error" in value && value.error !== undefined && value.error !== null) {
+  if ('error' in value && value.error !== undefined && value.error !== null) {
     return {
       ok: false,
       error: value.error,
@@ -669,7 +669,7 @@ function jsonSchemaValidation(value: unknown, schema: PagePropSchema, path: stri
   const issues: unknown[] = [];
 
   if (Array.isArray(schema.enum) && !schema.enum.some((item) => Object.is(item, value))) {
-    issues.push({ path, message: "must be one of the declared enum values" });
+    issues.push({ path, message: 'must be one of the declared enum values' });
     return issues;
   }
 
@@ -677,27 +677,27 @@ function jsonSchemaValidation(value: unknown, schema: PagePropSchema, path: stri
     const types = Array.isArray(schema.type) ? schema.type : [schema.type];
     const valid = types.some((type) => {
       switch (type) {
-        case "null":
+        case 'null':
           return value === null;
-        case "array":
+        case 'array':
           return Array.isArray(value);
-        case "object":
+        case 'object':
           return isRecord(value);
-        case "integer":
-          return typeof value === "number" && Number.isInteger(value);
-        case "number":
-          return typeof value === "number" && Number.isFinite(value);
-        case "boolean":
-          return typeof value === "boolean";
-        case "string":
-          return typeof value === "string";
+        case 'integer':
+          return typeof value === 'number' && Number.isInteger(value);
+        case 'number':
+          return typeof value === 'number' && Number.isFinite(value);
+        case 'boolean':
+          return typeof value === 'boolean';
+        case 'string':
+          return typeof value === 'string';
         default:
           return true;
       }
     });
 
     if (!valid) {
-      issues.push({ path, message: `expected ${types.join(" or ")}` });
+      issues.push({ path, message: `expected ${types.join(' or ')}` });
       return issues;
     }
   }
@@ -715,7 +715,7 @@ function jsonSchemaValidation(value: unknown, schema: PagePropSchema, path: stri
       if (hasOwn(value, key)) {
         issues.push(...jsonSchemaValidation(value[key], childSchema, `${path}.${key}`));
       } else if (childSchema.required) {
-        issues.push({ path: `${path}.${key}`, message: "is required" });
+        issues.push({ path: `${path}.${key}`, message: 'is required' });
       }
     }
   }
@@ -726,22 +726,22 @@ function jsonSchemaValidation(value: unknown, schema: PagePropSchema, path: stri
 function parserFor(
   schema: PagePropSchema,
 ):
-  | { kind: "safeParse"; fn: (value: unknown) => unknown }
-  | { kind: "decode"; fn: (value: unknown) => unknown }
-  | { kind: "parse"; fn: (value: unknown) => unknown }
-  | { kind: "transform"; fn: (value: unknown) => unknown }
+  | { kind: 'safeParse'; fn: (value: unknown) => unknown }
+  | { kind: 'decode'; fn: (value: unknown) => unknown }
+  | { kind: 'parse'; fn: (value: unknown) => unknown }
+  | { kind: 'transform'; fn: (value: unknown) => unknown }
   | undefined {
-  if (typeof schema.safeParse === "function")
-    return { kind: "safeParse", fn: schema.safeParse.bind(schema) };
-  if (typeof schema.decode === "function") {
+  if (typeof schema.safeParse === 'function')
+    return { kind: 'safeParse', fn: schema.safeParse.bind(schema) };
+  if (typeof schema.decode === 'function') {
     // Zod 4 exposes `decode` on every schema, even validators that do not
     // transform. Use the structural marker to avoid relabeling ordinary Zod
     // validation as a decode failure.
-    return { kind: hasTransform(schema) ? "decode" : "parse", fn: schema.decode.bind(schema) };
+    return { kind: hasTransform(schema) ? 'decode' : 'parse', fn: schema.decode.bind(schema) };
   }
-  if (typeof schema.parse === "function") return { kind: "parse", fn: schema.parse.bind(schema) };
-  if (typeof schema.transform === "function")
-    return { kind: "transform", fn: schema.transform.bind(schema) };
+  if (typeof schema.parse === 'function') return { kind: 'parse', fn: schema.parse.bind(schema) };
+  if (typeof schema.transform === 'function')
+    return { kind: 'transform', fn: schema.transform.bind(schema) };
   return undefined;
 }
 
@@ -750,7 +750,7 @@ function executeSchema(state: RuntimeState, schema: PagePropSchema, input: unkno
   if (cached) return cached;
 
   const fail = (
-    kind: "validation" | "decode",
+    kind: 'validation' | 'decode',
     error?: unknown,
     issues?: unknown,
   ): CachedResult => ({
@@ -758,32 +758,32 @@ function executeSchema(state: RuntimeState, schema: PagePropSchema, input: unkno
     failure: { kind, stage: kind, error, issues },
   });
 
-  if (typeof schema.validate === "function" && !parserFor(schema)) {
+  if (typeof schema.validate === 'function' && !parserFor(schema)) {
     try {
       const validation = normalizeValidation(schema.validate(input));
       if (!validation.ok) {
-        const result = fail("validation", validation.error, validation.issues);
+        const result = fail('validation', validation.error, validation.issues);
         writeCached(state, input, schema, result);
         return result;
       }
     } catch (error) {
-      const result = fail("validation", error);
+      const result = fail('validation', error);
       writeCached(state, input, schema, result);
       return result;
     }
-  } else if (typeof schema.validate === "function") {
+  } else if (typeof schema.validate === 'function') {
     // A separate validation callback is useful for transforms: it prevents a
     // transform from ever seeing invalid wire data and preserves the failure
     // category for diagnostics.
     try {
       const validation = normalizeValidation(schema.validate(input));
       if (!validation.ok) {
-        const result = fail("validation", validation.error, validation.issues);
+        const result = fail('validation', validation.error, validation.issues);
         writeCached(state, input, schema, result);
         return result;
       }
     } catch (error) {
-      const result = fail("validation", error);
+      const result = fail('validation', error);
       writeCached(state, input, schema, result);
       return result;
     }
@@ -795,9 +795,9 @@ function executeSchema(state: RuntimeState, schema: PagePropSchema, input: unkno
     return result;
   }
 
-  const jsonIssues = jsonSchemaValidation(input, schema, "$");
+  const jsonIssues = jsonSchemaValidation(input, schema, '$');
   if (jsonIssues.length > 0) {
-    const result = fail("validation", undefined, jsonIssues);
+    const result = fail('validation', undefined, jsonIssues);
     writeCached(state, input, schema, result);
     return result;
   }
@@ -815,9 +815,9 @@ function executeSchema(state: RuntimeState, schema: PagePropSchema, input: unkno
       // A safe decoder with transforms must never be treated as a validation
       // warning followed by the original wire value.  Its output is unsafe.
       const kind =
-        hasTransform(schema) || parser.kind === "decode" || parser.kind === "transform"
-          ? "decode"
-          : "validation";
+        hasTransform(schema) || parser.kind === 'decode' || parser.kind === 'transform'
+          ? 'decode'
+          : 'validation';
       const result = fail(kind, parsed.error, parsed.issues);
       writeCached(state, input, schema, result);
       return result;
@@ -828,9 +828,9 @@ function executeSchema(state: RuntimeState, schema: PagePropSchema, input: unkno
     return result;
   } catch (error) {
     const kind =
-      hasTransform(schema) || parser.kind === "decode" || parser.kind === "transform"
-        ? "decode"
-        : "validation";
+      hasTransform(schema) || parser.kind === 'decode' || parser.kind === 'transform'
+        ? 'decode'
+        : 'validation';
     const result = fail(kind, error);
     writeCached(state, input, schema, result);
     return result;
@@ -847,24 +847,24 @@ function sameOwnValues(left: Record<string, unknown>, right: Record<string, unkn
 
 function topLevelIssuePaths(issues: unknown): Set<string> {
   const paths = new Set<string>();
-  const unsafeKeys = new Set(["__proto__", "prototype", "constructor"]);
+  const unsafeKeys = new Set(['__proto__', 'prototype', 'constructor']);
   if (!Array.isArray(issues)) return paths;
 
   for (const issue of issues) {
     if (isRecord(issue)) {
       const path = issue.path;
-      if (typeof path === "string") {
+      if (typeof path === 'string') {
         // Zod commonly reports `$.field` while JSON-schema adapters may
         // report `field[0].name`. Strip only the root marker and select the
         // first own-property segment; never treat `$` or a prototype key as a
         // prop name by accident.
-        const normalized = path.replace(/^\$\.?/, "");
+        const normalized = path.replace(/^\$\.?/, '');
         const first = normalized.split(/[.[\]]/)[0];
         if (first && !unsafeKeys.has(first)) paths.add(first);
       }
       if (
         Array.isArray(path) &&
-        typeof path[0] === "string" &&
+        typeof path[0] === 'string' &&
         path[0] &&
         !unsafeKeys.has(path[0])
       ) {
@@ -882,7 +882,7 @@ function copyPageInto(target: PageLike, source: PageLike): void {
 }
 
 function isCompletePhase(phase: SchemaRuntimePhase): boolean {
-  return phase !== "partial" && phase !== "deferred";
+  return phase !== 'partial' && phase !== 'deferred';
 }
 
 function isRequiredSchemaField(schema: PagePropSchema, field: string): boolean {
@@ -894,10 +894,10 @@ function createRuntime(
   options: PageSchemaRuntimeOptions,
   router?: InertiaRouterLike,
 ): InstalledSchemaRuntime {
-  const enabled = options.enabled !== false && options.mode !== "off" && !!options.registry;
+  const enabled = options.enabled !== false && options.mode !== 'off' && !!options.registry;
   const mode = options.mode || defaultMode();
   const state: RuntimeState = {
-    phase: "navigation",
+    phase: 'navigation',
     disposed: false,
     pageCache: new WeakMap<object, unknown>(),
     registryCache: new Map(),
@@ -911,25 +911,25 @@ function createRuntime(
       (options.onFailure || options.reporter)?.(failure);
     } catch (error) {
       // Reporting should not hide the original schema failure.
-      if (mode === "throw") throw error;
+      if (mode === 'throw') throw error;
     }
 
-    if (mode === "report") {
+    if (mode === 'report') {
       try {
         options.overlay?.(failure);
       } catch (error) {
         void error;
       }
 
-      if (!options.onFailure && !options.reporter && typeof console !== "undefined") {
-        console.error("[nb_inertia] page schema failure", failure);
+      if (!options.onFailure && !options.reporter && typeof console !== 'undefined') {
+        console.error('[nb_inertia] page schema failure', failure);
       }
     }
   };
 
   const handleFailure = (failure: SchemaFailure): undefined => {
     report(failure);
-    if (mode === "throw") throw new PageSchemaRuntimeError(failure);
+    if (mode === 'throw') throw new PageSchemaRuntimeError(failure);
     return undefined;
   };
 
@@ -994,13 +994,13 @@ function createRuntime(
               (Array.isArray(pageRequired) && pageRequired.includes(prop)))
           ) {
             const failure: SchemaFailure = {
-              kind: "validation",
-              stage: "validation",
+              kind: 'validation',
+              stage: 'validation',
               component,
               prop,
               path: `${component}.${prop}`,
               phase,
-              issues: [{ path: `$.${prop}`, message: "is required" }],
+              issues: [{ path: `$.${prop}`, message: 'is required' }],
             };
             handleFailure(failure);
           }
@@ -1012,7 +1012,7 @@ function createRuntime(
 
         if (!result.ok) {
           handleFailure(result.failure);
-          if (mode === "report") {
+          if (mode === 'report') {
             if (next === fieldProps) next = { ...fieldProps };
             delete next[prop];
           }
@@ -1036,12 +1036,12 @@ function createRuntime(
       // are retained for explicit whole-page decoders, but must not cause a
       // nested codec to relabel unrelated field validation failures as
       // decode failures here.
-      if (isCompletePhase(phase) && typeof schema.validate === "function") {
+      if (isCompletePhase(phase) && typeof schema.validate === 'function') {
         const validation = executeSchema(state, { validate: schema.validate }, props);
         if (!validation.ok) {
           const failure = failureFor(validation, component, undefined, phase, props);
           handleFailure(failure);
-          if (mode === "report") {
+          if (mode === 'report') {
             const paths = topLevelIssuePaths(failure.issues);
             if (paths.size === 0) return {};
             const filtered = { ...props };
@@ -1082,7 +1082,7 @@ function createRuntime(
     }
 
     handleFailure(result.failure);
-    if (mode !== "report") return props;
+    if (mode !== 'report') return props;
 
     const paths = topLevelIssuePaths(result.failure.issues);
     if (paths.size === 0) return {};
@@ -1095,7 +1095,7 @@ function createRuntime(
 
   const processModal = (props: Record<string, unknown>): Record<string, unknown> => {
     const modal = props._nb_modal;
-    if (!isRecord(modal) || typeof modal.component !== "string" || !isRecord(modal.props))
+    if (!isRecord(modal) || typeof modal.component !== 'string' || !isRecord(modal.props))
       return props;
 
     const modalSchema = normalizeSchema(
@@ -1103,7 +1103,7 @@ function createRuntime(
     );
     if (!modalSchema) return props;
 
-    const modalProps = processProps(modal.component, modal.props, "modal", modalSchema);
+    const modalProps = processProps(modal.component, modal.props, 'modal', modalSchema);
     if (Object.is(modalProps, modal.props)) return props;
 
     return {
@@ -1120,7 +1120,7 @@ function createRuntime(
     const pageObject = page as Record<string, unknown>;
     const cached = state.pageCache.get(page);
     if (cached !== undefined) return cached;
-    if (typeof pageObject.component !== "string" || !isRecord(pageObject.props)) return page;
+    if (typeof pageObject.component !== 'string' || !isRecord(pageObject.props)) return page;
 
     const component = pageObject.component;
     const schema = normalizeSchema(
@@ -1149,11 +1149,11 @@ function createRuntime(
       } catch (error) {
         // In report mode a frozen page cannot be sanitized in place.  Throwing
         // is safer than allowing the invalid wire payload to reach a page.
-        if (mode !== "throw") {
+        if (mode !== 'throw') {
           const failure: SchemaFailure = {
-            kind: "decode",
-            stage: "decode",
-            component: typeof page.component === "string" ? page.component : "<unknown>",
+            kind: 'decode',
+            stage: 'decode',
+            component: typeof page.component === 'string' ? page.component : '<unknown>',
             phase,
             error,
           };
@@ -1174,7 +1174,7 @@ function createRuntime(
     const raw = response.data;
     let page: unknown = raw;
     let encoded = false;
-    if (typeof raw === "string") {
+    if (typeof raw === 'string') {
       try {
         page = JSON.parse(raw);
         encoded = true;
@@ -1183,7 +1183,7 @@ function createRuntime(
       }
     }
 
-    const processed = processPage(page, "prefetch");
+    const processed = processPage(page, 'prefetch');
     if (processed === page) return;
     if (encoded) {
       response.data = JSON.stringify(processed);
@@ -1215,10 +1215,10 @@ function createRuntime(
 
   if (!enabled || !router) return runtime;
 
-  if (typeof router.init === "function") {
+  if (typeof router.init === 'function') {
     const originalInit = router.init;
     const wrappedInit = function (this: InertiaRouterLike, params: RouterInitParamsLike) {
-      const initialPage = processAndAdopt(params.initialPage, "initial") as PageLike;
+      const initialPage = processAndAdopt(params.initialPage, 'initial') as PageLike;
       const originalResolve = params.resolveComponent;
       const resolveComponent = (name: string, page?: PageLike) => {
         const processed = page ? (processAndAdopt(page, phaseForPage(page)) as PageLike) : page;
@@ -1247,55 +1247,61 @@ function createRuntime(
     }
   }
 
-  if (typeof router.on === "function" && typeof document !== "undefined") {
+  if (typeof router.on === 'function' && typeof document !== 'undefined') {
     const subscribe = (event: string, callback: (event: unknown) => unknown): void => {
       try {
         const unsubscribe = router.on?.(event, callback);
-        if (typeof unsubscribe === "function") state.unsubs.push(unsubscribe);
+        if (typeof unsubscribe === 'function') state.unsubs.push(unsubscribe);
       } catch {
         // SSR and small router test doubles may not support subscriptions.
       }
     };
 
-    subscribe("start", (event) => {
+    subscribe('start', (event) => {
       const visit = isRecord(event) && isRecord(event.detail) ? event.detail.visit : undefined;
       if (isRecord(visit) && visit.deferredProps === true) {
-        state.phase = "deferred";
+        state.phase = 'deferred';
       } else if (
         isRecord(visit) &&
         ((Array.isArray(visit.only) && visit.only.length > 0) ||
-          (Array.isArray(visit.except) && visit.except.length > 0))
+          (Array.isArray(visit.except) && visit.except.length > 0) ||
+          (Array.isArray(visit.reset) && visit.reset.length > 0))
       ) {
-        state.phase = "partial";
-      } else if (isRecord(visit) && visit.instant === true) {
-        state.phase = "instant";
+        state.phase = 'partial';
+      } else if (isRecord(visit) && typeof visit.component === 'string') {
+        state.phase = 'instant';
       } else {
-        state.phase = "navigation";
+        state.phase = 'navigation';
       }
     });
-    subscribe("beforeUpdate", (event) => {
+    subscribe('beforeUpdate', (event) => {
       const page = isRecord(event) && isRecord(event.detail) ? event.detail.page : undefined;
       if (page) processAndAdopt(page, state.phase);
     });
-    subscribe("success", (event) => {
+    subscribe('success', (event) => {
       const page = isRecord(event) && isRecord(event.detail) ? event.detail.page : undefined;
       if (page) processAndAdopt(page, state.phase);
     });
-    subscribe("navigate", (event) => {
+    subscribe('clientVisit', (event) => {
+      const page = isRecord(event) && isRecord(event.detail) ? event.detail.page : undefined;
+      if (page) processAndAdopt(page, 'instant');
+      state.phase = 'instant';
+    });
+    subscribe('navigate', (event) => {
       const page = isRecord(event) && isRecord(event.detail) ? event.detail.page : undefined;
       if (page) processAndAdopt(page, state.phase);
-      state.phase = "navigation";
+      state.phase = 'navigation';
     });
-    subscribe("prefetched", processPrefetched);
-    subscribe("finish", () => {
-      if (state.phase !== "history") state.phase = "navigation";
+    subscribe('prefetched', processPrefetched);
+    subscribe('finish', () => {
+      if (state.phase !== 'history') state.phase = 'navigation';
     });
 
     const onPopState = () => {
-      state.phase = "history";
+      state.phase = 'history';
     };
-    window.addEventListener("popstate", onPopState);
-    state.unsubs.push(() => window.removeEventListener("popstate", onPopState));
+    window.addEventListener('popstate', onPopState);
+    state.unsubs.push(() => window.removeEventListener('popstate', onPopState));
   }
 
   return runtime;
@@ -1387,7 +1393,7 @@ export function createSchemaAwareInertiaApp<TOptions extends PageSchemaAppOption
   const originalResolve = (coreOptions as { resolve?: unknown }).resolve;
   const wrappedOptions = {
     ...coreOptions,
-    ...(typeof originalResolve === "function"
+    ...(typeof originalResolve === 'function'
       ? {
           resolve: (name: string, page?: PageLike) =>
             (originalResolve as (name: string, page?: PageLike) => unknown)(

@@ -45,11 +45,16 @@ import { routerPrefetch } from '../../shared/routerCompat';
 import { isRouteResult, type RouteResult } from '../../shared/types';
 import type {
   ModalInstance,
+  ModalPageMetadata,
   ModalVisitOptions,
   ModalStackContextValue,
   PrefetchedModal,
 } from './types';
-import { mergeModalHeaders, registerModalRequestContext, unregisterModalRequestContext } from './requestContext';
+import {
+  mergeModalHeaders,
+  registerModalRequestContext,
+  unregisterModalRequestContext,
+} from './requestContext';
 
 /**
  * Inertia Page object structure for modal context
@@ -67,6 +72,17 @@ export interface ModalPageObject {
   clearHistory?: boolean;
   encryptHistory?: boolean;
   preserveFragment?: boolean;
+  deferredProps?: ModalPageMetadata['deferredProps'];
+  initialDeferredProps?: ModalPageMetadata['initialDeferredProps'];
+  rescuedProps: string[];
+  mergeProps?: string[];
+  prependProps?: string[];
+  deepMergeProps?: string[];
+  matchPropsOn?: string[];
+  sharedProps?: string[];
+  scrollProps?: ModalPageMetadata['scrollProps'];
+  onceProps?: ModalPageMetadata['onceProps'];
+  optimisticUpdatedAt?: ModalPageMetadata['optimisticUpdatedAt'];
 }
 
 /**
@@ -102,6 +118,7 @@ export interface ModalPageProviderProps {
   url: string;
   baseUrl?: string;
   returnUrl?: string;
+  pageMetadata?: ModalPageMetadata;
   children: React.ReactNode;
 }
 
@@ -111,6 +128,7 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
   url,
   baseUrl,
   returnUrl,
+  pageMetadata,
   children,
 }) => {
   const contextIdRef = React.useRef(Symbol('nb-inertia-modal-request-context'));
@@ -121,15 +139,26 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
       url,
       baseUrl,
       returnUrl,
-      version: '1.0',
-      flash: {},
-      scrollRegions: [],
-      rememberedState: {},
-      clearHistory: false,
-      encryptHistory: false,
-      preserveFragment: false,
+      version: pageMetadata?.version === undefined ? '1.0' : pageMetadata.version,
+      flash: pageMetadata?.flash ?? {},
+      scrollRegions: pageMetadata?.scrollRegions ?? [],
+      rememberedState: pageMetadata?.rememberedState ?? {},
+      clearHistory: pageMetadata?.clearHistory ?? false,
+      encryptHistory: pageMetadata?.encryptHistory ?? false,
+      preserveFragment: pageMetadata?.preserveFragment ?? false,
+      deferredProps: pageMetadata?.deferredProps,
+      initialDeferredProps: pageMetadata?.initialDeferredProps,
+      rescuedProps: pageMetadata?.rescuedProps ?? [],
+      mergeProps: pageMetadata?.mergeProps,
+      prependProps: pageMetadata?.prependProps,
+      deepMergeProps: pageMetadata?.deepMergeProps,
+      matchPropsOn: pageMetadata?.matchPropsOn,
+      sharedProps: pageMetadata?.sharedProps,
+      scrollProps: pageMetadata?.scrollProps,
+      onceProps: pageMetadata?.onceProps,
+      optimisticUpdatedAt: pageMetadata?.optimisticUpdatedAt,
     }),
-    [component, props, url, baseUrl, returnUrl]
+    [component, props, url, baseUrl, returnUrl, pageMetadata],
   );
 
   useEffect(() => {
@@ -144,19 +173,11 @@ export const ModalPageProvider: React.FC<ModalPageProviderProps> = ({
     };
   }, [url, baseUrl, returnUrl]);
 
-  return (
-    <ModalPageContext.Provider value={page}>
-      {children}
-    </ModalPageContext.Provider>
-  );
+  return <ModalPageContext.Provider value={page}>{children}</ModalPageContext.Provider>;
 };
 
 // Re-export types for convenience
-export type {
-  ModalConfig,
-  ModalInstance,
-  ModalStackContextValue,
-} from './types';
+export type { ModalConfig, ModalInstance, ModalStackContextValue } from './types';
 
 /**
  * Modal stack context
@@ -368,7 +389,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
 
       return didPush ? id : '';
     },
-    [onStackChange]
+    [onStackChange],
   );
 
   /**
@@ -407,7 +428,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
         }
       }, 0);
     },
-    [onStackChange]
+    [onStackChange],
   );
 
   /**
@@ -419,38 +440,41 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
    * @param options.fireOnClose - If true, calls each modal's onClose callback.
    *   Use this when clearing modals programmatically outside of navigation.
    */
-  const clearModals = useCallback((options?: { fireOnClose?: boolean }) => {
-    if (options?.fireOnClose) {
-      setModals((prev) => {
-        // Collect callbacks before clearing
-        const callbacks = prev
-          .map((m) => m.onClose)
-          .filter((cb): cb is () => void => typeof cb === 'function');
+  const clearModals = useCallback(
+    (options?: { fireOnClose?: boolean }) => {
+      if (options?.fireOnClose) {
+        setModals((prev) => {
+          // Collect callbacks before clearing
+          const callbacks = prev
+            .map((m) => m.onClose)
+            .filter((cb): cb is () => void => typeof cb === 'function');
 
+          if (onStackChange) {
+            onStackChange([]);
+          }
+
+          // Fire callbacks after state update
+          setTimeout(() => {
+            callbacks.forEach((cb) => {
+              try {
+                cb();
+              } catch (error) {
+                console.error('Error in modal onClose callback:', error);
+              }
+            });
+          }, 0);
+
+          return [];
+        });
+      } else {
+        setModals([]);
         if (onStackChange) {
           onStackChange([]);
         }
-
-        // Fire callbacks after state update
-        setTimeout(() => {
-          callbacks.forEach((cb) => {
-            try {
-              cb();
-            } catch (error) {
-              console.error('Error in modal onClose callback:', error);
-            }
-          });
-        }, 0);
-
-        return [];
-      });
-    } else {
-      setModals([]);
-      if (onStackChange) {
-        onStackChange([]);
       }
-    }
-  }, [onStackChange]);
+    },
+    [onStackChange],
+  );
 
   /**
    * Get a modal by ID
@@ -459,7 +483,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
     (id: string) => {
       return modals.find((m) => m.id === id);
     },
-    [modals]
+    [modals],
   );
 
   /**
@@ -469,16 +493,14 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
   const updateModal = useCallback(
     (id: string, updates: Partial<Omit<ModalInstance, 'id'>>) => {
       setModals((prev) => {
-        const newModals = prev.map((modal) =>
-          modal.id === id ? { ...modal, ...updates } : modal
-        );
+        const newModals = prev.map((modal) => (modal.id === id ? { ...modal, ...updates } : modal));
         if (onStackChange) {
           onStackChange(newModals);
         }
         return newModals;
       });
     },
-    [onStackChange]
+    [onStackChange],
   );
 
   /**
@@ -521,6 +543,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
           config: prefetched.data.config || options.modalConfig || {},
           baseUrl: prefetched.data.baseUrl,
           returnUrl,
+          pageMetadata: prefetched.data.pageMetadata,
           onClose: () => {
             if (returnUrl && typeof window !== 'undefined') {
               window.history.replaceState({}, '', returnUrl);
@@ -556,11 +579,11 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
           {
             headers: options.headers,
           },
-          { url, baseUrl: returnUrl, returnUrl }
+          { url, baseUrl: returnUrl, returnUrl },
         ),
       });
     },
-    [getPrefetchedModal, modals, pushModal]
+    [getPrefetchedModal, modals, pushModal],
   );
 
   /**
@@ -621,6 +644,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
             url: modalUrl,
             baseUrl: modalData.baseUrl || '',
             config: modalData.config,
+            pageMetadata: modalData.pageMetadata || pageData,
           },
           component: cachedComponent,
           timestamp: Date.now(),
@@ -640,6 +664,7 @@ export const ModalStackProvider: React.FC<ModalStackProviderProps> = ({
                 url: modalUrl,
                 baseUrl: modalData.baseUrl || '',
                 config: modalData.config,
+                pageMetadata: modalData.pageMetadata || pageData,
               },
               component: Component,
               timestamp: Date.now(),

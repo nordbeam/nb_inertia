@@ -70,6 +70,42 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
     File.write!(Path.join(assets_dir, "tsconfig.json"), files["assets/tsconfig.json"])
 
+    File.write!(
+      Path.join([assets_dir, "js", "lib", "inertia_37_smoke.ts"]),
+      """
+      import {
+        Deferred,
+        Form,
+        InfiniteScroll,
+        WhenVisible,
+        http,
+        router,
+        useFormWithPrecognition,
+        useHttpWithPrecognition,
+        usePoll,
+        usePrefetch
+      } from './inertia';
+
+      // Compile the public surface added across Inertia 3.0 through 3.7.
+      void Deferred;
+      void Form;
+      void InfiniteScroll;
+      void WhenVisible;
+      void http;
+      void useFormWithPrecognition;
+      void useHttpWithPrecognition;
+      void usePoll;
+      void usePrefetch;
+      void router.optimistic;
+      void router.once;
+      void router.poll;
+      void router.activePolls;
+      void router.getCached;
+      void router.replace;
+      void router.flash;
+      """
+    )
+
     unless export_keys == [] do
       export_smoke =
         export_keys
@@ -617,6 +653,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert lib_ts =~ "@nordbeam/nb-inertia/react/useFlash"
       assert lib_ts =~ "@nordbeam/nb-inertia/react/modals"
       assert lib_ts =~ "export * from '@inertiajs/react'"
+      assert lib_ts =~ "useFormWithPrecognition"
+      assert lib_ts =~ "useHttpWithPrecognition"
       refute Map.has_key?(files, "assets/js/lib/inertia.js")
     end
 
@@ -679,6 +717,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert lib_ts =~ "@nordbeam/nb-inertia/vue/useFlash"
       assert lib_ts =~ "@nordbeam/nb-inertia/vue/modals"
       assert lib_ts =~ "export * from '@inertiajs/vue3'"
+      assert lib_ts =~ "useFormWithPrecognition"
+      assert lib_ts =~ "useHttpWithPrecognition"
       refute Map.has_key?(files, "assets/js/lib/inertia.js")
     end
 
@@ -696,6 +736,9 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       assert source =~ "createSchemaAwareInertiaApp"
       assert source =~ "import type { Pages } from '@/types/pages'"
       assert source =~ "export const usePageProps = createTypedUsePageProps<Pages>()"
+
+      assert source =~
+               "export const createInertiaApp = createInertiaAppWithSchemas as typeof createSchemaAwareInertiaApp"
     end
 
     test "Vue without TypeScript generates assets/js/lib/inertia.js" do
@@ -834,6 +877,14 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         |> File.read!()
 
       assert source =~ "radix-vue is installed automatically"
+    end
+
+    test "React client and SSR templates enable Inertia v3 server head reconciliation" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert length(Regex.scan(~r/serverHead: true/, source)) >= 3
     end
   end
 

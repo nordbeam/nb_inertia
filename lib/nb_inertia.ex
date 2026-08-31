@@ -202,6 +202,7 @@ defmodule NbInertia do
   defdelegate inertia_scroll(value, opts), to: NbInertia.CoreController
   defdelegate inertia_defer(fun), to: NbInertia.CoreController
   defdelegate inertia_defer(fun, group), to: NbInertia.CoreController
+  defdelegate inertia_defer(fun, group, opts), to: NbInertia.CoreController
   defdelegate inertia_always(value), to: NbInertia.CoreController
   defdelegate preserve_case(key), to: NbInertia.CoreController
   defdelegate encrypt_history(conn), to: NbInertia.CoreController

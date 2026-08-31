@@ -19,6 +19,37 @@ Advanced Inertia.js integration for Phoenix with declarative page DSL, type-safe
 - **Modal System**: Render pages as modals/slideovers without full page navigation
 - **Credo Checks**: Shortcut task to enable nb-specific custom checks from installed `nb_*` packages
 
+## Inertia.js 3.7 compatibility
+
+NbInertia targets the complete Inertia.js 3.7 protocol and adapter surface. The
+generated `@/lib/inertia` entrypoint re-exports the official React or Vue 3
+adapter, so current APIs such as `Form`, `Deferred`, `InfiniteScroll`,
+`WhenVisible`, `usePoll`, `usePrefetch`, `http`, instant visits, optimistic
+updates, once-only events, cached visits, background async visits, and form
+cancellation remain available alongside NbInertia's route, modal, flash, and
+schema integrations.
+
+Inertia 3.1 deferred-prop rescue is supported on the server and is reflected in
+the page's `rescuedProps` metadata:
+
+```elixir
+stats =
+  inertia_defer(fn -> Analytics.expensive_stats() end,
+    on_error: :ignore
+  )
+
+render_inertia(conn, "Dashboard", stats: stats)
+```
+
+Named groups are supported with `inertia_defer(fun, "analytics",
+on_error: :ignore)`. Deferred and once props may also be nested; their protocol
+metadata uses Inertia's dot-path representation. Generated React and SSR clients
+enable `serverHead`, allowing the server-provided `head` page property to be
+reconciled by Inertia 3.5+.
+
+See the [official Inertia releases](https://github.com/inertiajs/inertia/releases)
+for the upstream feature history.
+
 ## Development Tools
 
 Performance benchmarks and smoke budgets are documented in

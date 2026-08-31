@@ -39,6 +39,24 @@ defmodule NbInertia.DslOptionsTest do
       assert fun.() == [1, 2, 3]
     end
 
+    test "applies the Inertia v3 deferred rescue option" do
+      conn =
+        conn(:get, "/")
+        |> assign_raw_prop_with_dsl_opts(:stats, fn -> raise "unavailable" end,
+          defer: "analytics",
+          on_error: :ignore
+        )
+
+      assert {:defer, {fun, "analytics", :ignore}} = conn.private[:inertia_shared][:stats]
+      assert is_function(fun, 0)
+    end
+
+    test "rejects deferred rescue without defer" do
+      assert_raise ArgumentError, ~r/requires defer/, fn ->
+        assign_raw_prop_with_dsl_opts(conn(:get, "/"), :stats, %{}, on_error: :ignore)
+      end
+    end
+
     test "applies partial: true option" do
       conn = conn(:get, "/")
 

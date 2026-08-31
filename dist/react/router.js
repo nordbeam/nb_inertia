@@ -4,29 +4,42 @@ import { router as n } from "@inertiajs/react";
 function r(n) {
 	return t(n, e());
 }
-var i = {
-	...n,
-	visit(e, t) {
-		return n.visit(e, r(t));
-	},
-	get(e, t, i) {
-		return n.get(e, t, r(i));
-	},
-	post(e, t, i) {
-		return n.post(e, t, r(i));
-	},
-	put(e, t, i) {
-		return n.put(e, t, r(i));
-	},
-	patch(e, t, i) {
-		return n.patch(e, t, r(i));
-	},
-	delete(e, t) {
-		return n.delete(e, r(t));
-	},
-	reload(e) {
-		return n.reload(r(e));
-	}
-};
+function i(e) {
+	return typeof e == "function" ? () => r(e()) : r(e);
+}
+function a(e, t) {
+	let n = [...e];
+	return n[t] = r(n[t]), n;
+}
+var o = new Proxy(n, { get(e, t, n) {
+	let r = Reflect.get(e, t, e);
+	return typeof r == "function" ? (...o) => {
+		let s = o;
+		switch (t) {
+			case "visit":
+			case "reload":
+				s = a(s, +(t === "visit"));
+				break;
+			case "get":
+			case "post":
+			case "put":
+			case "patch":
+				s = a(s, 2);
+				break;
+			case "delete":
+				s = a(s, 1);
+				break;
+			case "poll":
+				s = [...s], s[1] = i(s[1]);
+				break;
+			case "prefetch":
+			case "getCached":
+			case "flush":
+			case "getPrefetching": s = a(s, 1);
+		}
+		let c = Reflect.apply(r, e, s);
+		return c === e ? n : c;
+	} : r;
+} });
 //#endregion
-export { i as default, i as router };
+export { o as default, o as router };

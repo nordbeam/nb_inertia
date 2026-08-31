@@ -11,6 +11,9 @@
 
 import type { Component, DefineComponent, InjectionKey } from 'vue';
 import type { RouteResult } from '../../shared/types';
+import type { ModalPageObject } from '../modalPageContext';
+
+export type { ModalPageObject } from '../modalPageContext';
 
 // ---------------------------------------------------------------------------
 // Modal configuration types
@@ -28,13 +31,7 @@ export type ModalSize =
   | 'full'
   | (string & {});
 
-export type ModalPosition =
-  | 'center'
-  | 'top'
-  | 'bottom'
-  | 'left'
-  | 'right'
-  | (string & {});
+export type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | (string & {});
 
 export interface ModalConfig {
   size?: ModalSize;
@@ -50,15 +47,14 @@ export interface ModalConfig {
 
 export type ModalEventType = 'close' | 'success' | 'blur' | 'focus' | 'beforeClose';
 
-export type ModalEventHandler = (
-  modal: ModalInstance
-) => void | boolean | Promise<void | boolean>;
+export type ModalEventHandler = (modal: ModalInstance) => void | boolean | Promise<void | boolean>;
 
 export interface ModalInstance {
   id: string;
   component: Component;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   props: Record<string, any>;
+  page?: ModalPageObject;
   config: ModalConfig;
   baseUrl: string;
   index: number;
@@ -86,7 +82,7 @@ export declare function mergeModalConfig(config?: ModalConfig): Required<ModalCo
 export declare const MODAL_STACK_KEY: InjectionKey<ModalStackState>;
 
 export declare function createModalStack(
-  onStackChange?: (modals: ModalInstance[]) => void
+  onStackChange?: (modals: ModalInstance[]) => void,
 ): ModalStackState;
 
 export declare function useModalStack(): ModalStackState;
@@ -120,6 +116,7 @@ export declare const HeadlessModal: DefineComponent<
     config?: ModalConfig;
     baseUrl: string;
     open?: boolean;
+    page?: Partial<ModalPageObject>;
   },
   Record<string, never>,
   unknown
@@ -138,6 +135,9 @@ export declare const ModalLink: DefineComponent<
     prefetch?: boolean | _PrefetchMode | _PrefetchMode[];
     cacheFor?: number;
     cacheTags?: string[];
+    target?: string;
+    rel?: string;
+    download?: string | boolean;
   },
   Record<string, never>,
   unknown

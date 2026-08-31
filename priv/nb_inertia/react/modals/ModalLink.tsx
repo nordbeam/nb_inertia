@@ -23,7 +23,7 @@
  */
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
-import type { Method } from '@inertiajs/core';
+import { shouldIntercept, type Method } from '@inertiajs/core';
 import { isRouteResult, type RouteResult } from '../../shared/types';
 import { routerPrefetch } from '../../shared/routerCompat';
 import type { ModalConfig } from './types';
@@ -32,7 +32,10 @@ import { useModalStack } from './modalStack';
 /**
  * Props for the ModalLink component
  */
-export interface ModalLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
+export interface ModalLinkProps extends Omit<
+  React.AnchorHTMLAttributes<HTMLAnchorElement>,
+  'href'
+> {
   /**
    * The URL or RouteResult to navigate to
    *
@@ -229,7 +232,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
         hoverTimeoutRef.current = setTimeout(doPrefetch, 75);
       }
     },
-    [prefetchModes, doPrefetch, anchorProps]
+    [prefetchModes, doPrefetch, anchorProps],
   );
 
   const handleMouseLeave = useCallback(
@@ -242,7 +245,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
         hoverTimeoutRef.current = null;
       }
     },
-    [anchorProps]
+    [anchorProps],
   );
 
   // Click prefetch (mousedown)
@@ -251,26 +254,25 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
       // Call any existing onMouseDown from anchorProps
       anchorProps.onMouseDown?.(e);
 
-      if (prefetchModes.includes('click')) {
+      if (prefetchModes.includes('click') && shouldIntercept(e)) {
         doPrefetch();
       }
     },
-    [prefetchModes, doPrefetch, anchorProps]
+    [prefetchModes, doPrefetch, anchorProps],
   );
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>) => {
-      // Allow modifier keys to work normally (open in new tab, etc.)
-      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      // Match Inertia's native anchor behavior: user handlers run first, and
+      // modifier clicks, alternate targets, non-left clicks, and prevented
+      // events continue through the browser's normal link handling.
+      onClick?.(e);
+
+      if (!shouldIntercept(e)) {
         return;
       }
 
       e.preventDefault();
-
-      // Call user's onClick if provided
-      if (onClick) {
-        onClick(e);
-      }
 
       // Check if there's already a modal for this URL (prevent duplicates)
       const existingModal = modals.find((m) => m.url === finalHref);
@@ -289,7 +291,7 @@ export const ModalLink: React.FC<ModalLinkProps> = ({
         returnUrl,
       });
     },
-    [data, finalMethod, href, loadingComponent, modalConfig, modals, onClick, visitModal]
+    [data, finalMethod, href, loadingComponent, modalConfig, modals, onClick, visitModal],
   );
 
   return (

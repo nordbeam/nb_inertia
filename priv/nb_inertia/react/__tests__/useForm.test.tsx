@@ -90,8 +90,53 @@ describe('useForm (React)', () => {
           'x-inertia-modal': 'true',
           'x-inertia-modal-base-url': '/posts?page=2',
         },
-      })
+      }),
     );
+  });
+
+  it('keeps modal headers after chaining the native optimistic builder', () => {
+    const post = vi.fn();
+    const form = {
+      submit: mockSubmit,
+      post,
+      optimistic: vi.fn(),
+      data: { title: 'Test Post' },
+      setData: vi.fn(),
+      errors: {},
+      processing: false,
+    };
+    form.optimistic.mockReturnValue(form);
+    mockUseForm.mockReturnValue(form);
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ModalPageProvider
+        component="Posts/Edit"
+        props={{}}
+        url="/posts/1/edit"
+        baseUrl="/posts"
+        returnUrl="/posts?page=2"
+      >
+        {children}
+      </ModalPageProvider>
+    );
+
+    const { result } = renderHook(() => useForm({ title: 'Updated' }), { wrapper });
+
+    act(() => {
+      result.current
+        .optimistic(() => ({ title: 'Optimistic' }))
+        .post('/posts/1', {
+          headers: { 'x-custom': 'yes' },
+        });
+    });
+
+    expect(post).toHaveBeenCalledWith('/posts/1', {
+      headers: {
+        'x-custom': 'yes',
+        'x-inertia-modal': 'true',
+        'x-inertia-modal-base-url': '/posts?page=2',
+      },
+    });
   });
 
   it('rewrites submit for separate submission routes', () => {
@@ -99,7 +144,7 @@ describe('useForm (React)', () => {
     const submitRoute: RouteResult = { url: '/posts', method: 'post' };
 
     const { result } = renderHook(() =>
-      useFormWithPrecognition({ title: 'Test Post' }, validateRoute, submitRoute)
+      useFormWithPrecognition({ title: 'Test Post' }, validateRoute, submitRoute),
     );
 
     act(() => {
@@ -108,5 +153,53 @@ describe('useForm (React)', () => {
 
     expect(mockUseForm).toHaveBeenCalledWith(validateRoute, { title: 'Test Post' });
     expect(mockSubmit).toHaveBeenCalledWith('post', '/posts', { preserveScroll: true });
+  });
+
+  it('keeps separate submission routes and modal headers after builders', () => {
+    const validateRoute: RouteResult = { url: '/posts/validate', method: 'post' };
+    const submitRoute: RouteResult = { url: '/posts', method: 'post' };
+    const form = {
+      submit: mockSubmit,
+      optimistic: vi.fn(),
+      data: { title: 'Test Post' },
+      setData: vi.fn(),
+      errors: {},
+      processing: false,
+    };
+    form.optimistic.mockReturnValue(form);
+    mockUseForm.mockReturnValue(form);
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ModalPageProvider
+        component="Posts/Edit"
+        props={{}}
+        url="/posts/1/edit"
+        baseUrl="/posts"
+        returnUrl="/posts?page=2"
+      >
+        {children}
+      </ModalPageProvider>
+    );
+
+    const { result } = renderHook(
+      () => useFormWithPrecognition({ title: 'Test Post' }, validateRoute, submitRoute),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current
+        .optimistic(() => ({ title: 'Optimistic' }))
+        .submit({
+          headers: { 'x-custom': 'yes' },
+        });
+    });
+
+    expect(mockSubmit).toHaveBeenCalledWith('post', '/posts', {
+      headers: {
+        'x-custom': 'yes',
+        'x-inertia-modal': 'true',
+        'x-inertia-modal-base-url': '/posts?page=2',
+      },
+    });
   });
 });

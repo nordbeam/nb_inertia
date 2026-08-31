@@ -2152,6 +2152,7 @@ defmodule NbInertia.Controller do
       - `:lazy` - When `true`, only serializes on partial reloads (default: `false`)
       - `:partial` - When `true`, excludes on first visit (default: `false`)
       - `:defer` - When `true` or a string (group name), marks for deferred loading (default: `false`)
+      - `:on_error` - Pass `:ignore` to rescue deferred resolution failures for `<Deferred rescue>`
       - `:merge` - When `true`, marks for merging with existing client data (default: `false`)
       - `:merge` - When `:deep`, marks for deep merging
       - `:opts` - Serialization options to pass to `NbSerializer.serialize/3` (default: `[]`)
@@ -2199,8 +2200,18 @@ defmodule NbInertia.Controller do
         Keyword.get(options, :partial, Keyword.get(options, :optional, is_function_data?))
 
       defer = Keyword.get(options, :defer, false)
+      on_error = Keyword.get(options, :on_error)
       once = Keyword.get(options, :once, false)
       merge = Keyword.get(options, :merge, false)
+
+      if on_error not in [nil, :ignore] do
+        raise ArgumentError, "on_error only accepts :ignore"
+      end
+
+      if on_error == :ignore and defer == false do
+        raise ArgumentError, "on_error: :ignore requires defer: true or a deferred group"
+      end
+
       # Disable NbSerializer camelization since NbInertia handles it.
       # Keep raw markers so resolve_props can skip camelization for raw: true fields.
       serialization_opts =
@@ -2227,7 +2238,7 @@ defmodule NbInertia.Controller do
             once_opts = build_once_opts(once)
             defer_group = if is_binary(defer), do: defer, else: "default"
 
-            NbInertia.CoreController.inertia_defer(serialize_fn, defer_group)
+            NbInertia.CoreController.inertia_defer(serialize_fn, defer_group, on_error: on_error)
             |> NbInertia.CoreController.defer_once()
             |> maybe_apply_once_opts(once_opts)
 
@@ -2236,14 +2247,14 @@ defmodule NbInertia.Controller do
             once_opts = build_once_opts(once)
             NbInertia.CoreController.inertia_once(serialize_fn, once_opts)
 
-          partial? ->
-            NbInertia.CoreController.inertia_optional(serialize_fn)
-
           is_binary(defer) ->
-            NbInertia.CoreController.inertia_defer(serialize_fn, defer)
+            NbInertia.CoreController.inertia_defer(serialize_fn, defer, on_error: on_error)
 
           defer == true ->
-            NbInertia.CoreController.inertia_defer(serialize_fn)
+            NbInertia.CoreController.inertia_defer(serialize_fn, on_error: on_error)
+
+          partial? ->
+            NbInertia.CoreController.inertia_optional(serialize_fn)
 
           lazy? ->
             serialize_fn
@@ -2871,6 +2882,7 @@ defmodule NbInertia.Controller do
   ## DSL Options Supported
 
     - `:defer` - When `true` or a group name string, wraps with `inertia_defer`
+    - `:on_error` - Pass `:ignore` to rescue deferred resolution failures for `<Deferred rescue>`
     - `:lazy` - When `true`, wraps value in a function for lazy evaluation
     - `:partial` - When `true`, wraps with `inertia_optional`
     - `:merge` - When `true` or `:deep`, wraps with `inertia_merge` or `inertia_deep_merge`
@@ -2892,6 +2904,7 @@ defmodule NbInertia.Controller do
   def assign_raw_prop_with_dsl_opts(conn, key, value, dsl_opts) do
     # Extract DSL options
     defer = Keyword.get(dsl_opts, :defer, false)
+    on_error = Keyword.get(dsl_opts, :on_error)
     once = Keyword.get(dsl_opts, :once, false)
     lazy? = Keyword.get(dsl_opts, :lazy, false)
     partial? = Keyword.get(dsl_opts, :partial, Keyword.get(dsl_opts, :optional, false))
@@ -2914,7 +2927,7 @@ defmodule NbInertia.Controller do
           once_opts = build_once_opts_from_dsl(once, dsl_opts)
           defer_group = if is_binary(defer), do: defer, else: "default"
 
-          NbInertia.CoreController.inertia_defer(value_fn, defer_group)
+          NbInertia.CoreController.inertia_defer(value_fn, defer_group, on_error: on_error)
           |> NbInertia.CoreController.defer_once()
           |> apply_once_opts_from_dsl(once_opts)
 
@@ -2925,10 +2938,10 @@ defmodule NbInertia.Controller do
 
         # Defer wraps in a function and marks for deferred loading
         is_binary(defer) ->
-          NbInertia.CoreController.inertia_defer(value_fn, defer)
+          NbInertia.CoreController.inertia_defer(value_fn, defer, on_error: on_error)
 
         defer == true ->
-          NbInertia.CoreController.inertia_defer(value_fn)
+          NbInertia.CoreController.inertia_defer(value_fn, on_error: on_error)
 
         partial? ->
           # Partial wraps in a function that's only called on partial reloads
@@ -2959,8 +2972,15 @@ defmodule NbInertia.Controller do
     prepend? = Keyword.get(dsl_opts, :prepend, false)
     match_on = Keyword.get(dsl_opts, :match_on)
     merge = Keyword.get(dsl_opts, :merge, false)
+    on_error = Keyword.get(dsl_opts, :on_error)
 
     cond do
+      on_error not in [nil, :ignore] ->
+        raise ArgumentError, "on_error only accepts :ignore"
+
+      on_error == :ignore and Keyword.get(dsl_opts, :defer, false) == false ->
+        raise ArgumentError, "on_error: :ignore requires defer: true or a deferred group"
+
       scroll != false and merge in [true, :deep] ->
         raise ArgumentError, "scroll cannot be combined with merge or merge: :deep"
 

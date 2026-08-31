@@ -50,6 +50,12 @@ export interface ClientModalLinkProps {
   className?: string;
 
   /**
+   * Native anchor target. Alternate targets stay regular browser links after
+   * hydration instead of being intercepted as modal visits.
+   */
+  target?: React.HTMLAttributeAnchorTarget;
+
+  /**
    * Modal configuration when opening as modal
    */
   modalConfig?: ModalConfig;
@@ -97,6 +103,7 @@ export function ClientModalLink({
   href,
   children,
   className,
+  target,
   modalConfig,
   loadingComponent,
   prefetch,
@@ -117,6 +124,7 @@ export function ClientModalLink({
       <Link
         href={url}
         className={className}
+        target={target}
         prefetch={prefetch}
         cacheFor={cacheFor}
       >
@@ -130,6 +138,7 @@ export function ClientModalLink({
     <ModalLink
       href={href}
       className={className}
+      target={target}
       modalConfig={modalConfig}
       loadingComponent={loadingComponent}
       prefetch={prefetch}

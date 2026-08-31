@@ -1,5 +1,6 @@
 import type { Component, DefineComponent } from 'vue';
 import type { ModalConfig } from './types';
+import type { ModalPageObject } from '../modalPageContext';
 
 export interface HeadlessModalProps {
   id?: string;
@@ -8,6 +9,7 @@ export interface HeadlessModalProps {
   config?: ModalConfig;
   baseUrl: string;
   open?: boolean;
+  page?: Partial<ModalPageObject>;
 }
 
 export interface HeadlessModalEmits {

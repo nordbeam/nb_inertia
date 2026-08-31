@@ -29,7 +29,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePage, router } from '@inertiajs/react';
 import { useModalStack } from './modalStack';
-import type { ModalConfig } from './types';
+import type { ModalConfig, ModalPageMetadata } from './types';
 
 /**
  * Modal data structure from the backend's render_inertia_modal response
@@ -48,6 +48,8 @@ export interface ModalOnBase {
   baseUrl: string;
   /** Optional modal configuration */
   config?: ModalConfig;
+  /** Optional page metadata when the modal payload is supplied directly. */
+  pageMetadata?: ModalPageMetadata;
 }
 
 /**
@@ -78,7 +80,8 @@ export interface InitialModalHandlerProps {
  * - Manages browser history for proper back/forward navigation
  */
 export function InitialModalHandler({ resolveComponent }: InitialModalHandlerProps) {
-  const { props: pageProps } = usePage<{ _nb_modal?: ModalOnBase }>();
+  const page = usePage<{ _nb_modal?: ModalOnBase }>();
+  const { props: pageProps } = page;
   const { pushModal, updateModal, clearModals, modals } = useModalStack();
   const isNavigatingRef = useRef(false);
   const initialModalHandledRef = useRef(false);
@@ -119,79 +122,88 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
   /**
    * Resolves and pushes a modal onto the stack, or updates a loading modal
    */
-  const openModal = useCallback((modalOnBase: ModalOnBase) => {
-    const url = modalOnBase.url;
-    const loadingModal = modals.find((m) => m.loading && m.url === url);
-    const existingModal = modals.find((m) => !m.loading && m.url === url);
+  const openModal = useCallback(
+    (modalOnBase: ModalOnBase, responsePageMetadata?: ModalPageMetadata) => {
+      const pageMetadata = responsePageMetadata || modalOnBase.pageMetadata;
+      const url = modalOnBase.url;
+      const loadingModal = modals.find((m) => m.loading && m.url === url);
+      const existingModal = modals.find((m) => !m.loading && m.url === url);
 
-    // Avoid racing duplicate open requests for the same new URL, but allow
-    // same-URL navigations to refresh an already mounted modal.
-    if (handledUrlsRef.current.has(url) && !loadingModal && !existingModal) {
-      return;
-    }
+      // Avoid racing duplicate open requests for the same new URL, but allow
+      // same-URL navigations to refresh an already mounted modal.
+      if (handledUrlsRef.current.has(url) && !loadingModal && !existingModal) {
+        return;
+      }
 
-    // Mark as handled immediately to prevent race conditions
-    handledUrlsRef.current.add(url);
+      // Mark as handled immediately to prevent race conditions
+      handledUrlsRef.current.add(url);
 
-    resolveComponent(modalOnBase.component)
-      .then((Component) => {
-        if (loadingModal) {
-          // Re-check if modal still exists and is still loading
-          // (user might have closed it during component resolution)
-          const stillLoading = modals.find(
-            (m) => m.id === loadingModal.id && m.loading
-          );
-          if (!stillLoading) {
-            // Modal was closed during resolution - don't update
-            handledUrlsRef.current.delete(url);
-            return;
+      resolveComponent(modalOnBase.component)
+        .then((Component) => {
+          if (loadingModal) {
+            // Re-check if modal still exists and is still loading
+            // (user might have closed it during component resolution)
+            const stillLoading = modals.find((m) => m.id === loadingModal.id && m.loading);
+            if (!stillLoading) {
+              // Modal was closed during resolution - don't update
+              handledUrlsRef.current.delete(url);
+              return;
+            }
+
+            // Preserve the returnUrl from the loading modal (captured by ModalLink)
+            const returnUrl = loadingModal.returnUrl;
+
+            // Update the existing loading modal with actual content
+            updateModal(loadingModal.id, {
+              component: Component,
+              componentName: modalOnBase.component,
+              props: modalOnBase.props,
+              config: modalOnBase.config || {},
+              baseUrl: modalOnBase.baseUrl,
+              returnUrl, // Preserve the return URL
+              pageMetadata,
+              onClose: createOnClose(modalOnBase, returnUrl),
+              loading: false,
+            });
+            currentModalRef.current = modalOnBase;
+          } else if (existingModal) {
+            updateModal(existingModal.id, {
+              component: Component,
+              componentName: modalOnBase.component,
+              props: modalOnBase.props,
+              config: modalOnBase.config || {},
+              baseUrl: modalOnBase.baseUrl,
+              pageMetadata,
+              onClose: existingModal.onClose || createOnClose(modalOnBase, existingModal.returnUrl),
+            });
+            currentModalRef.current = modalOnBase;
+          } else {
+            // No loading modal found - push new modal (direct URL access case)
+            // For direct URL access, there's no return URL - use baseUrl for restoration
+            currentModalRef.current = modalOnBase;
+            pushModal({
+              component: Component,
+              componentName: modalOnBase.component,
+              props: modalOnBase.props,
+              url: modalOnBase.url,
+              config: modalOnBase.config || {},
+              baseUrl: modalOnBase.baseUrl,
+              pageMetadata,
+              onClose: createOnClose(modalOnBase),
+            });
           }
-
-          // Preserve the returnUrl from the loading modal (captured by ModalLink)
-          const returnUrl = loadingModal.returnUrl;
-
-          // Update the existing loading modal with actual content
-          updateModal(loadingModal.id, {
-            component: Component,
-            componentName: modalOnBase.component,
-            props: modalOnBase.props,
-            config: modalOnBase.config || {},
-            baseUrl: modalOnBase.baseUrl,
-            returnUrl, // Preserve the return URL
-            onClose: createOnClose(modalOnBase, returnUrl),
-            loading: false,
-          });
-          currentModalRef.current = modalOnBase;
-        } else if (existingModal) {
-          updateModal(existingModal.id, {
-            component: Component,
-            componentName: modalOnBase.component,
-            props: modalOnBase.props,
-            config: modalOnBase.config || {},
-            baseUrl: modalOnBase.baseUrl,
-            onClose: existingModal.onClose || createOnClose(modalOnBase, existingModal.returnUrl),
-          });
-          currentModalRef.current = modalOnBase;
-        } else {
-          // No loading modal found - push new modal (direct URL access case)
-          // For direct URL access, there's no return URL - use baseUrl for restoration
-          currentModalRef.current = modalOnBase;
-          pushModal({
-            component: Component,
-            componentName: modalOnBase.component,
-            props: modalOnBase.props,
-            url: modalOnBase.url,
-            config: modalOnBase.config || {},
-            baseUrl: modalOnBase.baseUrl,
-            onClose: createOnClose(modalOnBase),
-          });
-        }
-      })
-      .catch((error) => {
-        handledUrlsRef.current.delete(url);
-        console.error('[InitialModalHandler] Failed to resolve modal component:', modalOnBase.component, error);
-      });
-  }, [resolveComponent, pushModal, updateModal, modals, createOnClose]);
+        })
+        .catch((error) => {
+          handledUrlsRef.current.delete(url);
+          console.error(
+            '[InitialModalHandler] Failed to resolve modal component:',
+            modalOnBase.component,
+            error,
+          );
+        });
+    },
+    [resolveComponent, pushModal, updateModal, modals, createOnClose],
+  );
 
   // Handle initial modal from page props (direct URL access)
   useEffect(() => {
@@ -199,7 +211,7 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
 
     if (modalOnBase && !initialModalHandledRef.current) {
       initialModalHandledRef.current = true;
-      openModal(modalOnBase);
+      openModal(modalOnBase, page);
     }
   }, []); // Only run once on mount
 
@@ -214,7 +226,9 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
     });
 
     const unsubscribeNavigate = router.on('navigate', (event) => {
-      const modalOnBase = (event.detail.page.props as Record<string, unknown>)?._nb_modal as ModalOnBase | undefined;
+      const modalOnBase = (event.detail.page.props as Record<string, unknown>)?._nb_modal as
+        | ModalOnBase
+        | undefined;
 
       if (!modalOnBase) {
         // No modal in this navigation - clear all modals and reset tracking
@@ -224,7 +238,7 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
         return;
       }
 
-      openModal(modalOnBase);
+      openModal(modalOnBase, event.detail.page);
     });
 
     return () => {

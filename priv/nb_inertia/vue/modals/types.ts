@@ -6,6 +6,7 @@
  */
 
 import type { Component } from 'vue';
+import type { ModalPageObject } from '../modalPageContext';
 
 /**
  * Modal size presets and custom sizes
@@ -25,13 +26,7 @@ export type ModalSize =
 /**
  * Modal position presets and custom positions
  */
-export type ModalPosition =
-  | 'center'
-  | 'top'
-  | 'bottom'
-  | 'left'
-  | 'right'
-  | (string & {});
+export type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | (string & {});
 
 /**
  * Configuration for a modal instance
@@ -65,6 +60,7 @@ export interface ModalInstance {
   id: string;
   component: Component;
   props: Record<string, any>;
+  page?: ModalPageObject;
   config: ModalConfig;
   baseUrl: string;
   index: number;

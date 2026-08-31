@@ -22,62 +22,129 @@
  * ```
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { Component, createElement, useMemo } from 'react';
 import { Head as InertiaHead } from '@inertiajs/react';
+import { createPortal } from 'react-dom';
 import { useIsInModal } from './modals/modalStack';
 
 /**
  * Props for the Head component (matches Inertia's HeadProps)
  */
-export interface HeadProps {
-  title?: string;
-  children?: React.ReactNode;
+export type HeadProps = React.ComponentProps<typeof InertiaHead>;
+
+type ModalHeadFallbackProps = HeadProps;
+
+function hasTitleElement(children: React.ReactNode): boolean {
+  return React.Children.toArray(children).some((child) => {
+    if (!React.isValidElement(child)) {
+      return false;
+    }
+
+    if (child.type === React.Fragment) {
+      return hasTitleElement((child.props as { children?: React.ReactNode }).children);
+    }
+
+    return child.type === 'title';
+  });
+}
+
+function addInertiaMarkers(children: React.ReactNode): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) {
+      if (child) {
+        nodes.push(child);
+      }
+      return;
+    }
+
+    if (child.type === React.Fragment) {
+      nodes.push(...addInertiaMarkers((child.props as { children?: React.ReactNode }).children));
+      return;
+    }
+
+    const props = child.props as Record<string, unknown>;
+    const headKey = props['head-key'];
+    const inertiaKey =
+      typeof headKey === 'string' || typeof headKey === 'number' ? String(headKey) : '';
+
+    nodes.push(
+      React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
+        'data-inertia': inertiaKey,
+      }),
+    );
+  });
+
+  return nodes;
+}
+
+/**
+ * Standalone fallback for custom modal renderers mounted outside Inertia's
+ * private HeadContext. Native head children are portaled into document.head,
+ * which keeps modal title/meta/link/script elements live and removable.
+ */
+function ModalHeadFallback({ title, children }: ModalHeadFallbackProps) {
+  const headChildren = useMemo(() => {
+    const nodes = addInertiaMarkers(children);
+
+    if (title && !hasTitleElement(children)) {
+      nodes.push(createElement('title', { 'data-inertia': '' }, title));
+    }
+
+    return nodes;
+  }, [children, title]);
+
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(headChildren, document.head);
+}
+
+interface ModalHeadBoundaryProps {
+  children: React.ReactNode;
+  fallback: React.ReactNode;
+}
+
+interface ModalHeadBoundaryState {
+  hasError: boolean;
+}
+
+class ModalHeadBoundary extends Component<ModalHeadBoundaryProps, ModalHeadBoundaryState> {
+  state: ModalHeadBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): ModalHeadBoundaryState {
+    return { hasError: true };
+  }
+
+  render() {
+    return this.state.hasError ? this.props.fallback : this.props.children;
+  }
 }
 
 /**
  * Enhanced Head component
  *
- * Checks if we're inside a modal context. If so, handles document title
- * updates directly. Otherwise, delegates to Inertia's Head component.
- *
- * In modal context:
- * - Only the `title` prop is supported
- * - The original title is restored when the modal closes
- * - Child elements (meta tags, etc.) are ignored in modal context
+ * Delegate to Inertia's head manager in every context. Modal content is
+ * rendered below the application's Inertia provider, so using the official
+ * component preserves title callbacks, server-head handling, head keys, and
+ * child elements such as meta/link/script tags.
  *
  * @param props - Head props (title and optional children)
  */
-export const Head: React.FC<HeadProps> = ({ title, children }) => {
+export const Head: React.FC<HeadProps> = (props) => {
   const isInModal = useIsInModal();
-  const originalTitleRef = useRef<string | null>(null);
 
-  // Handle modal context - update document.title directly
-  useEffect(() => {
-    if (!isInModal || !title) return;
-
-    // Save original title on mount
-    if (originalTitleRef.current === null) {
-      originalTitleRef.current = document.title;
-    }
-
-    // Update document title
-    document.title = title;
-
-    // Restore original title on unmount
-    return () => {
-      if (originalTitleRef.current !== null) {
-        document.title = originalTitleRef.current;
-      }
-    };
-  }, [isInModal, title]);
-
-  // If in modal, we've handled the title above - render nothing
-  if (isInModal) {
-    return null;
+  if (!isInModal) {
+    return <InertiaHead {...props} />;
   }
 
-  // Not in modal - delegate to Inertia's Head
-  return <InertiaHead title={title}>{children}</InertiaHead>;
+  return (
+    <ModalHeadBoundary fallback={<ModalHeadFallback {...props} />}>
+      <InertiaHead {...props} />
+    </ModalHeadBoundary>
+  );
 };
 
 export default Head;

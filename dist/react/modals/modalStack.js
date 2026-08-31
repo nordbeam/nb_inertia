@@ -13,40 +13,52 @@ function h() {
 function g() {
 	return c(m);
 }
-var _ = ({ component: e, props: t, url: n, baseUrl: o, returnUrl: s, children: c }) => {
-	let u = a.useRef(Symbol("nb-inertia-modal-request-context")), d = a.useMemo(() => ({
+var _ = ({ component: e, props: t, url: n, baseUrl: o, returnUrl: s, pageMetadata: c, children: u }) => {
+	let d = a.useRef(Symbol("nb-inertia-modal-request-context")), f = a.useMemo(() => ({
 		component: e,
 		props: t,
 		url: n,
 		baseUrl: o,
 		returnUrl: s,
-		version: "1.0",
-		flash: {},
-		scrollRegions: [],
-		rememberedState: {},
-		clearHistory: !1,
-		encryptHistory: !1,
-		preserveFragment: !1
+		version: c?.version === void 0 ? "1.0" : c.version,
+		flash: c?.flash ?? {},
+		scrollRegions: c?.scrollRegions ?? [],
+		rememberedState: c?.rememberedState ?? {},
+		clearHistory: c?.clearHistory ?? !1,
+		encryptHistory: c?.encryptHistory ?? !1,
+		preserveFragment: c?.preserveFragment ?? !1,
+		deferredProps: c?.deferredProps,
+		initialDeferredProps: c?.initialDeferredProps,
+		rescuedProps: c?.rescuedProps ?? [],
+		mergeProps: c?.mergeProps,
+		prependProps: c?.prependProps,
+		deepMergeProps: c?.deepMergeProps,
+		matchPropsOn: c?.matchPropsOn,
+		sharedProps: c?.sharedProps,
+		scrollProps: c?.scrollProps,
+		onceProps: c?.onceProps,
+		optimisticUpdatedAt: c?.optimisticUpdatedAt
 	}), [
 		e,
 		t,
 		n,
 		o,
-		s
+		s,
+		c
 	]);
-	return l(() => (r(u.current, {
+	return l(() => (r(d.current, {
 		url: n,
 		baseUrl: o,
 		returnUrl: s
 	}), () => {
-		i(u.current);
+		i(d.current);
 	}), [
 		n,
 		o,
 		s
 	]), /* @__PURE__ */ p(m.Provider, {
-		value: d,
-		children: c
+		value: f,
+		children: u
 	});
 }, v = o(null), y = () => {
 	let e = c(v);
@@ -131,6 +143,7 @@ var S = ({ children: t, onStackChange: r, resolveComponent: i }) => {
 				config: s.data.config || t.modalConfig || {},
 				baseUrl: s.data.baseUrl,
 				returnUrl: o,
+				pageMetadata: s.data.pageMetadata,
 				onClose: () => {
 					o && typeof window < "u" && window.history.replaceState({}, "", o);
 				}
@@ -181,7 +194,8 @@ var S = ({ children: t, onStackChange: r, resolveComponent: i }) => {
 					props: r.props || {},
 					url: o,
 					baseUrl: r.baseUrl || "",
-					config: r.config
+					config: r.config,
+					pageMetadata: r.pageMetadata || n
 				},
 				component: s,
 				timestamp: Date.now()
@@ -192,7 +206,8 @@ var S = ({ children: t, onStackChange: r, resolveComponent: i }) => {
 						props: r.props || {},
 						url: o,
 						baseUrl: r.baseUrl || "",
-						config: r.config
+						config: r.config,
+						pageMetadata: r.pageMetadata || n
 					},
 					component: e,
 					timestamp: Date.now()

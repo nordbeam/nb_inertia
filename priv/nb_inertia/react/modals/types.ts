@@ -5,8 +5,46 @@
  */
 
 import type { Method } from '@inertiajs/core';
+import type { Page as InertiaPage } from '@inertiajs/core';
 import React from 'react';
 import type { RouteResult } from '../../shared/types';
+
+/**
+ * Optional v3 page metadata carried by a modal response.
+ *
+ * Modal pages are rendered from the `_nb_modal` payload instead of the
+ * application's normal page context. Keeping this metadata alongside the
+ * modal lets `usePage` and deferred/once-aware components observe the same
+ * shape as an official Inertia page.
+ */
+export type ModalPageMetadata = Omit<
+  Partial<
+    Pick<
+      InertiaPage,
+      | 'flash'
+      | 'clearHistory'
+      | 'encryptHistory'
+      | 'preserveFragment'
+      | 'deferredProps'
+      | 'initialDeferredProps'
+      | 'rescuedProps'
+      | 'mergeProps'
+      | 'prependProps'
+      | 'deepMergeProps'
+      | 'matchPropsOn'
+      | 'sharedProps'
+      | 'scrollProps'
+      | 'onceProps'
+      | 'rememberedState'
+      | 'optimisticUpdatedAt'
+    >
+  >,
+  never
+> & {
+  /** Kept broad for compatibility with the existing modal API. */
+  version?: string | number | null;
+  scrollRegions?: Array<{ top: number; left: number }>;
+};
 
 /**
  * Modal size presets and custom sizes
@@ -26,13 +64,7 @@ export type ModalSize =
 /**
  * Modal position presets and custom positions
  */
-export type ModalPosition =
-  | 'center'
-  | 'top'
-  | 'bottom'
-  | 'left'
-  | 'right'
-  | (string & {});
+export type ModalPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | (string & {});
 
 /**
  * Configuration for a modal instance
@@ -169,6 +201,8 @@ export interface ModalInstance {
    */
   loadingComponent?: React.ComponentType;
 
+  /** Official Inertia page metadata associated with this modal response. */
+  pageMetadata?: ModalPageMetadata;
 }
 
 export interface ModalVisitOptions {
@@ -322,6 +356,7 @@ export interface PrefetchedModal {
     url: string;
     baseUrl: string;
     config?: ModalConfig;
+    pageMetadata?: ModalPageMetadata;
   };
   /** The resolved React component */
   component: React.ComponentType<any>;

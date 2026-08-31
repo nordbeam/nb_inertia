@@ -582,13 +582,16 @@ function F(n, r) {
 		};
 		e("start", (e) => {
 			let t = f(e) && f(e.detail) ? e.detail.visit : void 0;
-			f(t) && t.deferredProps === !0 ? o.phase = "deferred" : f(t) && (Array.isArray(t.only) && t.only.length > 0 || Array.isArray(t.except) && t.except.length > 0) ? o.phase = "partial" : f(t) && t.instant === !0 ? o.phase = "instant" : o.phase = "navigation";
+			f(t) && t.deferredProps === !0 ? o.phase = "deferred" : f(t) && (Array.isArray(t.only) && t.only.length > 0 || Array.isArray(t.except) && t.except.length > 0 || Array.isArray(t.reset) && t.reset.length > 0) ? o.phase = "partial" : f(t) && typeof t.component == "string" ? o.phase = "instant" : o.phase = "navigation";
 		}), e("beforeUpdate", (e) => {
 			let t = f(e) && f(e.detail) ? e.detail.page : void 0;
 			t && S(t, o.phase);
 		}), e("success", (e) => {
 			let t = f(e) && f(e.detail) ? e.detail.page : void 0;
 			t && S(t, o.phase);
+		}), e("clientVisit", (e) => {
+			let t = f(e) && f(e.detail) ? e.detail.page : void 0;
+			t && S(t, "instant"), o.phase = "instant";
 		}), e("navigate", (e) => {
 			let t = f(e) && f(e.detail) ? e.detail.page : void 0;
 			t && S(t, o.phase), o.phase = "navigation";

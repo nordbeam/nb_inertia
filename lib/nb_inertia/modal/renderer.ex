@@ -178,7 +178,6 @@ defmodule NbInertia.Modal.Renderer do
     |> add_modal_headers(modal)
     |> put_resp_content_type("application/json")
     |> put_resp_header("x-inertia", "true")
-    |> put_resp_header("vary", "X-Inertia")
     |> send_resp(200, Jason.encode!(page_data))
   end
 

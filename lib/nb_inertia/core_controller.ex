@@ -12,7 +12,18 @@ defmodule NbInertia.CoreController do
 
   require Logger
 
-  @title_regex ~r/<title inertia>(.*?)<\/title>/
+  # Inertia v3 marks SSR head elements with `data-inertia`. Keep accepting the
+  # legacy bare `inertia` marker so existing rendered fragments remain valid.
+  @title_regex ~r/<title(?=[^>]*\b(?:data-inertia|inertia)(?:=|\s|>))[^>]*>(.*?)<\/title>/
+  @title_entities %{
+    "&amp;" => "&",
+    "&lt;" => "<",
+    "&gt;" => ">",
+    "&quot;" => "\"",
+    "&#39;" => "'",
+    "&#x27;" => "'"
+  }
+  @title_entity_regex ~r/&(?:amp|lt|gt|quot|#39|#x27);/
 
   defmodule Scroll do
     @moduledoc false
@@ -37,7 +48,7 @@ defmodule NbInertia.CoreController do
   @opaque prepend() :: {:prepend, any()}
   @opaque match_merge() :: {:match_merge, {any(), String.t()}}
   @opaque scroll() :: Scroll.t()
-  @opaque defer() :: {:defer, {fun(), String.t()}}
+  @opaque defer() :: {:defer, {fun(), String.t()}} | {:defer, {fun(), String.t(), :ignore}}
   @opaque preserved_prop_key :: {:preserve, raw_prop_key()}
 
   @typedoc """
@@ -49,6 +60,7 @@ defmodule NbInertia.CoreController do
   - `:as` - Custom key for sharing data across pages with different prop names
   """
   @type once_config() :: %{
+          optional(:on_error) => :ignore,
           callback: fun(),
           fresh: boolean(),
           until: integer() | nil,
@@ -198,7 +210,18 @@ defmodule NbInertia.CoreController do
   end
 
   @doc """
-  Marks that a prop should fetched immediately after the page is loaded on the client-side.
+  Marks that a prop should be fetched immediately after the page is loaded on the client-side.
+
+  Pass `on_error: :ignore` to omit a failed deferred prop and expose its key in the
+  page's `rescuedProps` metadata. Inertia's `<Deferred rescue={...}>` slot can
+  then render a recovery state without turning the deferred request into an
+  exception response.
+
+  ## Examples
+
+      inertia_defer(fn -> Analytics.summary!() end)
+      inertia_defer(fn -> Analytics.summary!() end, on_error: :ignore)
+      inertia_defer(fn -> Analytics.summary!() end, "analytics", on_error: :ignore)
   """
   @doc since: "1.0.0"
   @spec inertia_defer(fun :: fun()) :: defer()
@@ -209,13 +232,51 @@ defmodule NbInertia.CoreController do
   end
 
   @doc since: "1.0.0"
-  @spec inertia_defer(fun :: fun(), group :: String.t()) :: defer()
+  @spec inertia_defer(fun :: fun(), group_or_opts :: String.t() | keyword()) :: defer()
   def inertia_defer(fun, group) when is_function(fun) and is_binary(group) do
     {:defer, {fun, group}}
   end
 
+  def inertia_defer(fun, opts) when is_function(fun) and is_list(opts) do
+    build_defer(fun, "default", opts)
+  end
+
   def inertia_defer(_, _) do
-    raise ArgumentError, message: "inertia_defer/2 only accepts function and group arguments"
+    raise ArgumentError,
+      message: "inertia_defer/2 only accepts a function and a group string or keyword options"
+  end
+
+  @doc since: "3.1.0"
+  @spec inertia_defer(fun :: fun(), group :: String.t(), opts :: keyword()) :: defer()
+  def inertia_defer(fun, group, opts)
+      when is_function(fun) and is_binary(group) and is_list(opts) do
+    build_defer(fun, group, opts)
+  end
+
+  def inertia_defer(_, _, _) do
+    raise ArgumentError,
+      message: "inertia_defer/3 only accepts a function, group string, and keyword options"
+  end
+
+  defp build_defer(fun, group, opts) do
+    case Keyword.validate(opts, [:on_error]) do
+      {:ok, opts} ->
+        case Keyword.get(opts, :on_error) do
+          nil ->
+            {:defer, {fun, group}}
+
+          :ignore ->
+            {:defer, {fun, group, :ignore}}
+
+          other ->
+            raise ArgumentError,
+              message: "inertia_defer :on_error only accepts :ignore, got: #{inspect(other)}"
+        end
+
+      {:error, invalid} ->
+        raise ArgumentError,
+          message: "inertia_defer received invalid options: #{inspect(invalid)}"
+    end
   end
 
   @doc """
@@ -429,9 +490,14 @@ defmodule NbInertia.CoreController do
     {:defer_once, {fun, group, %{callback: fun, fresh: false, until: nil, as: nil}}}
   end
 
+  def defer_once({:defer, {fun, group, :ignore}}) do
+    {:defer_once,
+     {fun, group, %{callback: fun, fresh: false, until: nil, as: nil, on_error: :ignore}}}
+  end
+
   def defer_once(_) do
     raise ArgumentError,
-      message: "defer_once/1 only accepts a deferred prop (created with inertia_defer/1,2)"
+      message: "defer_once/1 only accepts a deferred prop (created with inertia_defer/1,2,3)"
   end
 
   # Duration parsing helpers
@@ -785,11 +851,12 @@ defmodule NbInertia.CoreController do
     {props, deferred_props, once_props} =
       resolve_deferred_and_once_props(props, opts, except_once)
 
-    props =
+    {props, rescued_props} =
       props
       |> apply_filters(only, except, opts)
       |> resolve_props(opts)
-      |> maybe_put_flash(conn)
+
+    props = maybe_put_flash(props, conn)
 
     conn
     |> put_private(:inertia_page, %{
@@ -802,6 +869,7 @@ defmodule NbInertia.CoreController do
       scroll_props: scroll_props,
       deferred_props: deferred_props,
       once_props: once_props,
+      rescued_props: rescued_props,
       is_partial: is_partial
     })
     |> detect_ssr(opts)
@@ -995,41 +1063,78 @@ defmodule NbInertia.CoreController do
   defp scroll_key?(_value, _key), do: false
 
   defp resolve_deferred_and_once_props(props, opts, except_once) do
-    Enum.reduce(props, {[], %{}, %{}}, fn {key, value}, {props_acc, deferred_acc, once_acc} ->
-      transformed_key =
-        key
-        |> transform_key(opts)
-        |> to_string()
+    resolve_nested_prop_metadata(props, opts, except_once, nil, %{}, %{})
+  end
+
+  defp resolve_nested_prop_metadata(
+         props,
+         opts,
+         except_once,
+         parent_path,
+         deferred_acc,
+         once_acc
+       )
+       when is_list(props) or (is_map(props) and not is_struct(props)) do
+    Enum.reduce(props, {%{}, deferred_acc, once_acc}, fn {key, value},
+                                                         {props_acc, deferred_acc, once_acc} ->
+      transformed_key = key |> transform_key(opts) |> to_string()
+      path = join_prop_path(parent_path, transformed_key)
 
       case value do
         {:defer, {fun, group}} ->
-          deferred_acc = add_to_deferred_group(deferred_acc, group, transformed_key)
-          {[{key, {:optional, fun}} | props_acc], deferred_acc, once_acc}
+          deferred_acc = add_to_deferred_group(deferred_acc, group, path)
+          {Map.put(props_acc, key, {:optional, fun}), deferred_acc, once_acc}
+
+        {:defer, {fun, group, :ignore}} ->
+          deferred_acc = add_to_deferred_group(deferred_acc, group, path)
+          {Map.put(props_acc, key, {:optional, {:rescuable, fun, path}}), deferred_acc, once_acc}
 
         {:defer_once, {fun, group, once_config}} ->
-          once_acc = build_once_prop_entry(once_acc, transformed_key, once_config)
+          once_acc = build_once_prop_entry(once_acc, path, once_config)
 
-          if skip_once_prop?(transformed_key, once_config, except_once) do
+          if skip_once_prop?(path, once_config, except_once) do
             {props_acc, deferred_acc, once_acc}
           else
-            deferred_acc = add_to_deferred_group(deferred_acc, group, transformed_key)
-            {[{key, {:optional, fun}} | props_acc], deferred_acc, once_acc}
+            deferred_acc = add_to_deferred_group(deferred_acc, group, path)
+
+            value =
+              if once_config[:on_error] == :ignore,
+                do: {:rescuable, fun, path},
+                else: fun
+
+            {Map.put(props_acc, key, {:optional, value}), deferred_acc, once_acc}
           end
 
         {:once, %{callback: fun} = once_config} ->
-          once_acc = build_once_prop_entry(once_acc, transformed_key, once_config)
+          once_acc = build_once_prop_entry(once_acc, path, once_config)
 
-          if skip_once_prop?(transformed_key, once_config, except_once) do
+          if skip_once_prop?(path, once_config, except_once) do
             {props_acc, deferred_acc, once_acc}
           else
-            {[{key, {:once_value, fun}} | props_acc], deferred_acc, once_acc}
+            {Map.put(props_acc, key, {:once_value, fun}), deferred_acc, once_acc}
           end
 
+        nested when is_map(nested) and not is_struct(nested) ->
+          {nested, deferred_acc, once_acc} =
+            resolve_nested_prop_metadata(
+              nested,
+              opts,
+              except_once,
+              path,
+              deferred_acc,
+              once_acc
+            )
+
+          {Map.put(props_acc, key, nested), deferred_acc, once_acc}
+
         _ ->
-          {[{key, value} | props_acc], deferred_acc, once_acc}
+          {Map.put(props_acc, key, value), deferred_acc, once_acc}
       end
     end)
   end
+
+  defp join_prop_path(nil, key), do: key
+  defp join_prop_path(parent, key), do: "#{parent}.#{key}"
 
   defp add_to_deferred_group(deferred_acc, group, key) do
     case Map.get(deferred_acc, group) do
@@ -1056,64 +1161,174 @@ defmodule NbInertia.CoreController do
     !once_config.fresh and once_key in except_once
   end
 
-  defp apply_filters(props, only, _except, opts) when is_list(only) and only != [] do
-    props
-    |> Enum.filter(fn {key, value} ->
-      case value do
-        {:keep, _} ->
-          true
-
-        _ ->
-          transformed_key =
-            key
-            |> transform_key(opts)
-            |> to_string()
-
-          Enum.member?(only, transformed_key)
-      end
-    end)
-    |> Map.new()
+  defp apply_filters(props, only, except, opts) do
+    filter_prop_map(props, only, except, opts, nil)
   end
 
-  defp apply_filters(props, _only, except, opts) when is_list(except) and except != [] do
-    props
-    |> Enum.filter(fn {key, value} ->
-      case value do
-        {:keep, _} ->
-          true
+  defp filter_prop_map(props, only, except, opts, parent_path) do
+    Enum.reduce(props, %{}, fn {key, value}, acc ->
+      transformed_key = key |> transform_key(opts) |> to_string()
+      path = join_prop_path(parent_path, transformed_key)
 
-        _ ->
-          transformed_key =
-            key
-            |> transform_key(opts)
-            |> to_string()
+      cond do
+        match?({:keep, _}, value) ->
+          Map.put(acc, key, value)
 
-          !Enum.member?(except, transformed_key)
+        only != [] and not requested_path?(only, path) ->
+          acc
+
+        except != [] and excluded_path?(except, path) ->
+          acc
+
+        only == [] and except == [] and match?({:optional, _}, value) ->
+          acc
+
+        is_map(value) and not is_struct(value) ->
+          Map.put(acc, key, filter_prop_map(value, only, except, opts, path))
+
+        true ->
+          Map.put(acc, key, value)
       end
     end)
-    |> Map.new()
   end
 
-  defp apply_filters(props, _only, _except, _opts) do
-    props
-    |> Enum.filter(fn {_key, value} ->
-      case value do
-        {:optional, _} -> false
-        {:once_value, _} -> true
-        _ -> true
-      end
+  defp requested_path?(paths, path) do
+    Enum.any?(paths, fn requested ->
+      requested == path or String.starts_with?(requested, path <> ".") or
+        String.starts_with?(path, requested <> ".")
     end)
-    |> Map.new()
   end
 
-  defp resolve_props(value, opts) do
+  defp excluded_path?(paths, path) do
+    Enum.any?(paths, fn excluded ->
+      excluded == path or String.starts_with?(path, excluded <> ".")
+    end)
+  end
+
+  defp resolve_props(props, opts) when is_map(props) do
     if opts[:camelize_props] do
-      {resolved, _key_cache} = do_resolve_props(value, opts, %{})
-      resolved
+      {resolved, rescued, _key_cache} =
+        Enum.reduce(props, {%{}, [], %{}}, fn {key, value}, {resolved, rescued, key_cache} ->
+          {transformed_key, key_cache} = transform_key(key, opts, key_cache)
+
+          try do
+            {resolved_value, key_cache} = do_resolve_props(value, opts, key_cache)
+            {Map.put(resolved, transformed_key, resolved_value), rescued, key_cache}
+          rescue
+            error ->
+              rescue_prop_resolution(
+                value,
+                transformed_key,
+                error,
+                __STACKTRACE__,
+                resolved,
+                rescued,
+                key_cache
+              )
+          end
+        end)
+
+      {resolved, nested_rescued} = extract_rescued_props(resolved)
+      {resolved, Enum.reverse(rescued) ++ nested_rescued}
     else
-      do_resolve_props(value, opts)
+      {resolved, rescued} =
+        Enum.reduce(props, {%{}, []}, fn {key, value}, {resolved, rescued} ->
+          transformed_key = normalize_preserved_key(key)
+
+          try do
+            {Map.put(resolved, transformed_key, do_resolve_props(value, opts)), rescued}
+          rescue
+            error ->
+              case rescue_prop_resolution(
+                     value,
+                     transformed_key,
+                     error,
+                     __STACKTRACE__,
+                     resolved,
+                     rescued,
+                     nil
+                   ) do
+                {next_resolved, next_rescued, nil} -> {next_resolved, next_rescued}
+              end
+          end
+        end)
+
+      {resolved, nested_rescued} = extract_rescued_props(resolved)
+      {resolved, Enum.reverse(rescued) ++ nested_rescued}
     end
   end
+
+  defp rescue_prop_resolution(
+         value,
+         transformed_key,
+         error,
+         stacktrace,
+         resolved,
+         rescued,
+         key_cache
+       ) do
+    if rescuable_prop?(value) do
+      report_rescued_prop(to_string(transformed_key), :error, error, stacktrace)
+
+      {resolved, [to_string(transformed_key) | rescued], key_cache}
+    else
+      reraise error, stacktrace
+    end
+  end
+
+  defp rescuable_prop?({:optional, {:rescuable, fun, _path}}) when is_function(fun, 0),
+    do: true
+
+  defp rescuable_prop?(_value), do: false
+
+  defp resolve_rescuable_prop(fun, path, resolver) do
+    resolver.(fun)
+  rescue
+    error ->
+      report_rescued_prop(path, :error, error, __STACKTRACE__)
+      {:__nb_inertia_rescued_prop__, path}
+  catch
+    kind, reason ->
+      report_rescued_prop(path, kind, reason, __STACKTRACE__)
+      {:__nb_inertia_rescued_prop__, path}
+  end
+
+  defp report_rescued_prop(path, kind, reason, stacktrace) do
+    :telemetry.execute(
+      [:inertia, :deferred_prop, :rescue],
+      %{},
+      %{prop: path, kind: kind, reason: reason, stacktrace: stacktrace}
+    )
+
+    Logger.error(
+      "Rescued deferred Inertia prop #{inspect(path)}:\n" <>
+        Exception.format(kind, reason, stacktrace)
+    )
+  end
+
+  defp extract_rescued_props(value) when is_map(value) and not is_struct(value) do
+    Enum.reduce(value, {%{}, []}, fn
+      {_key, {:__nb_inertia_rescued_prop__, path}}, {resolved, rescued} ->
+        {resolved, [path | rescued]}
+
+      {key, nested}, {resolved, rescued} ->
+        {nested, nested_rescued} = extract_rescued_props(nested)
+        {Map.put(resolved, key, nested), rescued ++ nested_rescued}
+    end)
+  end
+
+  defp extract_rescued_props(value) when is_list(value) do
+    Enum.reduce(value, {[], []}, fn
+      {:__nb_inertia_rescued_prop__, path}, {resolved, rescued} ->
+        {resolved, [path | rescued]}
+
+      nested, {resolved, rescued} ->
+        {nested, nested_rescued} = extract_rescued_props(nested)
+        {resolved ++ [nested], rescued ++ nested_rescued}
+    end)
+  end
+
+  defp extract_rescued_props(value), do: {value, []}
 
   defp do_resolve_props(map, opts) when is_map(map) and not is_struct(map) do
     map
@@ -1128,6 +1343,11 @@ defmodule NbInertia.CoreController do
   end
 
   defp do_resolve_props({:optional, value}, opts), do: do_resolve_props(value, opts)
+
+  defp do_resolve_props({:rescuable, fun, path}, opts) do
+    resolve_rescuable_prop(fun, path, &do_resolve_props(&1, opts))
+  end
+
   defp do_resolve_props({:keep, value}, opts), do: do_resolve_props(value, opts)
   defp do_resolve_props({:merge, value}, opts), do: do_resolve_props(value, opts)
   defp do_resolve_props({:prepend, value}, opts), do: do_resolve_props(value, opts)
@@ -1167,6 +1387,15 @@ defmodule NbInertia.CoreController do
 
   defp do_resolve_props({:optional, value}, opts, key_cache),
     do: do_resolve_props(value, opts, key_cache)
+
+  defp do_resolve_props({:rescuable, fun, path}, opts, key_cache) do
+    case resolve_rescuable_prop(fun, path, fn value ->
+           do_resolve_props(value, opts, key_cache)
+         end) do
+      {:__nb_inertia_rescued_prop__, _path} = rescued -> {rescued, key_cache}
+      {resolved, next_key_cache} -> {resolved, next_key_cache}
+    end
+  end
 
   defp do_resolve_props({:keep, value}, opts, key_cache),
     do: do_resolve_props(value, opts, key_cache)
@@ -1267,7 +1496,6 @@ defmodule NbInertia.CoreController do
     conn
     |> put_status(200)
     |> put_resp_header("x-inertia", "true")
-    |> put_resp_header("vary", "X-Inertia")
     |> json(inertia_assigns(conn))
   end
 
@@ -1305,11 +1533,25 @@ defmodule NbInertia.CoreController do
   end
 
   defp update_page_title(conn, [title_tag | _]) do
-    [_, page_title] = Regex.run(@title_regex, title_tag)
+    page_title = extract_ssr_page_title(title_tag)
     assign(conn, :page_title, page_title)
   end
 
   defp update_page_title(conn, _), do: conn
+
+  @doc false
+  @spec extract_ssr_page_title(String.t()) :: String.t() | nil
+  def extract_ssr_page_title(title_tag) when is_binary(title_tag) do
+    case Regex.run(@title_regex, title_tag) do
+      [_, page_title] ->
+        Regex.replace(@title_entity_regex, page_title, fn entity ->
+          Map.fetch!(@title_entities, entity)
+        end)
+
+      _ ->
+        nil
+    end
+  end
 
   defp send_ssr_response(conn, head, body) do
     conn
@@ -1348,6 +1590,7 @@ defmodule NbInertia.CoreController do
     |> maybe_put_scroll_props(conn)
     |> maybe_put_deferred_props(conn)
     |> maybe_put_once_props(conn)
+    |> maybe_put_rescued_props(conn)
     |> maybe_put_shared_props(conn)
   end
 
@@ -1419,6 +1662,16 @@ defmodule NbInertia.CoreController do
       assigns
     else
       Map.put(assigns, :onceProps, once_props)
+    end
+  end
+
+  defp maybe_put_rescued_props(assigns, conn) do
+    rescued_props = conn.private.inertia_page.rescued_props
+
+    if Enum.empty?(rescued_props) do
+      assigns
+    else
+      Map.put(assigns, :rescuedProps, rescued_props)
     end
   end
 

@@ -101,6 +101,7 @@ export type {
   ModalSize,
   ModalPosition,
   ModalInstance,
+  ModalPageMetadata,
   ModalVisitOptions,
   ModalStackContextValue,
   PrefetchedModal,

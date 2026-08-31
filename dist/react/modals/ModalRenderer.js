@@ -62,6 +62,7 @@ var d = ({ renderModal: n, backdropClassName: s = "fixed inset-0 bg-black/50", w
 			url: t.url,
 			baseUrl: t.baseUrl,
 			returnUrl: t.returnUrl,
+			pageMetadata: t.pageMetadata,
 			children: /* @__PURE__ */ o(i, {
 				modal: t,
 				onClose: m,

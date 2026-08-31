@@ -17,6 +17,11 @@ export interface ClientModalLinkProps {
      */
     className?: string;
     /**
+     * Native anchor target. Alternate targets stay regular browser links after
+     * hydration instead of being intercepted as modal visits.
+     */
+    target?: React.HTMLAttributeAnchorTarget;
+    /**
      * Modal configuration when opening as modal
      */
     modalConfig?: ModalConfig;
@@ -55,6 +60,6 @@ export interface ClientModalLinkProps {
  * then switches to ModalLink on the client after mount.
  * This prevents SSR errors from useModalStack context.
  */
-export declare function ClientModalLink({ href, children, className, modalConfig, loadingComponent, prefetch, cacheFor, cacheTags, }: ClientModalLinkProps): import("react").JSX.Element;
+export declare function ClientModalLink({ href, children, className, target, modalConfig, loadingComponent, prefetch, cacheFor, cacheTags, }: ClientModalLinkProps): import("react").JSX.Element;
 export default ClientModalLink;
 //# sourceMappingURL=ClientModalLink.d.ts.map

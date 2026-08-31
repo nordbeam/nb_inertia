@@ -1,4 +1,4 @@
-import { ModalConfig } from './types';
+import { ModalConfig, ModalPageMetadata } from './types';
 /**
  * Modal data structure from the backend's render_inertia_modal response
  *
@@ -16,6 +16,8 @@ export interface ModalOnBase {
     baseUrl: string;
     /** Optional modal configuration */
     config?: ModalConfig;
+    /** Optional page metadata when the modal payload is supplied directly. */
+    pageMetadata?: ModalPageMetadata;
 }
 /**
  * Props for InitialModalHandler component

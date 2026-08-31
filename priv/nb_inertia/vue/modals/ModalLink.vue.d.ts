@@ -14,6 +14,9 @@ export interface ModalLinkProps {
   prefetch?: boolean | PrefetchMode | PrefetchMode[];
   cacheFor?: number;
   cacheTags?: string[];
+  target?: string;
+  rel?: string;
+  download?: string | boolean;
 }
 
 declare const ModalLink: DefineComponent<ModalLinkProps, Record<string, never>, unknown>;

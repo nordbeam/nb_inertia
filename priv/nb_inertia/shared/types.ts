@@ -54,6 +54,7 @@ export interface PageWithFlash<TProps = Record<string, unknown>> {
   matchPropsOn?: string[];
   deferredProps?: Record<string, string[]>;
   initialDeferredProps?: Record<string, string[]>;
+  rescuedProps: string[];
   onceProps?: Record<string, { prop: string; expiresAt?: number }>;
   sharedProps?: string[];
   scrollProps?: Record<

@@ -60,9 +60,9 @@ defmodule NbInertia.HTML do
   end
 
   @doc """
-  Renders a `<title>` tag with the `inertia` attribute.
+  Renders a `<title>` tag with Inertia v3's `data-inertia` attribute.
 
-  The `inertia` attribute tells the Inertia.js client to manage this title tag,
+  The `data-inertia` attribute tells the Inertia.js client to manage this title tag,
   updating it on client-side navigations via the `<Head>` component.
 
   This component handles the initial server-rendered title. For client-side title
@@ -81,7 +81,7 @@ defmodule NbInertia.HTML do
 
   def inertia_title(assigns) do
     ~H"""
-    <title data-prefix={@prefix} data-suffix={@suffix} inertia>
+    <title data-prefix={@prefix} data-suffix={@suffix} data-inertia="">
       {@prefix}{render_slot(@inner_block)}{@suffix}
     </title>
     """

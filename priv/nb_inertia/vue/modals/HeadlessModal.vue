@@ -70,6 +70,12 @@ interface Props {
    * Whether the modal is currently open
    */
   open?: boolean;
+
+  /**
+   * Optional Inertia page metadata for modal content. Missing v3 fields are
+   * defaulted so composables such as usePage can keep the official shape.
+   */
+  page?: Partial<ModalPageObject>;
 }
 
 interface Emits {
@@ -100,34 +106,45 @@ const modalPage = computed<ModalPageObject | null>(() => {
       ? props.component
       : ((props.component as any)?.name ?? 'Modal');
 
+  const page = props.page ?? {};
+
   return {
-    component: componentName,
-    props: props.componentProps,
-    url: props.baseUrl,
-    version: null,
-    flash: {},
-    scrollRegions: [],
-    rememberedState: {},
-    clearHistory: false,
-    encryptHistory: false,
-    preserveFragment: false,
+    ...page,
+    component: page.component ?? componentName,
+    props: page.props ?? props.componentProps,
+    url: page.url ?? props.baseUrl,
+    version: page.version ?? null,
+    flash: page.flash ?? {},
+    scrollRegions: page.scrollRegions ?? [],
+    rememberedState: page.rememberedState ?? {},
+    clearHistory: page.clearHistory ?? false,
+    encryptHistory: page.encryptHistory ?? false,
+    preserveFragment: page.preserveFragment ?? false,
+    rescuedProps: page.rescuedProps ?? [],
   };
 });
 
 provideModalPageContext(modalPage);
 
 // Watch for open prop changes
-watch(() => props.open, (newVal) => {
-  isOpen.value = newVal;
-});
+watch(
+  () => props.open,
+  (newVal) => {
+    isOpen.value = newVal;
+  },
+);
 
 // Current modal data
 const currentModal = computed(() => {
   if (!modalId.value) return null;
+
+  const page = modalPage.value;
+
   return {
     id: modalId.value,
     component: props.component,
-    props: props.componentProps,
+    props: page?.props ?? props.componentProps,
+    page: page ?? undefined,
     config: props.config,
     baseUrl: props.baseUrl,
     index: 0,
@@ -138,9 +155,12 @@ const currentModal = computed(() => {
 // Register modal in stack when opened
 watch(isOpen, (newVal) => {
   if (newVal && !modalId.value) {
+    const page = modalPage.value;
+
     const newId = pushModal({
       component: props.component,
-      props: props.componentProps,
+      props: page?.props ?? props.componentProps,
+      page: page ?? undefined,
       config: props.config,
       baseUrl: props.baseUrl,
     });
@@ -213,9 +233,12 @@ onUnmounted(() => {
 
 // Initialize modal if open on mount
 if (isOpen.value && !modalId.value) {
+  const page = modalPage.value;
+
   const newId = pushModal({
     component: props.component,
-    props: props.componentProps,
+    props: page?.props ?? props.componentProps,
+    page: page ?? undefined,
     config: props.config,
     baseUrl: props.baseUrl,
   });

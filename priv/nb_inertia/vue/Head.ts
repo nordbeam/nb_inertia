@@ -1,12 +1,5 @@
 import { Head as InertiaHead } from '@inertiajs/vue3';
-import {
-  defineComponent,
-  h,
-  onBeforeUnmount,
-  watch,
-  type PropType,
-  type VNodeChild,
-} from 'vue';
+import { defineComponent, h, type PropType, type VNodeChild } from 'vue';
 import { useIsInModal } from './modalPageContext';
 
 export default defineComponent({
@@ -19,40 +12,17 @@ export default defineComponent({
   },
   setup(props, { slots }) {
     const isInModal = useIsInModal();
-    let originalTitle: string | null = null;
-
-    watch(
-      [isInModal, () => props.title],
-      ([inModal, title]) => {
-        if (!inModal || !title || typeof document === 'undefined') {
-          return;
-        }
-
-        if (originalTitle === null) {
-          originalTitle = document.title;
-        }
-
-        document.title = title;
-      },
-      { immediate: true }
-    );
-
-    onBeforeUnmount(() => {
-      if (originalTitle !== null && typeof document !== 'undefined') {
-        document.title = originalTitle;
-      }
-    });
 
     return () => {
-      if (isInModal.value) {
-        return null;
-      }
-
-      const slot = slots.default;
+      // Keep modal head entries isolated from the page's metadata while still
+      // using Inertia's provider. This preserves the configured title callback
+      // (including its page argument) and lets the provider restore the parent
+      // head when the modal closes.
+      const slot = isInModal.value ? undefined : slots.default;
       return h(
         InertiaHead,
         { title: props.title },
-        slot ? { default: () => slot() as VNodeChild[] } : undefined
+        slot ? { default: () => slot() as VNodeChild[] } : undefined,
       );
     };
   },

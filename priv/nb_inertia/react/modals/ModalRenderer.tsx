@@ -173,6 +173,7 @@ export const ModalRenderer: React.FC<ModalRendererProps> = ({
             url={modal.url}
             baseUrl={modal.baseUrl}
             returnUrl={modal.returnUrl}
+            pageMetadata={modal.pageMetadata}
           >
             <HeadlessModal modal={modal} onClose={close}>
               {() =>

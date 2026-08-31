@@ -1,5 +1,5 @@
 import { default as React } from 'react';
-import { ModalInstance, ModalStackContextValue } from './types';
+import { ModalInstance, ModalPageMetadata, ModalStackContextValue } from './types';
 /**
  * Inertia Page object structure for modal context
  */
@@ -19,6 +19,17 @@ export interface ModalPageObject {
     clearHistory?: boolean;
     encryptHistory?: boolean;
     preserveFragment?: boolean;
+    deferredProps?: ModalPageMetadata['deferredProps'];
+    initialDeferredProps?: ModalPageMetadata['initialDeferredProps'];
+    rescuedProps: string[];
+    mergeProps?: string[];
+    prependProps?: string[];
+    deepMergeProps?: string[];
+    matchPropsOn?: string[];
+    sharedProps?: string[];
+    scrollProps?: ModalPageMetadata['scrollProps'];
+    onceProps?: ModalPageMetadata['onceProps'];
+    optimisticUpdatedAt?: ModalPageMetadata['optimisticUpdatedAt'];
 }
 /**
  * Hook to check if we're inside a modal context
@@ -40,10 +51,11 @@ export interface ModalPageProviderProps {
     url: string;
     baseUrl?: string;
     returnUrl?: string;
+    pageMetadata?: ModalPageMetadata;
     children: React.ReactNode;
 }
 export declare const ModalPageProvider: React.FC<ModalPageProviderProps>;
-export type { ModalConfig, ModalInstance, ModalStackContextValue, } from './types';
+export type { ModalConfig, ModalInstance, ModalStackContextValue } from './types';
 /**
  * Hook to access the modal stack
  *

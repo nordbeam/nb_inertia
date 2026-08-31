@@ -1,21 +1,16 @@
 import { default as React } from 'react';
+import { Head as InertiaHead } from '@inertiajs/react';
 /**
  * Props for the Head component (matches Inertia's HeadProps)
  */
-export interface HeadProps {
-    title?: string;
-    children?: React.ReactNode;
-}
+export type HeadProps = React.ComponentProps<typeof InertiaHead>;
 /**
  * Enhanced Head component
  *
- * Checks if we're inside a modal context. If so, handles document title
- * updates directly. Otherwise, delegates to Inertia's Head component.
- *
- * In modal context:
- * - Only the `title` prop is supported
- * - The original title is restored when the modal closes
- * - Child elements (meta tags, etc.) are ignored in modal context
+ * Delegate to Inertia's head manager in every context. Modal content is
+ * rendered below the application's Inertia provider, so using the official
+ * component preserves title callbacks, server-head handling, head keys, and
+ * child elements such as meta/link/script tags.
  *
  * @param props - Head props (title and optional children)
  */
