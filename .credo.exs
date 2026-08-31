@@ -24,69 +24,12 @@
       parse_timeout: 5000,
       checks: %{
         disabled: [
-          # Keep the strict CI gate stable across Credo releases. These are
-          # intentionally stylistic checks that conflict with macro-heavy DSL
-          # code, test fixtures, or the package's established pipeline style.
-          {Credo.Check.Consistency.MultiAliasImportRequireUse, []},
-          {Credo.Check.Consistency.UnusedVariableNames, []},
-          {Credo.Check.Design.DuplicatedCode, []},
-          {Credo.Check.Design.SkipTestWithoutComment, []},
-          # Installers deliberately use fully-qualified Igniter/Rewrite APIs so
-          # generated patches remain easy to audit beside their module names.
-          {Credo.Check.Design.AliasUsage, []},
-          {Credo.Check.Readability.AliasAs, []},
-          {Credo.Check.Readability.BlockPipe, []},
-          {Credo.Check.Readability.ImplTrue, []},
-          {Credo.Check.Readability.MultiAlias, []},
-          {Credo.Check.Readability.NestedFunctionCalls, []},
-          {Credo.Check.Readability.OneArityFunctionInPipe, []},
-          {Credo.Check.Readability.OnePipePerLine, []},
-          {Credo.Check.Readability.SeparateAliasRequire, []},
-          {Credo.Check.Readability.SingleFunctionToBlockPipe, []},
-          {Credo.Check.Readability.SinglePipe, []},
           {Credo.Check.Readability.Specs, []},
-          {Credo.Check.Readability.StrictModuleLayout, []},
-          # Installer tests assert source templates containing nested quotes.
-          {Credo.Check.Readability.StringSigils, []},
-          {Credo.Check.Readability.WithCustomTaggedTuple, []},
           {Credo.Check.Refactor.ABCSize, []},
-          {Credo.Check.Refactor.AppendSingleItem, []},
-          # SSR and Wallaby adapters dynamically dispatch optional callbacks.
-          {Credo.Check.Refactor.Apply, []},
-          {Credo.Check.Refactor.CondInsteadOfIfElse, []},
-          {Credo.Check.Refactor.DoubleBooleanNegation, []},
-          {Credo.Check.Refactor.FilterReject, []},
-          {Credo.Check.Refactor.IoPuts, []},
-          {Credo.Check.Refactor.MapMap, []},
           {Credo.Check.Refactor.ModuleDependencies, []},
-          {Credo.Check.Refactor.NegatedIsNil, []},
-          {Credo.Check.Refactor.PassAsyncInTestCases, []},
-          {Credo.Check.Refactor.PipeChainStart, []},
-          {Credo.Check.Refactor.RejectFilter, []},
-          {Credo.Check.Refactor.VariableRebinding, []},
           {Credo.Check.Warning.LazyLogging, []},
-          {Credo.Check.Warning.LeakyEnvironment, []},
-          {Credo.Check.Warning.MapGetUnsafePass, []},
           {Credo.Check.Warning.MixEnv, []},
-          {Credo.Check.Warning.UnsafeToAtom, []},
-          # The package's own tests and fixtures deliberately contain examples
-          # that trigger its exported checks. Those checks are covered directly
-          # in test/nb_inertia/credo/checks_test.exs and are enabled by the
-          # generated consumer configuration instead.
-          {NbInertia.Credo.Check.Design.DeclareInertiaPage, []},
-          {NbInertia.Credo.Check.Design.FormInputsOptionalFieldConsistency, []},
-          {NbInertia.Credo.Check.Readability.InertiaPageComponentNameCase, []},
-          {NbInertia.Credo.Check.Readability.PropFromAssigns, []},
-          {NbInertia.Credo.Check.Warning.AvoidRawInertiaRender, []},
-          {NbInertia.Credo.Check.Warning.DirectRepoInController, []},
-          {NbInertia.Credo.Check.Warning.InconsistentOptionalProps, []},
-          {NbInertia.Credo.Check.Warning.MissingInertiaPageProps, []},
-          {NbInertia.Credo.Check.Warning.MissingInertiaSharedProps, []},
-          {NbInertia.Credo.Check.Warning.MissingSerializerInertiaProps, []},
-          {NbInertia.Credo.Check.Warning.MixedInertiaControllerType, []},
-          {NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl, []},
-          {NbInertia.Credo.Check.Warning.UntypedInertiaProps, []},
-          {NbInertia.Credo.Check.Warning.UseNbInertiaController, []}
+          {Credo.Check.Warning.UnsafeToAtom, []}
         ],
         enabled: [
           {Credo.Check.Consistency.ExceptionNames, []},
@@ -95,6 +38,23 @@
           {Credo.Check.Consistency.SpaceAroundOperators, []},
           {Credo.Check.Consistency.SpaceInParentheses, []},
           {Credo.Check.Consistency.TabsOrSpaces, []},
+          # Keep the original tuned policy for the package namespaces. The
+          # installer and generator intentionally use qualified Igniter/Rewrite
+          # APIs while constructing consumer source files.
+          {Credo.Check.Design.AliasUsage,
+           [
+             priority: :low,
+             if_nested_deeper_than: 2,
+             if_called_more_often_than: 0,
+             excluded_namespaces: ["NbInertia", "Phoenix", "Plug"],
+             files: %{
+               excluded: [
+                 ~r{(^|/)lib/mix/tasks/nb_inertia\.install\.ex$},
+                 ~r{(^|/)lib/mix/tasks/nb_inertia\.gen\.realtime\.ex$},
+                 ~r{(^|/)lib/mix/tasks/nb\.setup\.credo\.ex$}
+               ]
+             }
+           ]},
           {Credo.Check.Design.TagTODO, [exit_status: 2]},
           {Credo.Check.Design.TagFIXME, []},
           {Credo.Check.Readability.AliasOrder, []},
@@ -112,21 +72,50 @@
           {Credo.Check.Readability.RedundantBlankLines, []},
           {Credo.Check.Readability.Semicolons, []},
           {Credo.Check.Readability.SpaceAfterCommas, []},
+          {Credo.Check.Readability.StringSigils, []},
           {Credo.Check.Readability.TrailingBlankLine, []},
           {Credo.Check.Readability.TrailingWhiteSpace, []},
           {Credo.Check.Readability.UnnecessaryAliasExpansion, []},
           {Credo.Check.Readability.VariableNames, []},
+          {Credo.Check.Refactor.Apply,
+           [
+             # Wallaby is optional and these adapters must stay dynamically
+             # dispatched so nb_inertia compiles without Wallaby installed.
+             files: %{excluded: [~r{(^|/)lib/nb_inertia/wallaby_helpers\.ex$}]}
+           ]},
           {Credo.Check.Refactor.CondStatements, []},
-          # Macro-heavy installers and controller dispatchers are inherently
-          # branchy; retain a ceiling that still catches substantial regressions.
-          {Credo.Check.Refactor.CyclomaticComplexity, [max_complexity: 50]},
+          # Keep a meaningful complexity ceiling for normal application code.
+          # Installer/generator modules are intentionally branch-heavy because
+          # they encode many mutually exclusive source-generation options.
+          {Credo.Check.Refactor.CyclomaticComplexity,
+           [
+             max_complexity: 20,
+             files: %{
+               excluded: [
+                 ~r{(^|/)lib/mix/tasks/nb_inertia\.install\.ex$},
+                 ~r{(^|/)lib/mix/tasks/nb_inertia\.gen\.realtime\.ex$},
+                 ~r{(^|/)lib/mix/tasks/nb\.setup\.credo\.ex$}
+               ]
+             }
+           ]},
           {Credo.Check.Refactor.FunctionArity, [max_arity: 8]},
           {Credo.Check.Refactor.LongQuoteBlocks, []},
           {Credo.Check.Refactor.MapJoin, []},
           {Credo.Check.Refactor.MatchInCondition, []},
           {Credo.Check.Refactor.NegatedConditionsInUnless, []},
           {Credo.Check.Refactor.NegatedConditionsWithElse, []},
-          {Credo.Check.Refactor.Nesting, [max_nesting: 5]},
+          # Depth five occurs only in source-generation DSL; retain the check
+          # for deeper nesting elsewhere without penalizing those templates.
+          {Credo.Check.Refactor.Nesting,
+           [
+             max_nesting: 4,
+             files: %{
+               excluded: [
+                 ~r{(^|/)lib/mix/tasks/nb_inertia\.install\.ex$},
+                 ~r{(^|/)lib/mix/tasks/nb_inertia\.gen\.realtime\.ex$}
+               ]
+             }
+           ]},
           {Credo.Check.Refactor.UnlessWithElse, []},
           {Credo.Check.Refactor.WithClauses, []},
           {Credo.Check.Refactor.FilterFilter, []},
@@ -150,7 +139,39 @@
           {Credo.Check.Warning.UnusedRegexOperation, []},
           {Credo.Check.Warning.UnusedStringOperation, []},
           {Credo.Check.Warning.UnusedTupleOperation, []},
-          {Credo.Check.Warning.UnsafeExec, []}
+          {Credo.Check.Warning.UnsafeExec, []},
+          # These fixtures intentionally exercise generic maps/lists/any values
+          # and are not production page contracts. Keep the safety check active
+          # for all other source and test files.
+          {NbInertia.Credo.Check.Warning.UntypedInertiaProps,
+           [
+             files: %{
+               excluded: [
+                 "lib/nb_inertia/examples/example_controller.ex",
+                 "lib/nb_inertia/perf/fixtures.ex",
+                 "test/integration/form_inputs_ts_integration_test.exs",
+                 "test/nb_inertia/controller/render_api_test.exs",
+                 "test/nb_inertia/dsl_options_test.exs",
+                 "test/nb_inertia/form_inputs_test.exs",
+                 "test/nb_inertia/modal_props_test.exs",
+                 "test/nb_inertia/modal_renderer_test.exs",
+                 "test/nb_inertia/type_name_option_test.exs"
+               ]
+             }
+           ]},
+          {NbInertia.Credo.Check.Design.DeclareInertiaPage, []},
+          {NbInertia.Credo.Check.Design.FormInputsOptionalFieldConsistency, []},
+          {NbInertia.Credo.Check.Readability.InertiaPageComponentNameCase, []},
+          {NbInertia.Credo.Check.Readability.PropFromAssigns, []},
+          {NbInertia.Credo.Check.Warning.AvoidRawInertiaRender, []},
+          {NbInertia.Credo.Check.Warning.DirectRepoInController, []},
+          {NbInertia.Credo.Check.Warning.InconsistentOptionalProps, []},
+          {NbInertia.Credo.Check.Warning.MissingInertiaPageProps, []},
+          {NbInertia.Credo.Check.Warning.MissingInertiaSharedProps, []},
+          {NbInertia.Credo.Check.Warning.MissingSerializerInertiaProps, []},
+          {NbInertia.Credo.Check.Warning.MixedInertiaControllerType, []},
+          {NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl, []},
+          {NbInertia.Credo.Check.Warning.UseNbInertiaController, []}
         ]
       }
     }

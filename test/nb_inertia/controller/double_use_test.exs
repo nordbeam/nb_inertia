@@ -20,7 +20,10 @@ defmodule NbInertia.Controller.DoubleUseTest do
     warnings = capture_io(:stderr, fn -> Code.compile_string(source) end)
 
     refute warnings =~ "redundant"
+    # The module is generated dynamically to exercise its generated functions.
+    # credo:disable-for-next-line Credo.Check.Refactor.Apply
     assert apply(module, :page, [:index]) == "Index"
+    # credo:disable-for-next-line Credo.Check.Refactor.Apply
     assert %{component: "Index"} = apply(module, :inertia_page_config, [:index])
   end
 end

@@ -22,7 +22,7 @@ defmodule NbInertia.ModalRendererTest do
 
     inertia_page :users_index, component: "Users/Index" do
       prop(:users, :list)
-      prop(:current_user_id, :string)
+      prop(:current_user_id, :string, from: :assigns)
       prop(:base_request, :boolean)
     end
 
@@ -34,7 +34,6 @@ defmodule NbInertia.ModalRendererTest do
     def index(conn, _params) do
       render_inertia_page(conn, :users_index,
         users: [%{id: 1, name: "Ada"}],
-        current_user_id: conn.assigns.current_user_id,
         base_request: NbInertia.Modal.Renderer.base_request?(conn)
       )
     end

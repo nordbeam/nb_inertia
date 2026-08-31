@@ -248,101 +248,105 @@ defmodule NbInertia.SSR do
   @impl true
   def init(opts) do
     config = Application.get_env(:nb_inertia, :ssr, [])
+    state = build_state(config, opts)
 
-    # Handle both boolean and keyword list formats for :enabled
-    config_enabled =
-      case config do
-        config when is_list(config) -> Keyword.get(config, :enabled, false)
-        config when is_boolean(config) -> config
-        _ -> false
-      end
+    initialize_state(state)
+  end
 
-    enabled = Keyword.get(opts, :enabled, config_enabled)
+  defp build_state(config, opts) do
+    configured_dev_server_url = configured_dev_server_url(config, opts)
 
-    # Use configured script_path or fall back to default based on app's priv_dir
-    script_path =
-      Keyword.get(opts, :script_path) ||
-        (is_list(config) && Keyword.get(config, :script_path)) ||
-        default_script_path()
-
-    configured_dev_server_url =
-      Keyword.get(opts, :dev_server_url) ||
-        (is_list(config) && Keyword.get(config, :dev_server_url)) ||
-        System.get_env("VITE_DEV_SERVER_URL")
-
-    # Detect if we're in development mode
-    dev_mode = dev_mode?()
-
-    dev_server_url = configured_dev_server_url || default_dev_server_url()
-
-    config_raise_on_failure =
-      if is_list(config) do
-        Keyword.get(
-          config,
-          :raise_on_failure,
-          Application.get_env(:nb_inertia, :raise_on_ssr_failure, true)
-        )
-      else
-        Application.get_env(:nb_inertia, :raise_on_ssr_failure, true)
-      end
-
-    state = %{
-      enabled: enabled,
-      script_path: script_path,
-      dev_server_url: dev_server_url,
+    %{
+      enabled: Keyword.get(opts, :enabled, config_enabled(config)),
+      script_path: configured_script_path(config, opts),
+      dev_server_url: configured_dev_server_url || default_dev_server_url(),
       dev_server_url_source: if(configured_dev_server_url, do: :configured, else: :auto),
-      dev_mode: dev_mode,
-      raise_on_failure: Keyword.get(opts, :raise_on_failure, config_raise_on_failure),
+      dev_mode: dev_mode?(),
+      raise_on_failure: Keyword.get(opts, :raise_on_failure, config_raise_on_failure(config)),
       script_loaded: false,
       deno_pid: nil,
       deno_available: deno_rider_available?()
     }
+  end
 
-    cond do
-      # In dev mode, try to use the dev SSR server
-      state.enabled and state.dev_mode ->
-        case check_dev_server_health(state.dev_server_url) do
-          {:ok, dev_server_url} ->
-            Logger.info("NbInertia.SSR: Using development server at #{dev_server_url}")
-            {:ok, %{state | script_loaded: true, dev_server_url: dev_server_url}}
+  defp config_enabled(config) when is_list(config), do: Keyword.get(config, :enabled, false)
+  defp config_enabled(config) when is_boolean(config), do: config
+  defp config_enabled(_config), do: false
 
-          :error ->
-            Logger.info(
-              "SSR: Development server not yet available at #{state.dev_server_url}. " <>
-                "Will retry in background (this is normal during startup)."
-            )
+  defp configured_script_path(config, opts) do
+    Keyword.get(opts, :script_path) || config_value(config, :script_path) || default_script_path()
+  end
 
-            # Schedule a retry check instead of disabling SSR permanently
-            Process.send_after(self(), :check_dev_server, 2000)
-            {:ok, state}
-        end
+  defp configured_dev_server_url(config, opts) do
+    Keyword.get(opts, :dev_server_url) ||
+      config_value(config, :dev_server_url) ||
+      System.get_env("VITE_DEV_SERVER_URL")
+  end
 
-      # In production mode, use DenoRider with bundled script
-      state.enabled and state.deno_available and script_path ->
-        case start_deno_with_module(script_path) do
-          {:ok, pid} ->
-            Logger.info("NbInertia.SSR: Using production bundle at #{script_path}")
-            {:ok, %{state | script_loaded: true, deno_pid: pid}}
+  defp config_value(config, key) when is_list(config), do: Keyword.get(config, key)
+  defp config_value(_config, _key), do: nil
 
-          {:error, reason} ->
-            Logger.warning(
-              "NbInertia.SSR: Failed to start DenoRider with SSR script: #{inspect(reason)}"
-            )
+  defp config_raise_on_failure(config) when is_list(config) do
+    Keyword.get(
+      config,
+      :raise_on_failure,
+      Application.get_env(:nb_inertia, :raise_on_ssr_failure, true)
+    )
+  end
 
-            {:ok, %{state | enabled: false}}
-        end
+  defp config_raise_on_failure(_config) do
+    Application.get_env(:nb_inertia, :raise_on_ssr_failure, true)
+  end
 
-      # SSR enabled but DenoRider not available in production
-      state.enabled and not state.deno_available and not state.dev_mode ->
-        Logger.warning(
-          "SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps."
+  defp initialize_state(%{enabled: true, dev_mode: true} = state) do
+    initialize_dev_state(state)
+  end
+
+  defp initialize_state(%{enabled: true, deno_available: true, script_path: script_path} = state)
+       when script_path not in [nil, false] do
+    initialize_prod_state(state)
+  end
+
+  defp initialize_state(%{enabled: true, deno_available: false, dev_mode: false} = state) do
+    Logger.warning(
+      "SSR enabled but DenoRider is not available. Please add {:deno_rider, \"~> 0.2\"} to your deps."
+    )
+
+    {:ok, state}
+  end
+
+  defp initialize_state(state), do: {:ok, state}
+
+  defp initialize_dev_state(state) do
+    case check_dev_server_health(state.dev_server_url) do
+      {:ok, dev_server_url} ->
+        Logger.info("NbInertia.SSR: Using development server at #{dev_server_url}")
+        {:ok, %{state | script_loaded: true, dev_server_url: dev_server_url}}
+
+      :error ->
+        Logger.info(
+          "SSR: Development server not yet available at #{state.dev_server_url}. " <>
+            "Will retry in background (this is normal during startup)."
         )
 
+        # Schedule a retry check instead of disabling SSR permanently
+        Process.send_after(self(), :check_dev_server, 2000)
         {:ok, state}
+    end
+  end
 
-      # SSR not enabled
-      true ->
-        {:ok, state}
+  defp initialize_prod_state(%{script_path: script_path} = state) do
+    case start_deno_with_module(script_path) do
+      {:ok, pid} ->
+        Logger.info("NbInertia.SSR: Using production bundle at #{script_path}")
+        {:ok, %{state | script_loaded: true, deno_pid: pid}}
+
+      {:error, reason} ->
+        Logger.warning(
+          "NbInertia.SSR: Failed to start DenoRider with SSR script: #{inspect(reason)}"
+        )
+
+        {:ok, %{state | enabled: false}}
     end
   end
 
@@ -601,6 +605,8 @@ defmodule NbInertia.SSR do
       # Start DenoRider with the SSR script as the main module
       # This will execute the script and make globalThis.render available
       if Code.ensure_loaded?(DenoRider) do
+        # DenoRider is optional; dynamic dispatch keeps the library compilable without it.
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
         apply(DenoRider, :start, [[main_module_path: script_path]])
       else
         {:error, :deno_rider_not_available}
@@ -748,6 +754,8 @@ defmodule NbInertia.SSR do
 
     result =
       if Code.ensure_loaded?(DenoRider) do
+        # DenoRider is optional; dynamic dispatch keeps the library compilable without it.
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
         case apply(DenoRider, :eval, [js_code, [pid: state.deno_pid]]) do
           # Check for error object first
           {:ok, %{"__error" => true, "message" => message, "stack" => stack}} ->

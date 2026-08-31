@@ -314,7 +314,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     test "uses the HTTPS GitHub source and preserves a ref for first-party installs" do
       source =
         Install.client_package_source_from_dep_declaration(
-          "{:nb_inertia, [github: \"nordbeam/nb_inertia\", ref: \"abc123\"]}",
+          ~S|{:nb_inertia, [github: "nordbeam/nb_inertia", ref: "abc123"]}|,
           "git+https://github.com/nordbeam/nb_inertia.git"
         )
 
@@ -330,14 +330,14 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
     test "keeps the old helper name as a compatibility alias" do
       assert Install.npm_source_from_dep_declaration(
-               "{:nb_inertia, [github: \"nordbeam/nb_inertia\", tag: \"v1.0.0\"]}",
+               ~S|{:nb_inertia, [github: "nordbeam/nb_inertia", tag: "v1.0.0"]}|,
                "git+https://github.com/nordbeam/nb_inertia.git"
              ) == "git+https://github.com/nordbeam/nb_inertia.git#v1.0.0"
     end
 
     test "preserves explicit git and workspace sources" do
       assert Install.client_package_source_from_dep_declaration(
-               "{:nb_inertia, [git: \"git@github.com:fork/nb_inertia.git\", ref: \"abc123\"]}",
+               ~S|{:nb_inertia, [git: "git@github.com:fork/nb_inertia.git", ref: "abc123"]}|,
                "git+https://github.com/nordbeam/nb_inertia.git"
              ) == "git@github.com:fork/nb_inertia.git#abc123"
 
