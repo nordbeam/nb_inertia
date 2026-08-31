@@ -14,15 +14,16 @@
  * ```tsx
  * import { ModalStackProvider, InitialModalHandler, ModalRenderer } from '@nordbeam/nb-inertia/react/modals';
  *
- * function App({ Component, props }) {
- *   return (
- *     <ModalStackProvider>
- *       <Component {...props} />
- *       <InitialModalHandler resolveComponent={resolveComponent} />
+ * createInertiaApp({
+ *   resolve: resolveComponent,
+ *   withApp: (app, { page }) => (
+ *     <ModalStackProvider resolveComponent={resolveComponent}>
+ *       {app}
+ *       <InitialModalHandler resolveComponent={resolveComponent} initialPage={page} />
  *       <ModalRenderer />
  *     </ModalStackProvider>
- *   );
- * }
+ *   ),
+ * });
  * ```
  *
  * @example Custom rendering

@@ -19,15 +19,16 @@
  * const resolveComponent = (name: string) =>
  *   pages[`./pages/${name}.tsx`]().then((m: any) => m.default);
  *
- * function App({ Component, props }) {
- *   return (
- *     <ModalStackProvider>
- *       <Component {...props} />
- *       <InitialModalHandler resolveComponent={resolveComponent} />
+ * createInertiaApp({
+ *   resolve: resolveComponent,
+ *   withApp: (app, { page }) => (
+ *     <ModalStackProvider resolveComponent={resolveComponent}>
+ *       {app}
+ *       <InitialModalHandler resolveComponent={resolveComponent} initialPage={page} />
  *       <MyModalRenderer resolveComponent={resolveComponent} />
  *     </ModalStackProvider>
- *   );
- * }
+ *   ),
+ * });
  *
  * // Your custom modal renderer using any UI library
  * function MyModalRenderer({ resolveComponent }) {

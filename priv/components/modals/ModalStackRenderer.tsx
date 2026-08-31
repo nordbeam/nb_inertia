@@ -154,6 +154,7 @@ function AnimatedModal({
           url={modal.url}
           baseUrl={modal.baseUrl}
           returnUrl={modal.returnUrl}
+          pageMetadata={modal.pageMetadata}
         >
           {modal.loading ? (
             LoadingComponent ? (
@@ -241,15 +242,19 @@ function AnimatedModal({
  *   import { ModalStackProvider, InitialModalHandler } from '@nordbeam/nb-inertia/react/modals';
  *   import { ModalStackRenderer } from '@/components/modals/ModalStackRenderer';
  *
- *   function App({ children }) {
- *     return (
+ *   createInertiaApp({
+ *     resolve: resolvePageComponent,
+ *     withApp: (app, { page }) => (
  *       <ModalStackProvider resolveComponent={resolvePageComponent}>
- *         <InitialModalHandler resolveComponent={resolvePageComponent} />
- *         {children}
+ *         {app}
+ *         <InitialModalHandler
+ *           resolveComponent={resolvePageComponent}
+ *           initialPage={page}
+ *         />
  *         <ModalStackRenderer />
  *       </ModalStackProvider>
- *     );
- *   }
+ *     ),
+ *   });
  *   ```
  *
  * Customization:

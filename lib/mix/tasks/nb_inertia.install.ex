@@ -1305,8 +1305,13 @@ if Code.ensure_loaded?(Igniter) do
 
       """
       import "phoenix-colocated/#{app_name}/colocated.css";
-      import { createInertiaApp, http } from "@/lib/inertia";
-      import { createRoot } from "react-dom/client";
+      import {
+        createInertiaApp,
+        http,
+        InitialModalHandler,
+        ModalStackProvider,
+      } from "@/lib/inertia";
+      import { ModalStackRenderer } from "@/components/modals";
       import type { ComponentType } from "react";
 
       type PageModule = {
@@ -1314,6 +1319,15 @@ if Code.ensure_loaded?(Igniter) do
       };
 
       const pages = import.meta.glob<PageModule>("./pages/**/*.#{extension}");
+
+      const resolvePageComponent = async (name#{if typescript, do: ": string", else: ""}) => {
+        const path = `./pages/${name}.#{extension}`;
+        const resolver = pages[path];
+        if (!resolver) {
+          throw new Error(`Page not found: ${name}`);
+        }
+        return (await resolver()).default;
+      };
 
       const getCsrfToken = () =>
         document
@@ -1339,20 +1353,19 @@ if Code.ensure_loaded?(Igniter) do
       void createInertiaApp({
         // Inertia v3.5+: reconcile head elements supplied in the `head` prop.
         serverHead: true,
-        // Inertia v3: resolve receives (name, props). Props can be used for
-        // per-page layout selection or conditional logic.
-        resolve: async (name, _props) => {
-          const path = `./pages/${name}.#{extension}`;
-          const resolver = pages[path];
-          if (!resolver) {
-            throw new Error(`Page not found: ${name}`);
-          }
-          return (await resolver()).default;
-        },
-        setup({ App, el, props }) {
-          if (!el) throw new Error("Inertia root element was not found");
-          createRoot(el).render(<App {...props} />);
-        },
+        resolve: resolvePageComponent,
+        // Inertia v3 mounts or hydrates the app itself. `withApp` supplies one
+        // shared modal stack without bypassing the adapter's hydration path.
+        withApp: (app, { page }) => (
+          <ModalStackProvider resolveComponent={resolvePageComponent}>
+            {app}
+            <InitialModalHandler
+              resolveComponent={resolvePageComponent}
+              initialPage={page}
+            />
+            <ModalStackRenderer />
+          </ModalStackProvider>
+        ),
         // Inertia v3: optional layout callback for default layouts
         // layout: (name) => AppLayout,
         // Inertia v3 (React only): enable React.StrictMode wrapper
@@ -1674,10 +1687,16 @@ if Code.ensure_loaded?(Igniter) do
       type_definitions = ssr_type_definitions(extension)
       glob_call = ssr_glob_call(extension, eager?: false)
       render_signature = ssr_render_signature(extension)
+      name_argument = if extension == "tsx", do: "name: string", else: "name"
 
       """
       import ReactDOMServer from "react-dom/server.browser";
-      import { createInertiaApp } from "@/lib/inertia";
+      import {
+        createInertiaApp,
+        InitialModalHandler,
+        ModalStackProvider,
+      } from "@/lib/inertia";
+      import { ModalStackRenderer } from "@/components/modals";
       #{type_definitions}
       /**
        * Development SSR entry point with on-demand page loading
@@ -1688,6 +1707,26 @@ if Code.ensure_loaded?(Igniter) do
       // Lazy loading - create import functions once at module level
       const pages = #{glob_call};
 
+      const resolvePageComponent = async (#{name_argument}) => {
+        const pagePath = `./pages/${name}.#{extension}`;
+
+        if (!pages[pagePath]) {
+          const availablePages = Object.keys(pages)
+            .map(p => p.replace('./pages/', '').replace('.#{extension}', ''))
+            .sort();
+
+          throw new Error(
+            `SSR page not found: ${name}\\n` +
+            `Expected: assets/js/pages/${name}.#{extension}\\n` +
+            `Available pages (${availablePages.length}):\\n` +
+            availablePages.map(p => `  - ${p}`).join('\\n')
+          );
+        }
+
+        const pageModule = await pages[pagePath]();
+        return pageModule.default;
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       #{render_signature} {
         if (page?.component === "__nb_inertia_healthcheck__") {
@@ -1698,36 +1737,17 @@ if Code.ensure_loaded?(Igniter) do
           page,
           render: ReactDOMServer.renderToString,
           serverHead: true,
-          // Inertia v3: resolve receives (name, props)
-          resolve: async (name, _props) => {
-            const pagePath = `./pages/${name}.#{extension}`;
-
-            if (!pages[pagePath]) {
-              // List available pages for debugging
-              const availablePages = Object.keys(pages)
-                .map(p => p.replace('./pages/', '').replace('.#{extension}', ''))
-                .sort();
-
-              throw new Error(
-                `❌ SSR Page Not Found\\n\\n` +
-                `Component: ${name}\\n` +
-                `Expected file: assets/js/pages/${name}.#{extension}\\n\\n` +
-                `This page file doesn't exist or wasn't found by Vite's glob.\\n\\n` +
-                `Common causes:\\n` +
-                `• The file hasn't been created yet\\n` +
-                `• The file name doesn't match the component name\\n` +
-                `• The file has the wrong extension\\n` +
-                `• The component name in your controller doesn't match the file path\\n\\n` +
-                `Available pages (${availablePages.length}):\\n` +
-                availablePages.map(p => `  - ${p}`).join('\\n')
-              );
-            }
-
-            // Dynamically import only the requested page
-            const pageModule = await pages[pagePath]();
-            return pageModule.default;
-          },
-          setup: ({ App, props }) => <App {...props} />,
+          resolve: resolvePageComponent,
+          setup: ({ App, props }) => (
+            <ModalStackProvider resolveComponent={resolvePageComponent}>
+              <App {...props} />
+              <InitialModalHandler
+                resolveComponent={resolvePageComponent}
+                initialPage={props.initialPage}
+              />
+              <ModalStackRenderer />
+            </ModalStackProvider>
+          ),
         });
       }
       """
@@ -1737,10 +1757,16 @@ if Code.ensure_loaded?(Igniter) do
       type_definitions = ssr_type_definitions(extension)
       glob_call = ssr_glob_call(extension, eager?: true)
       render_signature = ssr_render_signature(extension)
+      name_argument = if extension == "tsx", do: "name: string", else: "name"
 
       """
       import ReactDOMServer from "react-dom/server.browser";
-      import { createInertiaApp } from "@/lib/inertia";
+      import {
+        createInertiaApp,
+        InitialModalHandler,
+        ModalStackProvider,
+      } from "@/lib/inertia";
+      import { ModalStackRenderer } from "@/components/modals";
       #{type_definitions}
       /**
        * Production SSR entry point with eager page loading
@@ -1749,6 +1775,27 @@ if Code.ensure_loaded?(Igniter) do
        * This is required for Deno/DenoRider which doesn't support dynamic imports
        * in the same way as Node.js.
        */
+      const pages = #{glob_call};
+
+      const resolvePageComponent = async (#{name_argument}) => {
+        const pagePath = `./pages/${name}.#{extension}`;
+
+        if (!pages[pagePath]) {
+          const availablePages = Object.keys(pages)
+            .map(p => p.replace('./pages/', '').replace('.#{extension}', ''))
+            .sort();
+
+          throw new Error(
+            `SSR page not found: ${name}\\n` +
+            `Expected: assets/js/pages/${name}.#{extension}\\n` +
+            `Available pages (${availablePages.length}):\\n` +
+            availablePages.map(p => `  - ${p}`).join('\\n')
+          );
+        }
+
+        return pages[pagePath].default;
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       #{render_signature} {
         if (page?.component === "__nb_inertia_healthcheck__") {
@@ -1759,37 +1806,17 @@ if Code.ensure_loaded?(Igniter) do
           page,
           render: ReactDOMServer.renderToString,
           serverHead: true,
-          // Inertia v3: resolve receives (name, props)
-          resolve: async (name, _props) => {
-            // Eager loading - all pages are bundled
-            const pages = #{glob_call};
-            const pagePath = `./pages/${name}.#{extension}`;
-
-            if (!pages[pagePath]) {
-              // List available pages for debugging
-              const availablePages = Object.keys(pages)
-                .map(p => p.replace('./pages/', '').replace('.#{extension}', ''))
-                .sort();
-
-              throw new Error(
-                `❌ SSR Page Not Found\\n\\n` +
-                `Component: ${name}\\n` +
-                `Expected file: assets/js/pages/${name}.#{extension}\\n\\n` +
-                `This page file doesn't exist or wasn't bundled in the SSR build.\\n\\n` +
-                `Common causes:\\n` +
-                `• The file hasn't been created yet\\n` +
-                `• The file name doesn't match the component name\\n` +
-                `• The file has the wrong extension\\n` +
-                `• The component name in your controller doesn't match the file path\\n` +
-                `• The SSR bundle needs to be rebuilt (run your package manager's build:ssr script)\\n\\n` +
-                `Available pages (${availablePages.length}):\\n` +
-                availablePages.map(p => `  - ${p}`).join('\\n')
-              );
-            }
-
-            return pages[pagePath].default;
-          },
-          setup: ({ App, props }) => <App {...props} />,
+          resolve: resolvePageComponent,
+          setup: ({ App, props }) => (
+            <ModalStackProvider resolveComponent={resolvePageComponent}>
+              <App {...props} />
+              <InitialModalHandler
+                resolveComponent={resolvePageComponent}
+                initialPage={props.initialPage}
+              />
+              <ModalStackRenderer />
+            </ModalStackProvider>
+          ),
         });
       }
       """
@@ -3114,20 +3141,9 @@ if Code.ensure_loaded?(Igniter) do
           - The stack installer adds the required Dialog and Sheet components
           - Customize the renderer to match your app's design
 
-          To enable modals, wrap your app:
-
-            import { ModalStackProvider, InitialModalHandler } from '@/lib/inertia';
-            import { ModalStackRenderer } from '@/components/modals';
-
-            function App({ children }) {
-              return (
-                <ModalStackProvider resolveComponent={resolvePageComponent}>
-                  <InitialModalHandler resolveComponent={resolvePageComponent} />
-                  {children}
-                  <ModalStackRenderer />
-                </ModalStackProvider>
-              );
-            }
+          The generated app and SSR entries already mount ModalStackProvider,
+          InitialModalHandler, and ModalStackRenderer. Customize the copied
+          renderer when you want to change the modal UI.
           """
         else
           if client_framework == "vue" do

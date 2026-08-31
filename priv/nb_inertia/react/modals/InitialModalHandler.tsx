@@ -1,7 +1,9 @@
 /**
  * InitialModalHandler - Detects initial modal props and handles navigation events
  *
- * This component must be rendered INSIDE the Inertia App context so that usePage() works.
+ * This component is independent of React's Inertia page context. Pass the
+ * initial page from `createInertiaApp`'s `withApp`/`setup` callback so it can
+ * handle direct modal URLs, while navigation events keep it in sync afterward.
  * It handles:
  * 1. Initial page load with _nb_modal prop (direct URL access to modal)
  * 2. Navigation events that include modal data
@@ -10,26 +12,27 @@
  * ```tsx
  * import { ModalStackProvider, InitialModalHandler, ModalStackRenderer } from '@nordbeam/nb-inertia/react/modals';
  *
- * function App({ Component, props }) {
- *   return (
- *     <ModalStackProvider>
- *       <Component {...props} />
+ * createInertiaApp({
+ *   resolve: resolveComponent,
+ *   withApp: (app, { page }) => (
+ *     <ModalStackProvider resolveComponent={resolveComponent}>
+ *       {app}
  *       <InitialModalHandler
- *         resolveComponent={(name) => import(`./pages/${name}.tsx`).then(m => m.default)}
+ *         resolveComponent={resolveComponent}
+ *         initialPage={page}
  *       />
- *       <ModalStackRenderer
- *         resolveComponent={(name) => import(`./pages/${name}.tsx`).then(m => m.default)}
- *       />
+ *       <ModalStackRenderer />
  *     </ModalStackProvider>
- *   );
- * }
+ *   ),
+ * });
  * ```
  */
 
-import { useEffect, useRef, useCallback } from 'react';
-import { usePage, router } from '@inertiajs/react';
-import { useModalStack } from './modalStack';
-import type { ModalConfig, ModalPageMetadata } from './types';
+import { useEffect, useRef, useCallback } from "react";
+import { router, usePage } from "@inertiajs/react";
+import type { Page as InertiaPage } from "@inertiajs/core";
+import { useModalStack } from "./modalStack";
+import type { ModalConfig, ModalPageMetadata } from "./types";
 
 /**
  * Modal data structure from the backend's render_inertia_modal response
@@ -68,6 +71,13 @@ export interface InitialModalHandlerProps {
    * ```
    */
   resolveComponent: (name: string) => Promise<React.ComponentType<any>>;
+
+  /**
+   * The initial Inertia page supplied to `createInertiaApp`'s `withApp` or
+   * `setup` callback. This avoids coupling the handler to React's internal page
+   * context and lets the modal provider wrap the entire Inertia application.
+   */
+  initialPage?: InertiaPage;
 }
 
 /**
@@ -79,9 +89,7 @@ export interface InitialModalHandlerProps {
  * - Pushes modals onto the stack via useModalStack
  * - Manages browser history for proper back/forward navigation
  */
-export function InitialModalHandler({ resolveComponent }: InitialModalHandlerProps) {
-  const page = usePage<{ _nb_modal?: ModalOnBase }>();
-  const { props: pageProps } = page;
+function ModalEventHandler({ resolveComponent, initialPage }: InitialModalHandlerProps) {
   const { pushModal, updateModal, clearModals, modals } = useModalStack();
   const isNavigatingRef = useRef(false);
   const initialModalHandledRef = useRef(false);
@@ -110,10 +118,10 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
       // 2. router.visit would trigger a full navigation that races with React re-render
       //
       // Priority: returnUrl (full URL with query params) > baseUrl (path only)
-      if (!isNavigatingRef.current && typeof window !== 'undefined') {
+      if (!isNavigatingRef.current && typeof window !== "undefined") {
         const targetUrl = returnUrl || modalOnBase.baseUrl;
         if (targetUrl && window.location.href !== targetUrl) {
-          window.history.replaceState({}, '', targetUrl);
+          window.history.replaceState({}, "", targetUrl);
         }
       }
     };
@@ -196,7 +204,7 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
         .catch((error) => {
           handledUrlsRef.current.delete(url);
           console.error(
-            '[InitialModalHandler] Failed to resolve modal component:',
+            "[InitialModalHandler] Failed to resolve modal component:",
             modalOnBase.component,
             error,
           );
@@ -207,25 +215,27 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
 
   // Handle initial modal from page props (direct URL access)
   useEffect(() => {
-    const modalOnBase = pageProps._nb_modal;
+    const modalOnBase = (initialPage?.props as Record<string, unknown> | undefined)?._nb_modal as
+      | ModalOnBase
+      | undefined;
 
     if (modalOnBase && !initialModalHandledRef.current) {
       initialModalHandledRef.current = true;
-      openModal(modalOnBase, page);
+      openModal(modalOnBase, initialPage);
     }
   }, []); // Only run once on mount
 
   // Handle navigation events
   useEffect(() => {
-    const unsubscribeStart = router.on('start', () => {
+    const unsubscribeStart = router.on("start", () => {
       isNavigatingRef.current = true;
     });
 
-    const unsubscribeFinish = router.on('finish', () => {
+    const unsubscribeFinish = router.on("finish", () => {
       isNavigatingRef.current = false;
     });
 
-    const unsubscribeNavigate = router.on('navigate', (event) => {
+    const unsubscribeNavigate = router.on("navigate", (event) => {
       const modalOnBase = (event.detail.page.props as Record<string, unknown>)?._nb_modal as
         | ModalOnBase
         | undefined;
@@ -250,6 +260,27 @@ export function InitialModalHandler({ resolveComponent }: InitialModalHandlerPro
 
   // This component doesn't render anything
   return null;
+}
+
+function ContextInitialModalHandler({
+  resolveComponent,
+}: Pick<InitialModalHandlerProps, "resolveComponent">) {
+  const page = usePage();
+
+  return <ModalEventHandler resolveComponent={resolveComponent} initialPage={page} />;
+}
+
+/**
+ * Mount the modal event bridge with an explicit initial page (recommended for
+ * Inertia v3 `withApp` wrappers) or, for backward compatibility, inside the
+ * Inertia component tree where the official `usePage` context is available.
+ */
+export function InitialModalHandler({ resolveComponent, initialPage }: InitialModalHandlerProps) {
+  if (initialPage) {
+    return <ModalEventHandler resolveComponent={resolveComponent} initialPage={initialPage} />;
+  }
+
+  return <ContextInitialModalHandler resolveComponent={resolveComponent} />;
 }
 
 export default InitialModalHandler;

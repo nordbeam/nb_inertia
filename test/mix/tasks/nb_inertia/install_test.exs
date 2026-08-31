@@ -824,6 +824,9 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
       assert Map.has_key?(files, "assets/js/components/modals/ModalStackRenderer.tsx")
       assert Map.has_key?(files, "assets/js/components/modals/index.ts")
+
+      assert files["assets/js/components/modals/ModalStackRenderer.tsx"] =~
+               "pageMetadata={modal.pageMetadata}"
     end
 
     test "Vue does not copy local modal files — modals come from the GitHub package" do
@@ -902,6 +905,18 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
       assert length(Regex.scan(~r/serverHead: true/, source)) >= 3
     end
+
+    test "React client template uses Inertia v3 hydration and mounts the modal stack" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert source =~ "withApp: (app, { page }) => ("
+      assert source =~ "<ModalStackProvider resolveComponent={resolvePageComponent}>"
+      assert source =~ "initialPage={page}"
+      assert source =~ "<ModalStackRenderer />"
+      refute source =~ ~s(import { createRoot } from "react-dom/client";)
+    end
   end
 
   describe "SSR entry templates" do
@@ -910,7 +925,8 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
         |> File.read!()
 
-      assert source =~ ~s(import { createInertiaApp } from "@/lib/inertia";)
+      assert source =~ "createInertiaApp,"
+      assert source =~ ~s(from "@/lib/inertia";)
       assert length(Regex.scan(~r|react-dom/server\.browser|, source)) >= 2
       assert source =~ "ReactDOMServer.renderToString"
       assert source =~ "export async function render(page"
@@ -923,6 +939,22 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
 
       assert source =~ ~S|import.meta.glob<PageModule>("./pages/**/*.tsx", { eager: true })|
       assert source =~ "return pages[pagePath].default"
+    end
+
+    test "SSR templates mount the same modal provider tree as the client" do
+      source =
+        Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
+        |> File.read!()
+
+      assert length(
+               Regex.scan(
+                 ~r/<ModalStackProvider resolveComponent=\{resolvePageComponent\}>/,
+                 source
+               )
+             ) >=
+               3
+
+      assert length(Regex.scan(~r/initialPage=\{props\.initialPage\}/, source)) >= 2
     end
 
     test "SSR healthcheck guard is present in both dev and prod templates" do
@@ -1014,7 +1046,9 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
       Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)
       |> File.read!()
 
-    assert source =~ ~s(import { createInertiaApp, http } from "@/lib/inertia";)
+    assert source =~ "createInertiaApp,"
+    assert source =~ "http,"
+    assert source =~ ~s(from "@/lib/inertia";)
     assert source =~ "http.onRequest((config) => {"
     refute source =~ "axios.defaults.xsrfHeaderName"
   end

@@ -1,23 +1,24 @@
 import { useModalStack as e } from "./modalStack.js";
 import { useCallback as t, useEffect as n, useRef as r } from "react";
 import { router as i, usePage as a } from "@inertiajs/react";
+import { jsx as o } from "react/jsx-runtime";
 //#region priv/nb_inertia/react/modals/InitialModalHandler.tsx
-function o({ resolveComponent: o }) {
-	let s = a(), { props: c } = s, { pushModal: l, updateModal: u, clearModals: d, modals: f } = e(), p = r(!1), m = r(!1), h = r(null), g = r(/* @__PURE__ */ new Set()), _ = t((e, t) => () => {
-		if (h.current = null, g.current.delete(e.url), !p.current && typeof window < "u") {
+function s({ resolveComponent: a, initialPage: o }) {
+	let { pushModal: s, updateModal: c, clearModals: l, modals: u } = e(), d = r(!1), f = r(!1), p = r(null), m = r(/* @__PURE__ */ new Set()), h = t((e, t) => () => {
+		if (p.current = null, m.current.delete(e.url), !d.current && typeof window < "u") {
 			let n = t || e.baseUrl;
 			n && window.location.href !== n && window.history.replaceState({}, "", n);
 		}
-	}, []), v = t((e, t) => {
-		let n = t || e.pageMetadata, r = e.url, i = f.find((e) => e.loading && e.url === r), a = f.find((e) => !e.loading && e.url === r);
-		g.current.has(r) && !i && !a || (g.current.add(r), o(e.component).then((t) => {
+	}, []), g = t((e, t) => {
+		let n = t || e.pageMetadata, r = e.url, i = u.find((e) => e.loading && e.url === r), o = u.find((e) => !e.loading && e.url === r);
+		m.current.has(r) && !i && !o || (m.current.add(r), a(e.component).then((t) => {
 			if (i) {
-				if (!f.find((e) => e.id === i.id && e.loading)) {
-					g.current.delete(r);
+				if (!u.find((e) => e.id === i.id && e.loading)) {
+					m.current.delete(r);
 					return;
 				}
 				let a = i.returnUrl;
-				u(i.id, {
+				c(i.id, {
 					component: t,
 					componentName: e.component,
 					props: e.props,
@@ -25,18 +26,18 @@ function o({ resolveComponent: o }) {
 					baseUrl: e.baseUrl,
 					returnUrl: a,
 					pageMetadata: n,
-					onClose: _(e, a),
+					onClose: h(e, a),
 					loading: !1
-				}), h.current = e;
-			} else a ? (u(a.id, {
+				}), p.current = e;
+			} else o ? (c(o.id, {
 				component: t,
 				componentName: e.component,
 				props: e.props,
 				config: e.config || {},
 				baseUrl: e.baseUrl,
 				pageMetadata: n,
-				onClose: a.onClose || _(e, a.returnUrl)
-			}), h.current = e) : (h.current = e, l({
+				onClose: o.onClose || h(e, o.returnUrl)
+			}), p.current = e) : (p.current = e, s({
 				component: t,
 				componentName: e.component,
 				props: e.props,
@@ -44,38 +45,51 @@ function o({ resolveComponent: o }) {
 				config: e.config || {},
 				baseUrl: e.baseUrl,
 				pageMetadata: n,
-				onClose: _(e)
+				onClose: h(e)
 			}));
 		}).catch((t) => {
-			g.current.delete(r), console.error("[InitialModalHandler] Failed to resolve modal component:", e.component, t);
+			m.current.delete(r), console.error("[InitialModalHandler] Failed to resolve modal component:", e.component, t);
 		}));
 	}, [
-		o,
-		l,
+		a,
+		s,
+		c,
 		u,
-		f,
-		_
+		h
 	]);
 	return n(() => {
-		let e = c._nb_modal;
-		e && !m.current && (m.current = !0, v(e, s));
+		let e = o?.props?._nb_modal;
+		e && !f.current && (f.current = !0, g(e, o));
 	}, []), n(() => {
 		let e = i.on("start", () => {
-			p.current = !0;
+			d.current = !0;
 		}), t = i.on("finish", () => {
-			p.current = !1;
+			d.current = !1;
 		}), n = i.on("navigate", (e) => {
 			let t = e.detail.page.props?._nb_modal;
 			if (!t) {
-				d(), h.current = null, g.current.clear();
+				l(), p.current = null, m.current.clear();
 				return;
 			}
-			v(t, e.detail.page);
+			g(t, e.detail.page);
 		});
 		return () => {
 			e(), t(), n();
 		};
-	}, [v, d]), null;
+	}, [g, l]), null;
+}
+function c({ resolveComponent: e }) {
+	let t = a();
+	return /* @__PURE__ */ o(s, {
+		resolveComponent: e,
+		initialPage: t
+	});
+}
+function l({ resolveComponent: e, initialPage: t }) {
+	return t ? /* @__PURE__ */ o(s, {
+		resolveComponent: e,
+		initialPage: t
+	}) : /* @__PURE__ */ o(c, { resolveComponent: e });
 }
 //#endregion
-export { o as InitialModalHandler, o as default };
+export { l as InitialModalHandler, l as default };

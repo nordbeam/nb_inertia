@@ -1,3 +1,4 @@
+import { Page as InertiaPage } from '@inertiajs/core';
 import { ModalConfig, ModalPageMetadata } from './types';
 /**
  * Modal data structure from the backend's render_inertia_modal response
@@ -35,16 +36,18 @@ export interface InitialModalHandlerProps {
      * ```
      */
     resolveComponent: (name: string) => Promise<React.ComponentType<any>>;
+    /**
+     * The initial Inertia page supplied to `createInertiaApp`'s `withApp` or
+     * `setup` callback. This avoids coupling the handler to React's internal page
+     * context and lets the modal provider wrap the entire Inertia application.
+     */
+    initialPage?: InertiaPage;
 }
 /**
- * Handles initial modal detection and navigation events
- *
- * This component:
- * - Detects `_nb_modal` prop on initial page load (direct URL access)
- * - Listens for Inertia navigation events with modal data
- * - Pushes modals onto the stack via useModalStack
- * - Manages browser history for proper back/forward navigation
+ * Mount the modal event bridge with an explicit initial page (recommended for
+ * Inertia v3 `withApp` wrappers) or, for backward compatibility, inside the
+ * Inertia component tree where the official `usePage` context is available.
  */
-export declare function InitialModalHandler({ resolveComponent }: InitialModalHandlerProps): null;
+export declare function InitialModalHandler({ resolveComponent, initialPage }: InitialModalHandlerProps): import("react").JSX.Element;
 export default InitialModalHandler;
 //# sourceMappingURL=InitialModalHandler.d.ts.map
