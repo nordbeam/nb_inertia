@@ -709,7 +709,7 @@ if Code.ensure_loaded?(Igniter) do
       "#{Igniter.Project.Application.app_name(igniter)}_web"
     end
 
-    defp inertia_root_html_esbuild() do
+    defp inertia_root_html_esbuild do
       """
       <!DOCTYPE html>
       <html lang="en">
@@ -1252,7 +1252,7 @@ if Code.ensure_loaded?(Igniter) do
       "'" <> String.replace(to_string(value), "'", ~s('"'"')) <> "'"
     end
 
-    defp react_tsconfig_json() do
+    defp react_tsconfig_json do
       ~S"""
       {
         "compilerOptions": {
@@ -1876,7 +1876,7 @@ if Code.ensure_loaded?(Igniter) do
     defp ssr_render_signature("tsx"), do: "export async function render(page: any)"
     defp ssr_render_signature(_extension), do: "export async function render(page)"
 
-    defp node_prefix_plugin() do
+    defp node_prefix_plugin do
       """
       /**
        * Vite plugin to add 'node:' prefix to Node.js built-in modules
@@ -2654,8 +2654,9 @@ if Code.ensure_loaded?(Igniter) do
           "assets/js/**/*.vue"
         ]
         |> Enum.flat_map(&Path.wildcard/1)
-        |> Enum.reject(&String.ends_with?(&1, "/lib/inertia.js"))
-        |> Enum.reject(&String.ends_with?(&1, "/lib/inertia.ts"))
+        |> Enum.reject(fn path ->
+          String.ends_with?(path, ["/lib/inertia.js", "/lib/inertia.ts"])
+        end)
         |> Enum.uniq()
         |> Enum.reduce(igniter, fn path, acc ->
           acc

@@ -454,11 +454,9 @@ defmodule NbInertia.Plugs.Precognition do
   end
 
   defp maybe_to_atom(field) when is_binary(field) do
-    try do
-      String.to_existing_atom(field)
-    rescue
-      ArgumentError -> field
-    end
+    String.to_existing_atom(field)
+  rescue
+    ArgumentError -> field
   end
 
   defp maybe_to_atom(field), do: field
@@ -485,10 +483,9 @@ defmodule NbInertia.Plugs.Precognition do
     string
     |> String.split("_")
     |> Enum.with_index()
-    |> Enum.map(fn
+    |> Enum.map_join("", fn
       {word, 0} -> String.downcase(word)
       {word, _} -> String.capitalize(word)
     end)
-    |> Enum.join()
   end
 end

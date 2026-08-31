@@ -370,7 +370,7 @@ defmodule NbInertia.Plug do
     endpoint = NbInertia.Config.endpoint()
     paths = NbInertia.Config.static_paths()
 
-    if is_atom(endpoint) and endpoint != nil and length(paths) > 0 do
+    if is_atom(endpoint) and endpoint != nil and paths != [] do
       hash_static_paths(endpoint, paths)
     else
       NbInertia.Config.default_version()

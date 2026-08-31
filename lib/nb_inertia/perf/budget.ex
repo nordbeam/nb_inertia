@@ -9,10 +9,9 @@ defmodule NbInertia.Perf.Budget do
 
   def format_failures(failures) do
     failures
-    |> Enum.map(fn failure ->
+    |> Enum.map_join("\n", fn failure ->
       "- #{failure.scenario}/#{failure.size} #{failure.metric}: #{failure.actual} exceeded #{failure.limit}"
     end)
-    |> Enum.join("\n")
   end
 
   defp check_result(result, budgets) do

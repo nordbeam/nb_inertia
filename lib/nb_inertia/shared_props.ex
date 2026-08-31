@@ -146,12 +146,10 @@ defmodule NbInertia.SharedProps do
           value = Map.get(props, key)
 
           serialized_value =
-            cond do
-              Map.has_key?(prop_config, :serializer) ->
-                serialize_with_serializer(value, prop_config.serializer)
-
-              true ->
-                value
+            if Map.has_key?(prop_config, :serializer) do
+              serialize_with_serializer(value, prop_config.serializer)
+            else
+              value
             end
 
           Map.put(acc, key, serialized_value)
@@ -206,11 +204,12 @@ defmodule NbInertia.SharedProps do
         extra_keys = MapSet.difference(provided_keys, declared_keys)
 
         if MapSet.size(extra_keys) > 0 do
-          extra_list = MapSet.to_list(extra_keys) |> Enum.map(&inspect/1) |> Enum.join(", ")
+          extra_list = Enum.map_join(extra_keys, ", ", &inspect/1)
+          declared_list = Enum.map_join(declared_props, ", ", &inspect(&1.name))
 
           raise ArgumentError,
                 "Undeclared props returned from build_props/2: #{extra_list}. " <>
-                  "Declared props: #{Enum.map(declared_props, & &1.name) |> Enum.map(&inspect/1) |> Enum.join(", ")}. " <>
+                  "Declared props: #{declared_list}. " <>
                   "Make sure build_props/2 returns only the declared props."
         end
 
@@ -218,11 +217,12 @@ defmodule NbInertia.SharedProps do
         missing_keys = MapSet.difference(declared_keys, provided_keys)
 
         if MapSet.size(missing_keys) > 0 do
-          missing_list = MapSet.to_list(missing_keys) |> Enum.map(&inspect/1) |> Enum.join(", ")
+          missing_list = Enum.map_join(missing_keys, ", ", &inspect/1)
+          declared_list = Enum.map_join(declared_props, ", ", &inspect(&1.name))
 
           raise ArgumentError,
                 "Missing required props from build_props/2: #{missing_list}. " <>
-                  "Declared props: #{Enum.map(declared_props, & &1.name) |> Enum.map(&inspect/1) |> Enum.join(", ")}. " <>
+                  "Declared props: #{declared_list}. " <>
                   "Make sure build_props/2 returns all declared props."
         end
 

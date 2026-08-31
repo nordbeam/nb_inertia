@@ -63,7 +63,7 @@ defmodule NbInertia.ComponentNaming do
         parse_parts(rest, [{:namespace, part} | acc])
 
       # Check if this is a namespace prefix followed by more parts
-      part in Enum.map(@namespace_prefixes, &Atom.to_string/1) and length(rest) > 0 ->
+      part in Enum.map(@namespace_prefixes, &Atom.to_string/1) and rest != [] ->
         parse_parts(rest, [{:namespace, part} | acc])
 
       # Check if this is a standard action at the end
@@ -95,18 +95,15 @@ defmodule NbInertia.ComponentNaming do
 
       namespace_path =
         namespaces
-        |> Enum.map(fn {:namespace, name} -> camelize(name) end)
-        |> Enum.join("/")
+        |> Enum.map_join("/", fn {:namespace, name} -> camelize(name) end)
 
       resource_path =
         resource_parts
-        |> Enum.map(fn {:part, name} -> camelize(name) end)
-        |> Enum.join("")
+        |> Enum.map_join("", fn {:part, name} -> camelize(name) end)
 
       action_path =
         actions
-        |> Enum.map(fn {:action, name} -> camelize(name) end)
-        |> Enum.join("")
+        |> Enum.map_join("", fn {:action, name} -> camelize(name) end)
 
       # Build final path
       path_parts =
@@ -147,8 +144,7 @@ defmodule NbInertia.ComponentNaming do
         |> String.split("_")
         # Remove empty strings
         |> Enum.reject(&(&1 == ""))
-        |> Enum.map(&String.capitalize/1)
-        |> Enum.join("")
+        |> Enum.map_join("", &String.capitalize/1)
 
       # Ensure the result starts with an uppercase letter (not a digit)
       if result != "" and not String.match?(result, ~r/^[A-Z]/) do

@@ -1,19 +1,19 @@
 defmodule NbInertia.Credo.ChecksTest do
   use ExUnit.Case, async: false
 
-  alias NbInertia.Credo.Check.Warning.UseNbInertiaController
-  alias NbInertia.Credo.Check.Warning.AvoidRawInertiaRender
-  alias NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl
-  alias NbInertia.Credo.Check.Warning.MissingInertiaPageProps
-  alias NbInertia.Credo.Check.Warning.UntypedInertiaProps
-  alias NbInertia.Credo.Check.Warning.MissingSerializerInertiaProps
-  alias NbInertia.Credo.Check.Warning.MissingInertiaSharedProps
-  alias NbInertia.Credo.Check.Warning.InconsistentOptionalProps
-  alias NbInertia.Credo.Check.Warning.MixedInertiaControllerType
-  alias NbInertia.Credo.Check.Readability.PropFromAssigns
-  alias NbInertia.Credo.Check.Readability.InertiaPageComponentNameCase
   alias NbInertia.Credo.Check.Design.DeclareInertiaPage
   alias NbInertia.Credo.Check.Design.FormInputsOptionalFieldConsistency
+  alias NbInertia.Credo.Check.Readability.InertiaPageComponentNameCase
+  alias NbInertia.Credo.Check.Readability.PropFromAssigns
+  alias NbInertia.Credo.Check.Warning.AvoidRawInertiaRender
+  alias NbInertia.Credo.Check.Warning.InconsistentOptionalProps
+  alias NbInertia.Credo.Check.Warning.MissingInertiaPageProps
+  alias NbInertia.Credo.Check.Warning.MissingInertiaSharedProps
+  alias NbInertia.Credo.Check.Warning.MissingSerializerInertiaProps
+  alias NbInertia.Credo.Check.Warning.MixedInertiaControllerType
+  alias NbInertia.Credo.Check.Warning.ModalRequiresBaseUrl
+  alias NbInertia.Credo.Check.Warning.UntypedInertiaProps
+  alias NbInertia.Credo.Check.Warning.UseNbInertiaController
 
   # Start Credo services before running tests
   setup_all do

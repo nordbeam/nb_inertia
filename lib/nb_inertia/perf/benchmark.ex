@@ -317,7 +317,8 @@ defmodule NbInertia.Perf.Benchmark do
     |> String.to_existing_atom()
     |> normalize_size!()
   rescue
-    ArgumentError -> raise ArgumentError, "unknown benchmark size #{inspect(size)}"
+    ArgumentError ->
+      reraise ArgumentError, "unknown benchmark size #{inspect(size)}", __STACKTRACE__
   end
 
   defp normalize_scenario_names(:all), do: @scenario_order
@@ -335,7 +336,8 @@ defmodule NbInertia.Perf.Benchmark do
     |> String.to_existing_atom()
     |> normalize_scenario_name!()
   rescue
-    ArgumentError -> raise ArgumentError, "unknown benchmark scenario #{inspect(name)}"
+    ArgumentError ->
+      reraise ArgumentError, "unknown benchmark scenario #{inspect(name)}", __STACKTRACE__
   end
 
   defp conn_marker(conn) do

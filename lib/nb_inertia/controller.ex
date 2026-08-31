@@ -1961,7 +1961,7 @@ defmodule NbInertia.Controller do
             if relevant_opts == [] do
               ""
             else
-              " (#{Enum.map(relevant_opts, fn {k, v} -> "#{k}: #{inspect(v)}" end) |> Enum.join(", ")})"
+              " (#{Enum.map_join(relevant_opts, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)})"
             end
 
           _ ->

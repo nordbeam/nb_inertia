@@ -97,8 +97,7 @@ if Code.ensure_loaded?(Credo.Check) do
     defp suggest_pascal_case(name) do
       name
       |> String.split(~r/[_\/]/)
-      |> Enum.map(&String.capitalize/1)
-      |> Enum.join("/")
+      |> Enum.map_join("/", &String.capitalize/1)
     end
   end
 end

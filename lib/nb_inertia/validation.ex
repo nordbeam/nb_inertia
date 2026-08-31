@@ -59,9 +59,8 @@ defmodule NbInertia.Validation do
   @spec validate_render_props(atom(), keyword(), map()) :: :ok | {:error, term()}
   def validate_render_props(page_ref, props, pages) do
     with {:ok, config} <- fetch_page_config(pages, page_ref),
-         :ok <- validate_required_props(config, props),
-         :ok <- validate_declared_props(config, props) do
-      :ok
+         :ok <- validate_required_props(config, props) do
+      validate_declared_props(config, props)
     end
   end
 
@@ -203,9 +202,8 @@ defmodule NbInertia.Validation do
     provided_keys = Map.keys(returned_props) |> MapSet.new()
     declared_keys = Enum.map(declared_props, & &1.name) |> MapSet.new()
 
-    with :ok <- check_missing_shared_props(provided_keys, declared_keys),
-         :ok <- check_extra_shared_props(provided_keys, declared_keys) do
-      :ok
+    with :ok <- check_missing_shared_props(provided_keys, declared_keys) do
+      check_extra_shared_props(provided_keys, declared_keys)
     end
   end
 
