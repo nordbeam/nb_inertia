@@ -59,7 +59,7 @@ defmodule NbInertia.SSR do
       ```javascript
       // assets/js/ssr.jsx
       import React from "react";
-      import ReactDOMServer from "react-dom/server";
+      import ReactDOMServer from "react-dom/server.browser";
       import { createInertiaApp } from "@inertiajs/react";
 
       export async function render(page) {

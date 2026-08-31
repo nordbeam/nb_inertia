@@ -911,6 +911,7 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
         |> File.read!()
 
       assert source =~ ~s(import { createInertiaApp } from "@/lib/inertia";)
+      assert length(Regex.scan(~r|react-dom/server\.browser|, source)) >= 2
       assert source =~ "ReactDOMServer.renderToString"
       assert source =~ "export async function render(page"
     end

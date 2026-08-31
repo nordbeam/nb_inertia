@@ -1676,7 +1676,7 @@ if Code.ensure_loaded?(Igniter) do
       render_signature = ssr_render_signature(extension)
 
       """
-      import ReactDOMServer from "react-dom/server";
+      import ReactDOMServer from "react-dom/server.browser";
       import { createInertiaApp } from "@/lib/inertia";
       #{type_definitions}
       /**
@@ -1739,7 +1739,7 @@ if Code.ensure_loaded?(Igniter) do
       render_signature = ssr_render_signature(extension)
 
       """
-      import ReactDOMServer from "react-dom/server";
+      import ReactDOMServer from "react-dom/server.browser";
       import { createInertiaApp } from "@/lib/inertia";
       #{type_definitions}
       /**
