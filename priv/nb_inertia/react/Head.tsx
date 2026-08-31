@@ -22,10 +22,10 @@
  * ```
  */
 
-import React, { Component, createElement, useMemo } from 'react';
-import { Head as InertiaHead } from '@inertiajs/react';
-import { createPortal } from 'react-dom';
-import { useIsInModal } from './modals/modalStack';
+import React, { Component, createElement, useMemo } from "react";
+import { Head as InertiaHead } from "@inertiajs/react";
+import { createPortal } from "react-dom";
+import { useIsInModal } from "./modals/modalStack";
 
 /**
  * Props for the Head component (matches Inertia's HeadProps)
@@ -44,11 +44,11 @@ function hasTitleElement(children: React.ReactNode): boolean {
       return hasTitleElement((child.props as { children?: React.ReactNode }).children);
     }
 
-    return child.type === 'title';
+    return child.type === "title";
   });
 }
 
-function addInertiaMarkers(children: React.ReactNode): React.ReactNode[] {
+function addModalHeadMarkers(children: React.ReactNode): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
 
   React.Children.forEach(children, (child) => {
@@ -60,18 +60,22 @@ function addInertiaMarkers(children: React.ReactNode): React.ReactNode[] {
     }
 
     if (child.type === React.Fragment) {
-      nodes.push(...addInertiaMarkers((child.props as { children?: React.ReactNode }).children));
+      nodes.push(...addModalHeadMarkers((child.props as { children?: React.ReactNode }).children));
       return;
     }
 
     const props = child.props as Record<string, unknown>;
-    const headKey = props['head-key'];
+    const headKey = props["head-key"];
     const inertiaKey =
-      typeof headKey === 'string' || typeof headKey === 'number' ? String(headKey) : '';
+      typeof headKey === "string" || typeof headKey === "number" ? String(headKey) : "";
 
     nodes.push(
       React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
-        'data-inertia': inertiaKey,
+        // The official head manager owns every `data-inertia` element and may
+        // remove it during a navigation before React unmounts this portal.
+        // Keep modal-owned nodes in a separate namespace to prevent a
+        // removeChild race during modal teardown.
+        "data-nb-inertia-modal-head": inertiaKey,
       }),
     );
   });
@@ -86,16 +90,16 @@ function addInertiaMarkers(children: React.ReactNode): React.ReactNode[] {
  */
 function ModalHeadFallback({ title, children }: ModalHeadFallbackProps) {
   const headChildren = useMemo(() => {
-    const nodes = addInertiaMarkers(children);
+    const nodes = addModalHeadMarkers(children);
 
     if (title && !hasTitleElement(children)) {
-      nodes.push(createElement('title', { 'data-inertia': '' }, title));
+      nodes.push(createElement("title", { "data-nb-inertia-modal-head": "" }, title));
     }
 
     return nodes;
   }, [children, title]);
 
-  if (typeof document === 'undefined') {
+  if (typeof document === "undefined") {
     return null;
   }
 

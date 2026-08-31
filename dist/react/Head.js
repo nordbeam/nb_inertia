@@ -19,13 +19,13 @@ function l(e) {
 			return;
 		}
 		let r = e.props["head-key"], i = typeof r == "string" || typeof r == "number" ? String(r) : "";
-		n.push(t.cloneElement(e, { "data-inertia": i }));
+		n.push(t.cloneElement(e, { "data-nb-inertia-modal-head": i }));
 	}), n;
 }
 function u({ title: e, children: t }) {
 	let n = i(() => {
 		let n = l(t);
-		return e && !c(t) && n.push(r("title", { "data-inertia": "" }, e)), n;
+		return e && !c(t) && n.push(r("title", { "data-nb-inertia-modal-head": "" }, e)), n;
 	}, [t, e]);
 	return typeof document > "u" ? null : o(n, document.head);
 }
