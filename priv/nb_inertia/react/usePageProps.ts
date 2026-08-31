@@ -11,13 +11,14 @@
  * // usePageProps('Users/Index') -> Pages['Users/Index']
  * ```
  *
- * The accessor calls the official Inertia `usePage` hook.  It has no schema
+ * The accessor calls nb_inertia's enhanced `usePage` hook so typed props work
+ * for both official Inertia pages and modal page contexts. It has no schema
  * runtime dependency, so importing it does not add validation code to an app
  * that only wants typed page access.
  */
 
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
-import { usePage as inertiaUsePage } from "@inertiajs/react";
+import { usePage as inertiaUsePage } from "./usePage";
 import {
   createPagePropsHook,
   type PageMap,

@@ -1,6 +1,8 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { usePage as inertiaUsePage } from "@inertiajs/react";
+import type { PropsWithChildren } from "react";
+import { ModalPageProvider } from "../modals";
 import { createUsePageProps, PagePropsComponentMismatchError, usePageProps } from "../usePageProps";
 
 vi.mock("@inertiajs/react", () => ({
@@ -35,6 +37,25 @@ describe("usePageProps (React)", () => {
     const { result } = renderHook(() => useGeneratedPageProps("Users/Index"));
 
     expect(result.current.users).toHaveLength(1);
+  });
+
+  it("reads typed props from a modal page context without calling official usePage", () => {
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <ModalPageProvider
+        component="Users/Index"
+        props={{ users: [{ id: 2 }] }}
+        url="/users/2/edit"
+        baseUrl="/users"
+      >
+        {children}
+      </ModalPageProvider>
+    );
+
+    const useGeneratedPageProps = createUsePageProps<Pages>({ development: true });
+    const { result } = renderHook(() => useGeneratedPageProps("Users/Index"), { wrapper });
+
+    expect(result.current.users).toEqual([{ id: 2 }]);
+    expect(mockUsePage).not.toHaveBeenCalled();
   });
 
   it("throws a useful development error when the component is not the expected page", () => {
