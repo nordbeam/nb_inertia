@@ -123,6 +123,34 @@ defmodule NbInertia.TestHelpersTest do
       assert assert_inertia_prop(conn, "totalCount", 42) == true
     end
 
+    test "supports nested dot paths with snake_case and camelCase keys", %{conn: conn} do
+      conn =
+        conn
+        |> Plug.Conn.put_private(:inertia_page, %{
+          component: "Contacts/Show",
+          props: %{
+            contact: %{
+              display_name: "Ada Lovelace",
+              profile: %{"timeZone" => "UTC"}
+            }
+          }
+        })
+
+      assert assert_inertia_prop(conn, "contact.displayName", "Ada Lovelace") == true
+      assert assert_inertia_prop(conn, "contact.profile.time_zone", "UTC") == true
+    end
+
+    test "keeps exact top-level dotted keys compatible", %{conn: conn} do
+      conn =
+        conn
+        |> Plug.Conn.put_private(:inertia_page, %{
+          component: "Posts/Index",
+          props: %{"meta.version" => 2, meta: %{version: 1}}
+        })
+
+      assert assert_inertia_prop(conn, "meta.version", 2) == true
+    end
+
     test "fails when prop value doesn't match", %{conn: conn} do
       conn =
         conn
@@ -146,6 +174,19 @@ defmodule NbInertia.TestHelpersTest do
 
       assert_raise ExUnit.AssertionError, ~r/Prop :missing not found/, fn ->
         assert_inertia_prop(conn, :missing, "value")
+      end
+    end
+
+    test "fails when nested prop doesn't exist", %{conn: conn} do
+      conn =
+        conn
+        |> Plug.Conn.put_private(:inertia_page, %{
+          component: "Contacts/Show",
+          props: %{contact: %{id: 1}}
+        })
+
+      assert_raise ExUnit.AssertionError, ~r/Prop "contact\.name" not found/, fn ->
+        assert_inertia_prop(conn, "contact.name", "Ada")
       end
     end
   end
@@ -200,6 +241,34 @@ defmodule NbInertia.TestHelpersTest do
 
       # Can query using snake_case even when prop is camelCase
       assert assert_inertia_prop(conn, :total_count, 42) == true
+    end
+  end
+
+  describe "nested refute_inertia_prop/2" do
+    test "passes when nested prop is not present", %{conn: conn} do
+      conn =
+        conn
+        |> Plug.Conn.put_private(:inertia_page, %{
+          component: "Contacts/Show",
+          props: %{contact: %{id: 1}}
+        })
+
+      assert refute_inertia_prop(conn, "contact.email") == true
+    end
+
+    test "fails when nested prop is present", %{conn: conn} do
+      conn =
+        conn
+        |> Plug.Conn.put_private(:inertia_page, %{
+          component: "Contacts/Show",
+          props: %{contact: %{email: "ada@example.com"}}
+        })
+
+      assert_raise ExUnit.AssertionError,
+                   ~r/Expected prop "contact\.email" to NOT be present/,
+                   fn ->
+                     refute_inertia_prop(conn, "contact.email")
+                   end
     end
   end
 

@@ -1092,6 +1092,37 @@ defmodule Mix.Tasks.NbInertia.InstallTest do
     assert File.exists?(Path.join(project_root(), "usage-rules/skills/nb-inertia/SKILL.md"))
   end
 
+  test "prebuilt skill routes typed serializer pages to its end-to-end reference" do
+    skill_path = Path.join(project_root(), "usage-rules/skills/nb-inertia/SKILL.md")
+
+    reference_path =
+      Path.join(
+        project_root(),
+        "usage-rules/skills/nb-inertia/references/typed-serializer-page.md"
+      )
+
+    assert File.exists?(reference_path)
+
+    skill = File.read!(skill_path)
+    reference = File.read!(reference_path)
+
+    assert skill =~ "references/typed-serializer-page.md"
+
+    for required_contract <- [
+          "use NbSerializer.Serializer",
+          "prop :contact, ref(ContactProfileSerializer)",
+          "contact: {ContactProfileSerializer, contact}",
+          "mix nb_ts.gen --validate",
+          "pageSchemaRegistry",
+          "usePageProps('Contacts/Show')",
+          "assert_inertia_prop(conn, \"contact.id\", contact.id)",
+          "corepack npm@12.0.2"
+        ] do
+      assert reference =~ required_contract,
+             "typed serializer page reference is missing #{inspect(required_contract)}"
+    end
+  end
+
   test "installer source uses Inertia HTTP hooks for CSRF instead of axios" do
     source =
       Path.expand("../../../../lib/mix/tasks/nb_inertia.install.ex", __DIR__)

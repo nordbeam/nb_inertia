@@ -44,7 +44,7 @@ defmodule NbInertia.TestHelpers do
 
   - `assert_inertia_page/2` - Assert that a specific component was rendered
   - `assert_inertia_props/2` - Assert that specific props are present
-  - `assert_inertia_prop/3` - Assert a specific prop value
+  - `assert_inertia_prop/3` - Assert a specific top-level or dot-path prop value
   - `refute_inertia_prop/2` - Assert a prop is not present
   """
 
@@ -188,7 +188,9 @@ defmodule NbInertia.TestHelpers do
   @doc """
   Asserts that specific props are present in the Inertia response.
 
-  This checks that the keys exist in the props, but doesn't validate their values.
+  This checks that the top-level keys exist in the props, but doesn't validate
+  their values. Use `assert_inertia_prop/3` with a dot-delimited string when
+  asserting one nested value.
 
   ## Examples
 
@@ -219,11 +221,17 @@ defmodule NbInertia.TestHelpers do
   @doc """
   Asserts that a specific prop has the expected value.
 
+  String keys may use a dot-delimited path to assert a nested value. Each path
+  segment accepts atom/string keys and the usual snake_case/camelCase variants.
+  A top-level map value is compared as a whole; use a dot path when you only
+  need to check one nested field.
+
   ## Examples
 
       assert_inertia_prop(conn, :total_count, 5)
       assert_inertia_prop(conn, :user, %{id: 1, name: "John"})
       assert_inertia_prop(conn, "totalCount", 5)  # Works with camelCase too
+      assert_inertia_prop(conn, "user.name", "John")
   """
   @spec assert_inertia_prop(Plug.Conn.t(), atom() | String.t(), any()) :: true
   def assert_inertia_prop(conn, prop_key, expected_value) do
@@ -231,25 +239,16 @@ defmodule NbInertia.TestHelpers do
     prop_key = to_prop_key(prop_key)
 
     actual_value =
-      case Map.fetch(props, prop_key) do
+      case fetch_prop_value(props, prop_key) do
         {:ok, value} ->
           value
 
         :error ->
-          # Try the other case (atom vs string or camelCase vs snake_case)
-          alternate_key = find_alternate_key(props, prop_key)
+          flunk("""
+          Prop #{inspect(prop_key)} not found in Inertia props.
 
-          case alternate_key do
-            nil ->
-              flunk("""
-              Prop #{inspect(prop_key)} not found in Inertia props.
-
-              Available props: #{inspect(Map.keys(props))}
-              """)
-
-            key ->
-              Map.fetch!(props, key)
-          end
+          Available props: #{inspect(Map.keys(props))}
+          """)
       end
 
     assert actual_value == expected_value,
@@ -273,7 +272,7 @@ defmodule NbInertia.TestHelpers do
     props = get_inertia_props(conn) || %{}
     prop_key = to_prop_key(prop_key)
 
-    has_prop = Map.has_key?(props, prop_key) || find_alternate_key(props, prop_key) != nil
+    has_prop = match?({:ok, _value}, fetch_prop_value(props, prop_key))
 
     refute has_prop,
            """
@@ -615,6 +614,50 @@ defmodule NbInertia.TestHelpers do
   defp to_prop_key(key) when is_binary(key), do: key
   defp to_prop_key(key), do: to_string(key)
 
+  defp fetch_prop_value(props, prop_key) when is_map(props) do
+    case fetch_map_prop(props, prop_key) do
+      {:ok, _value} = result ->
+        result
+
+      :error ->
+        if is_binary(prop_key) and String.contains?(prop_key, ".") do
+          prop_key
+          |> String.split(".")
+          |> fetch_nested_prop(props)
+        else
+          :error
+        end
+    end
+  end
+
+  defp fetch_prop_value(_props, _prop_key), do: :error
+
+  defp fetch_nested_prop([], value), do: {:ok, value}
+
+  defp fetch_nested_prop([segment | rest], value) when is_map(value) do
+    case fetch_map_prop(value, segment) do
+      {:ok, nested_value} -> fetch_nested_prop(rest, nested_value)
+      :error -> :error
+    end
+  end
+
+  defp fetch_nested_prop(_segments, _value), do: :error
+
+  defp fetch_map_prop(props, prop_key) do
+    prop_key = to_prop_key(prop_key)
+
+    case Map.fetch(props, prop_key) do
+      {:ok, _value} = result ->
+        result
+
+      :error ->
+        case find_alternate_key(props, prop_key) do
+          nil -> :error
+          alternate_key -> Map.fetch(props, alternate_key)
+        end
+    end
+  end
+
   # Try to find the prop key in alternate forms (atom/string, camelCase/snake_case)
   defp find_alternate_key(props, prop_key) when is_atom(prop_key) do
     string_key = Atom.to_string(prop_key)
@@ -632,20 +675,27 @@ defmodule NbInertia.TestHelpers do
   end
 
   defp find_alternate_key(props, prop_key) when is_binary(prop_key) do
-    atom_key =
-      try do
-        String.to_existing_atom(prop_key)
-      rescue
-        ArgumentError -> nil
-      end
+    atom_key = existing_atom(prop_key)
 
     snake_key = camel_to_snake(prop_key)
+    camel_key = snake_to_camel(snake_key)
+    snake_atom_key = existing_atom(snake_key)
+    camel_atom_key = existing_atom(camel_key)
 
     cond do
       atom_key && Map.has_key?(props, atom_key) -> atom_key
       Map.has_key?(props, snake_key) -> snake_key
+      Map.has_key?(props, camel_key) -> camel_key
+      snake_atom_key && Map.has_key?(props, snake_atom_key) -> snake_atom_key
+      camel_atom_key && Map.has_key?(props, camel_atom_key) -> camel_atom_key
       true -> nil
     end
+  end
+
+  defp existing_atom(value) do
+    String.to_existing_atom(value)
+  rescue
+    ArgumentError -> nil
   end
 
   defp snake_to_camel(string) do

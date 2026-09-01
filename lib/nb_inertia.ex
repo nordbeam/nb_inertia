@@ -149,7 +149,7 @@ defmodule NbInertia do
   - `inertia_get/2`, `inertia_post/3`, etc. - Make Inertia requests with proper headers
   - `assert_inertia_page/2` - Assert the rendered component name
   - `assert_inertia_props/2` - Assert specific props are present
-  - `assert_inertia_prop/3` - Assert a prop has a specific value
+  - `assert_inertia_prop/3` - Assert a top-level or dot-path prop has a specific value
   - `refute_inertia_prop/2` - Assert a prop is not present
 
   See `NbInertia.TestHelpers` for full documentation.
