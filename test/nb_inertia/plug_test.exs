@@ -84,6 +84,16 @@ defmodule NbInertia.PlugTest do
     assert get_resp_header(conn, "vary") == ["X-Inertia"]
   end
 
+  test "exposes the same asset version used by the plug" do
+    conn =
+      conn(:get, "/")
+      |> init_test_session(%{})
+      |> assign(:flash, %{})
+      |> NbInertia.Plug.call([])
+
+    assert conn.private[:inertia_version] == NbInertia.Plug.asset_version()
+  end
+
   test "merges X-Inertia with existing Vary response values" do
     conn =
       conn(:get, "/")

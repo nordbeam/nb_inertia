@@ -906,6 +906,11 @@ refute_shared_prop(conn, :admin_settings)  # For non-admin users
 assert_shared_module_props(conn, MyAppWeb.InertiaShared.Auth)
 ```
 
+The request helpers derive `x-inertia-version` from
+`NbInertia.Plug.asset_version/0`, the same source used by the Inertia plug for
+version checks. They therefore continue to work when `static_paths` or
+`default_version` is customized; do not hard-code a version in test requests.
+
 ### Example Tests
 
 ```elixir

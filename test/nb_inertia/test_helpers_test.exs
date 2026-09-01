@@ -18,7 +18,10 @@ defmodule NbInertia.TestHelpersTest do
         |> with_inertia_headers()
 
       assert Plug.Conn.get_req_header(conn, "x-inertia") == ["true"]
-      assert Plug.Conn.get_req_header(conn, "x-inertia-version") == ["1.0"]
+
+      assert Plug.Conn.get_req_header(conn, "x-inertia-version") == [
+               NbInertia.Plug.asset_version()
+             ]
     end
   end
 

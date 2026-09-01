@@ -38,7 +38,9 @@ defmodule NbInertia.TestHelpers do
   ## Inertia Request Helpers
 
   Use `inertia_get/2`, `inertia_post/3`, etc. to make Inertia requests that include
-  the required `X-Inertia` header.
+  the required `X-Inertia` header and the current `x-inertia-version` from
+  `NbInertia.Plug.asset_version/0`. This keeps test requests valid when the
+  application uses static-path asset versioning or a custom default version.
 
   ## Assertion Helpers
 
@@ -79,7 +81,7 @@ defmodule NbInertia.TestHelpers do
   def with_inertia_headers(conn) do
     conn
     |> put_req_header("x-inertia", "true")
-    |> put_req_header("x-inertia-version", "1.0")
+    |> put_req_header("x-inertia-version", NbInertia.Plug.asset_version())
   end
 
   @doc """
@@ -94,7 +96,7 @@ defmodule NbInertia.TestHelpers do
     quote do
       unquote(conn)
       |> put_req_header("x-inertia", "true")
-      |> put_req_header("x-inertia-version", "1.0")
+      |> put_req_header("x-inertia-version", NbInertia.Plug.asset_version())
       |> get(unquote(path))
     end
   end
@@ -110,7 +112,7 @@ defmodule NbInertia.TestHelpers do
     quote do
       unquote(conn)
       |> put_req_header("x-inertia", "true")
-      |> put_req_header("x-inertia-version", "1.0")
+      |> put_req_header("x-inertia-version", NbInertia.Plug.asset_version())
       |> post(unquote(path), unquote(params))
     end
   end
@@ -126,7 +128,7 @@ defmodule NbInertia.TestHelpers do
     quote do
       unquote(conn)
       |> put_req_header("x-inertia", "true")
-      |> put_req_header("x-inertia-version", "1.0")
+      |> put_req_header("x-inertia-version", NbInertia.Plug.asset_version())
       |> put(unquote(path), unquote(params))
     end
   end
@@ -142,7 +144,7 @@ defmodule NbInertia.TestHelpers do
     quote do
       unquote(conn)
       |> put_req_header("x-inertia", "true")
-      |> put_req_header("x-inertia-version", "1.0")
+      |> put_req_header("x-inertia-version", NbInertia.Plug.asset_version())
       |> patch(unquote(path), unquote(params))
     end
   end
@@ -158,7 +160,7 @@ defmodule NbInertia.TestHelpers do
     quote do
       unquote(conn)
       |> put_req_header("x-inertia", "true")
-      |> put_req_header("x-inertia-version", "1.0")
+      |> put_req_header("x-inertia-version", NbInertia.Plug.asset_version())
       |> delete(unquote(path))
     end
   end

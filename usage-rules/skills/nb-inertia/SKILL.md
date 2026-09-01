@@ -63,6 +63,9 @@ adapters, and optional companion-package integrations.
   TypeScript/Vite+ checks. Test initial and partial/deferred visits when those
   options are present; add modal, real-time, or SSR smoke coverage only when
   configured.
+- Use `NbInertia.TestHelpers` request helpers for controller tests. They derive
+  the `x-inertia-version` header from `NbInertia.Plug.asset_version/0`, which is
+  also the plug's runtime source of truth; do not hard-code a version in tests.
 - Use the exact npm 12/Vite+ commands and recovery notes in the typed-page
   reference. Do not hand-edit generated TypeScript or suppress a failed
   serializer/type contract to make a check pass.

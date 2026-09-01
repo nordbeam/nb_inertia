@@ -173,6 +173,11 @@ use the string dot-path form for one nested field. Dot paths resolve atom/string
 keys and snake_case/camelCase variants, so they work with camelized wire props.
 `refute_inertia_prop/2` accepts the same top-level or dot-path lookup.
 
+`inertia_get/2` and the other request helpers automatically send the current
+`x-inertia-version` from `NbInertia.Plug.asset_version/0`, so these tests remain
+valid with static-path hashing or a custom `default_version`. Do not replace
+that header with a hard-coded value.
+
 ## 5. npm 12 and Vite+ checks
 
 The first-party package and current generated apps require npm 12.0.2. From

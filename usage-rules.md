@@ -551,6 +551,11 @@ conn = inertia_patch(conn, ~p"/users/1", user: params)
 conn = inertia_delete(conn, ~p"/users/1")
 ```
 
+Request helpers derive `x-inertia-version` from
+`NbInertia.Plug.asset_version/0`, the same source used by the Inertia plug for
+version checks. They remain valid with static-path hashing or a custom
+`default_version`; do not hard-code a version in test requests.
+
 **Page and prop assertions:**
 ```elixir
 assert_inertia_page(conn, "Users/Index")

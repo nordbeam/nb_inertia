@@ -45,7 +45,7 @@ defmodule NbInertia.Plug do
     |> assign(:inertia_head, [])
     |> ensure_inertia_vary()
     |> register_before_send(&ensure_inertia_vary/1)
-    |> put_private(:inertia_version, compute_version())
+    |> put_private(:inertia_version, asset_version())
     |> put_private(:inertia_error_bag, get_error_bag(conn))
     |> put_private(:inertia_encrypt_history, default_encrypt_history())
     |> put_private(:inertia_clear_history, false)
@@ -159,7 +159,7 @@ defmodule NbInertia.Plug do
     case get_req_header(conn, "x-inertia") do
       ["true"] ->
         conn
-        |> put_private(:inertia_version, compute_version())
+        |> put_private(:inertia_version, asset_version())
         |> put_private(:inertia_request, true)
         |> detect_partial_reload()
         |> detect_reset()
@@ -358,15 +358,18 @@ defmodule NbInertia.Plug do
   # -- Asset versioning --
 
   # https://inertiajs.com/the-protocol#asset-versioning
-  defp check_version(%{private: %{inertia_version: current_version}} = conn) do
-    if conn.method == "GET" && get_req_header(conn, "x-inertia-version") != [current_version] do
-      force_refresh(conn)
-    else
-      conn
-    end
-  end
+  @doc """
+  Returns the current Inertia asset version.
 
-  defp compute_version do
+  This is the same value stored in `conn.private[:inertia_version]` and used
+  by `check_version/1`. Test clients and other internal requests should use
+  this function instead of hard-coding a version header.
+
+  When `:endpoint` and `:static_paths` are configured, the version is an MD5
+  hash of the resolved static paths. Otherwise, `:default_version` is used.
+  """
+  @spec asset_version() :: String.t()
+  def asset_version do
     endpoint = NbInertia.Config.endpoint()
     paths = NbInertia.Config.static_paths()
 
@@ -374,6 +377,14 @@ defmodule NbInertia.Plug do
       hash_static_paths(endpoint, paths)
     else
       NbInertia.Config.default_version()
+    end
+  end
+
+  defp check_version(%{private: %{inertia_version: current_version}} = conn) do
+    if conn.method == "GET" && get_req_header(conn, "x-inertia-version") != [current_version] do
+      force_refresh(conn)
+    else
+      conn
     end
   end
 
